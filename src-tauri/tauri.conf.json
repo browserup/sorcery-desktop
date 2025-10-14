@@ -1,0 +1,57 @@
+{
+  "productName": "hypredit",
+  "version": "0.1.0",
+  "identifier": "com.hypredit.app",
+  "build": {
+    "frontendDist": "../public"
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/icon.png"
+    ],
+    "macOS": {
+      "frameworks": [],
+      "minimumSystemVersion": "10.13"
+    }
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "title": "Hypr Edit",
+        "width": 800,
+        "height": 600,
+        "visible": false,
+        "skipTaskbar": true
+      }
+    ],
+    "security": {
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["$APPDATA/**", "$RESOURCE/**"]
+      },
+      "capabilities": [
+        {
+          "identifier": "main-capability",
+          "description": "Main app capabilities",
+          "windows": ["*"],
+          "permissions": [
+            "core:default",
+            "shell:default",
+            "dialog:default",
+            "dialog:allow-open"
+          ]
+        }
+      ]
+    }
+  },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["hypredit"]
+      }
+    }
+  }
+}

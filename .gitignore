@@ -1,0 +1,38 @@
+# ---------- Rust ----------
+/target/
+
+# ---------- Tauri / Web front-end ----------
+/dist/
+/build/
+/out/
+/node_modules/
+/src-tauri/target/
+/src-tauri/Cargo.lock
+/.parcel-cache/
+/.vite/
+/.yarn/
+/.pnpm-store/
+.DS_Store
+
+# ---------- OS junk ----------
+Thumbs.db
+ehthumbs.db
+*.swp
+*.swo
+*.log
+
+# ---------- IntelliJ / JetBrains IDEs ----------
+.idea/
+/*.iml
+*.iws
+
+# ---------- Environment & local configs ----------
+.env
+.env.*
+!.env.example
+
+# ---------- Optional (if using npm/yarn) ----------
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
