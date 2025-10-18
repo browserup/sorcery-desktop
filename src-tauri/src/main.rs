@@ -3,6 +3,7 @@
 
 mod settings;
 mod path_validator;
+mod editors;
 
 fn main() {
     tauri::Builder::default()
