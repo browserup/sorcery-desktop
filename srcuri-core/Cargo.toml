@@ -1,0 +1,9 @@
+[package]
+name = "srcuri-core"
+version = "0.1.0"
+edition = "2021"
+description = "Shared URL parsing library for srcuri:// protocol"
+license = "MIT"
+
+[dependencies]
+url = "2.5"
