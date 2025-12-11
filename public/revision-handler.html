@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Open File at Git Reference</title>
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --primary: #6366f1;
+      --primary-hover: #4f46e5;
+      --primary-active: #4338ca;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --success: #22c55e;
+      --bg-primary: #121212;
+      --bg-surface: #1e1e1e;
+      --bg-elevated: #2d2d2d;
+      --text-primary: #f5f5f5;
+      --text-secondary: #a0a0a0;
+      --border: #333333;
+      --border-hover: #444444;
+      --shadow: rgba(0, 0, 0, 0.3);
+    }
+
+    html {
+      background: var(--bg-primary);
+    }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Roboto, 'Helvetica Neue', sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      padding: 1.5rem;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .container {
+      max-width: 650px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      color: var(--text-primary);
+    }
+
+    .subtitle {
+      color: var(--text-secondary);
+      font-size: 0.875rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .info-section {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .info-row {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .info-row:last-child {
+      margin-bottom: 0;
+    }
+
+    .info-label {
+      color: var(--text-secondary);
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      min-width: 100px;
+      padding-top: 0.125rem;
+    }
+
+    .info-value {
+      color: var(--text-primary);
+      font-size: 0.875rem;
+      flex: 1;
+      word-break: break-all;
+    }
+
+    .info-value.code {
+      font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+      font-size: 0.8125rem;
+    }
+
+    .transition-info {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-size: 0.875rem;
+    }
+
+    .transition-arrow {
+      color: var(--text-secondary);
+      font-size: 1.25rem;
+    }
+
+    .ref-label {
+      font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+      color: var(--primary);
+      font-weight: 600;
+    }
+
+    .status-section {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .status-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+    }
+
+    .status-label {
+      color: var(--text-secondary);
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .status-badge {
+      padding: 0.25rem 0.625rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .status-badge.clean {
+      background: rgba(34, 197, 94, 0.15);
+      color: #86efac;
+    }
+
+    .status-badge.dirty {
+      background: rgba(239, 68, 68, 0.15);
+      color: #fca5a5;
+    }
+
+    .status-details {
+      font-size: 0.8125rem;
+      color: var(--text-secondary);
+      margin-top: 0.5rem;
+    }
+
+    .error-banner {
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid #ef4444;
+      color: #fca5a5;
+      padding: 1rem;
+      border-radius: 8px;
+      margin-bottom: 1rem;
+      font-size: 0.875rem;
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+    }
+
+    .error-banner .error-text {
+      flex: 1;
+      word-break: break-word;
+    }
+
+    .error-banner .copy-btn {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #fca5a5;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.75rem;
+      white-space: nowrap;
+      transition: all 0.2s;
+    }
+
+    .error-banner .copy-btn:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    .error-banner .copy-btn.copied {
+      background: rgba(34, 197, 94, 0.3);
+      border-color: rgba(34, 197, 94, 0.5);
+      color: #86efac;
+    }
+
+    .warning-banner {
+      background: rgba(245, 158, 11, 0.15);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      color: var(--warning);
+      padding: 1rem;
+      border-radius: 8px;
+      margin-bottom: 1rem;
+      font-size: 0.875rem;
+    }
+
+    .button-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .button {
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 0.75rem 1rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.875rem;
+      font-weight: 600;
+      transition: all 0.2s;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      text-align: left;
+    }
+
+    .button-title {
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+    }
+
+    .button-hint {
+      font-size: 0.75rem;
+      opacity: 0.8;
+      font-weight: 400;
+    }
+
+    .button:hover:not(:disabled) {
+      background: var(--primary-hover);
+    }
+
+    .button:active:not(:disabled) {
+      background: var(--primary-active);
+    }
+
+    .button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .button.secondary {
+      background: var(--bg-elevated);
+      color: var(--text-primary);
+    }
+
+    .button.secondary:hover:not(:disabled) {
+      background: var(--border-hover);
+    }
+
+    .button.worktree {
+      background: #0ea5e9;
+    }
+
+    .button.worktree:hover:not(:disabled) {
+      background: #0284c7;
+    }
+
+    .button.ignore {
+      background: var(--bg-elevated);
+      color: var(--warning);
+    }
+
+    .button.ignore:hover:not(:disabled) {
+      background: var(--border-hover);
+    }
+
+    .button-footer {
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    .disabled-reason {
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      border-radius: 6px;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.75rem;
+      color: #fca5a5;
+      margin-top: 0.5rem;
+      line-height: 1.4;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 2rem;
+      color: var(--text-secondary);
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 0.6; }
+      50% { opacity: 1; }
+    }
+
+    .polling-indicator {
+      animation: pulse 2s ease-in-out infinite;
+      color: var(--text-secondary);
+      font-size: 0.75rem;
+      margin-top: 0.5rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Open File at Git Reference</h1>
+    <p class="subtitle">Choose how to open this file</p>
+
+    <div id="loading" class="loading">
+      Loading...
+    </div>
+
+    <div id="content" style="display: none;">
+      <div id="error-banner" class="error-banner" style="display: none;">
+        <span class="error-text" id="error-text"></span>
+        <button class="copy-btn" onclick="copyError()">Copy</button>
+      </div>
+      <div id="warning-banner" class="warning-banner" style="display: none;"></div>
+
+      <div class="info-section">
+        <div class="info-row">
+          <div class="info-label">Workspace</div>
+          <div class="info-value" id="workspace-name"></div>
+        </div>
+        <div class="info-row">
+          <div class="info-label">File</div>
+          <div class="info-value code" id="file-path"></div>
+        </div>
+        <div class="info-row" id="line-row" style="display: none;">
+          <div class="info-label">Line</div>
+          <div class="info-value" id="line-number"></div>
+        </div>
+      </div>
+
+      <div class="transition-info">
+        <span class="ref-label" id="current-ref"></span>
+        <span class="transition-arrow">→</span>
+        <span class="ref-label" id="target-ref"></span>
+      </div>
+
+      <div class="status-section">
+        <div class="status-header">
+          <span class="status-label">Working Tree Status</span>
+          <span class="status-badge" id="status-badge"></span>
+        </div>
+        <div class="status-details" id="status-details"></div>
+        <div class="polling-indicator" id="polling-indicator" style="display: none;">
+          Checking for changes...
+        </div>
+      </div>
+
+      <div class="button-grid">
+        <button class="button" id="switch-button" onclick="switchAndOpen()" disabled>
+          <span class="button-title">Go to Branch</span>
+          <span class="button-hint">Switch and edit</span>
+          <div class="disabled-reason" id="switch-disabled-reason" style="display: none;"></div>
+        </button>
+
+        <button class="button fetch" id="fetch-button" onclick="fetchAndSwitch()" style="display: none; background: #0ea5e9;">
+          <span class="button-title">Fetch & Switch</span>
+          <span class="button-hint">Download from remote</span>
+        </button>
+
+        <button class="button worktree" id="worktree-button" onclick="createWorktreeAndOpen()">
+          <span class="button-title">Checkout in Git Worktree</span>
+          <span class="button-hint">Non-destructive</span>
+        </button>
+
+        <button class="button ignore" id="ignore-button" onclick="ignoreAndOpen()">
+          <span class="button-title">Ignore Reference</span>
+          <span class="button-hint">Open from current branch</span>
+        </button>
+
+        <button class="button secondary" onclick="cancel()">
+          <span class="button-title">Cancel</span>
+          <span class="button-hint">Close dialog</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const { invoke } = window.__TAURI__.core;
+    let revisionData = null;
+    let pollingInterval = null;
+
+    async function init() {
+      try {
+        revisionData = await invoke('get_revision_dialog_data');
+
+        document.getElementById('workspace-name').textContent = revisionData.workspace;
+        document.getElementById('file-path').textContent = revisionData.file_path;
+        document.getElementById('current-ref').textContent = revisionData.current_ref;
+        document.getElementById('target-ref').textContent = revisionData.rev;
+
+        if (revisionData.line) {
+          document.getElementById('line-row').style.display = 'flex';
+          document.getElementById('line-number').textContent = revisionData.line;
+        }
+
+        handleSpecialCases();
+        updateUI();
+
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('content').style.display = 'block';
+
+        if (shouldPoll()) {
+          startPolling();
+        }
+
+        document.addEventListener('keydown', handleKeyPress);
+      } catch (e) {
+        showError('Failed to load: ' + e);
+      }
+    }
+
+    function handleSpecialCases() {
+      if (revisionData.repo_type === 'Bare') {
+        document.getElementById('warning-banner').textContent =
+          "This workspace doesn't support branch switching (bare repository)";
+        document.getElementById('warning-banner').style.display = 'block';
+      } else if (revisionData.repo_type === 'NotGit') {
+        document.getElementById('warning-banner').textContent =
+          "This workspace doesn't support branch switching (not a git repository)";
+        document.getElementById('warning-banner').style.display = 'block';
+      }
+
+      if (!revisionData.file_exists_at_ref) {
+        showError(`File '${revisionData.file_path}' does not exist at this reference (stale link)`);
+      }
+    }
+
+    function shouldPoll() {
+      return !revisionData.is_working_tree_clean &&
+             revisionData.repo_type === 'Normal' &&
+             revisionData.file_exists_at_ref;
+    }
+
+    function updateUI() {
+      const isClean = revisionData.is_working_tree_clean;
+      const dirtyCount = revisionData.dirty_file_count;
+      const statusBadge = document.getElementById('status-badge');
+      const statusDetails = document.getElementById('status-details');
+      const switchButton = document.getElementById('switch-button');
+      const switchReason = document.getElementById('switch-disabled-reason');
+
+      if (isClean) {
+        statusBadge.className = 'status-badge clean';
+        statusBadge.textContent = 'Clean';
+        statusDetails.textContent = 'No uncommitted changes';
+      } else {
+        statusBadge.className = 'status-badge dirty';
+        statusBadge.textContent = `${dirtyCount} file${dirtyCount !== 1 ? 's' : ''} modified`;
+        statusDetails.textContent = `${dirtyCount} modified, ${revisionData.dirty_file_count - dirtyCount} untracked`;
+      }
+
+      const canSwitch = isClean &&
+                        revisionData.repo_type === 'Normal' &&
+                        revisionData.branch_exists_locally &&
+                        revisionData.file_exists_at_ref &&
+                        !revisionData.checkout_blocked_reason;
+
+      if (canSwitch) {
+        switchButton.disabled = false;
+        switchReason.style.display = 'none';
+      } else {
+        switchButton.disabled = true;
+        let reason = revisionData.checkout_blocked_reason;
+
+        if (!reason && !isClean) {
+          reason = `${dirtyCount} file${dirtyCount !== 1 ? 's' : ''} modified, ${revisionData.dirty_file_count - dirtyCount} untracked`;
+        } else if (!reason && !revisionData.branch_exists_locally) {
+          reason = `Branch '${revisionData.rev}' does not exist locally`;
+        } else if (!reason && revisionData.repo_type !== 'Normal') {
+          reason = 'Repository does not support checkout';
+        } else if (!reason && !revisionData.file_exists_at_ref) {
+          reason = 'File does not exist at this reference';
+        }
+
+        if (reason) {
+          switchReason.textContent = reason;
+          switchReason.style.display = 'block';
+        }
+      }
+
+      const worktreeButton = document.getElementById('worktree-button');
+      const ignoreButton = document.getElementById('ignore-button');
+      const fetchButton = document.getElementById('fetch-button');
+
+      worktreeButton.disabled = revisionData.repo_type !== 'Normal' || !revisionData.file_exists_at_ref;
+      ignoreButton.disabled = !revisionData.file_exists_at_ref;
+
+      const showFetchButton = !revisionData.branch_exists_locally &&
+                              isClean &&
+                              revisionData.repo_type === 'Normal' &&
+                              revisionData.file_exists_at_ref &&
+                              !revisionData.checkout_blocked_reason;
+      fetchButton.style.display = showFetchButton ? 'flex' : 'none';
+    }
+
+    function startPolling() {
+      document.getElementById('polling-indicator').style.display = 'block';
+
+      pollingInterval = setInterval(async () => {
+        try {
+          const status = await invoke('get_working_tree_status_poll', {
+            workspacePath: revisionData.workspace_path
+          });
+
+          revisionData.is_working_tree_clean = status.is_clean;
+          revisionData.dirty_file_count = status.modified_count;
+
+          updateUI();
+
+          if (status.is_clean) {
+            stopPolling();
+          }
+        } catch (e) {
+          console.error('Polling error:', e);
+        }
+      }, 1000);
+    }
+
+    function stopPolling() {
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
+        pollingInterval = null;
+        document.getElementById('polling-indicator').style.display = 'none';
+      }
+    }
+
+    async function switchAndOpen() {
+      try {
+        document.getElementById('switch-button').disabled = true;
+        document.getElementById('switch-button').querySelector('.button-title').textContent = 'Switching...';
+
+        await invoke('switch_and_open_file', {
+          workspacePath: revisionData.workspace_path,
+          branch: revisionData.rev,
+          filePath: revisionData.full_file_path,
+          line: revisionData.line,
+          column: revisionData.column
+        });
+
+        window.close();
+      } catch (e) {
+        showError('Failed to switch and open: ' + e);
+      }
+    }
+
+    async function fetchAndSwitch() {
+      try {
+        const fetchButton = document.getElementById('fetch-button');
+        fetchButton.disabled = true;
+        fetchButton.querySelector('.button-title').textContent = 'Fetching...';
+
+        await invoke('fetch_and_switch', {
+          workspacePath: revisionData.workspace_path,
+          branch: revisionData.rev,
+          filePath: revisionData.full_file_path,
+          line: revisionData.line,
+          column: revisionData.column
+        });
+
+        window.close();
+      } catch (e) {
+        showError('Failed to fetch and switch: ' + e);
+        const fetchButton = document.getElementById('fetch-button');
+        fetchButton.disabled = false;
+        fetchButton.querySelector('.button-title').textContent = 'Fetch & Switch';
+      }
+    }
+
+    async function createWorktreeAndOpen() {
+      try {
+        document.getElementById('worktree-button').disabled = true;
+        document.getElementById('worktree-button').querySelector('.button-title').textContent = 'Creating...';
+
+        await invoke('create_worktree_and_open', {
+          workspacePath: revisionData.workspace_path,
+          workspaceName: revisionData.workspace,
+          branchOrCommit: revisionData.rev,
+          filePath: revisionData.file_path,
+          line: revisionData.line,
+          column: revisionData.column
+        });
+
+        window.close();
+      } catch (e) {
+        showError('Failed to create worktree: ' + e);
+      }
+    }
+
+    async function ignoreAndOpen() {
+      try {
+        document.getElementById('ignore-button').disabled = true;
+        document.getElementById('ignore-button').querySelector('.button-title').textContent = 'Opening...';
+
+        await invoke('ignore_ref_and_open', {
+          filePath: revisionData.full_file_path,
+          line: revisionData.line,
+          column: revisionData.column
+        });
+
+        window.close();
+      } catch (e) {
+        showError('Failed to open file: ' + e);
+      }
+    }
+
+    function cancel() {
+      invoke('revision_dialog_cancelled').catch(() => {});
+      window.close();
+    }
+
+    function showError(message) {
+      document.getElementById('error-text').textContent = message;
+      document.getElementById('error-banner').style.display = 'flex';
+    }
+
+    async function copyError() {
+      const errorText = document.getElementById('error-text').textContent;
+      const copyBtn = document.querySelector('#error-banner .copy-btn');
+      try {
+        await navigator.clipboard.writeText(errorText);
+        copyBtn.textContent = 'Copied!';
+        copyBtn.classList.add('copied');
+        setTimeout(() => {
+          copyBtn.textContent = 'Copy';
+          copyBtn.classList.remove('copied');
+        }, 2000);
+      } catch (e) {
+        console.error('Failed to copy:', e);
+      }
+    }
+
+    function handleKeyPress(e) {
+      if (e.key === 'Escape') {
+        cancel();
+      }
+    }
+
+    window.addEventListener('beforeunload', () => {
+      stopPolling();
+    });
+
+    init();
+  </script>
+</body>
+</html>
