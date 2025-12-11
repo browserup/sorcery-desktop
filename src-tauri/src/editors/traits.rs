@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 
@@ -25,6 +25,7 @@ pub struct OpenOptions {
     pub line: Option<usize>,
     pub column: Option<usize>,
     pub new_window: bool,
+    pub terminal_preference: Option<String>,
 }
 
 impl Default for OpenOptions {
@@ -33,6 +34,7 @@ impl Default for OpenOptions {
             line: None,
             column: None,
             new_window: false,
+            terminal_preference: None,
         }
     }
 }
@@ -49,6 +51,10 @@ pub trait EditorManager: Send + Sync {
     fn id(&self) -> &str;
 
     fn display_name(&self) -> &str;
+
+    fn supports_folders(&self) -> bool {
+        false
+    }
 
     async fn is_installed(&self) -> bool {
         self.find_binary().await.is_some()

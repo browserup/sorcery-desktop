@@ -1,14 +1,18 @@
 [package]
-name = "hypredit"
+name = "sorcery-desktop"
 version = "0.1.0"
-description = "Cross-platform hyper-linker for editors and IDEs"
+description = "Sorcery Desktop - Cross-platform editor hyperlink launcher"
 authors = ["Eric Beland"]
 license = "MIT"
-repository = "https://github.com/ebeland/hypredit"
+repository = "https://github.com/ebeland/sorcery-desktop"
 edition = "2021"
 
+[lib]
+name = "sorcery_desktop"
+path = "src/lib.rs"
+
 [[bin]]
-name = "hypredit"
+name = "sorcery-desktop"
 path = "src/main.rs"
 
 [build-dependencies]
@@ -19,18 +23,53 @@ tauri = { version = "2.0.0", features = ["tray-icon", "protocol-asset"] }
 tauri-plugin-deep-link = "2.0.0"
 tauri-plugin-shell = "2.0.0"
 tauri-plugin-dialog = "2.0.0"
+tauri-plugin-fs = "2.0.0"
+tauri-plugin-single-instance = "2.0.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_yaml = "0.9"
 tokio = { version = "1.40", features = ["full"] }
 anyhow = "1.0"
-tracing = "0.1"
-dirs = "5.0"
-shellexpand = "3.1"
-regex = "1.10"
-once_cell = "1.19"
-async-trait = "0.1"
 thiserror = "1.0"
-parking_lot = "0.12"
-chrono = "0.4"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+dirs = "5.0"
+regex = "1.10"
 url = "2.5"
+async-trait = "0.1"
+parking_lot = "0.12"
+once_cell = "1.19"
+shellexpand = "3.1"
+chrono = { version = "0.4", features = ["serde"] }
+lazy_static = "1.4"
+git2 = "0.18"
+sysinfo = "0.30"
+open = "5"
+srcuri-core = { path = "../srcuri-core" }
+
+# Platform-specific dependencies
+[target.'cfg(target_os = "macos")'.dependencies]
+cocoa = "0.25"
+objc = "0.2"
+core-foundation = "0.9"
+core-graphics = "0.23"
+window-vibrancy = "0.5"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+winapi = { version = "0.3", features = ["winuser", "processthreadsapi", "handleapi"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+x11 = { version = "2.21", features = ["xlib"] }
+libc = "0.2"
+
+[dev-dependencies]
+tempfile = "3.8"
+
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+libc = "0.2"
+
+[features]
+docker-tests = []
+
+[lints.rust]
+unexpected_cfgs = { level = "allow", check-cfg = ['cfg(feature, values("cargo-clippy"))'] }

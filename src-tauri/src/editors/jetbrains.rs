@@ -1,9 +1,9 @@
-use super::traits::{EditorManager, OpenOptions, EditorInstance, EditorResult, EditorError};
+use super::traits::{EditorError, EditorInstance, EditorManager, EditorResult, OpenOptions};
 use async_trait::async_trait;
+use parking_lot::RwLock;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, SystemTime};
-use parking_lot::RwLock;
 use tracing::{debug, warn};
 
 struct BinaryCache {
@@ -52,7 +52,8 @@ impl JetBrainsManager {
 
     #[cfg(target_os = "macos")]
     async fn find_toolbox_binary_macos(&self) -> Option<PathBuf> {
-        let toolbox_apps = dirs::home_dir()?.join("Library/Application Support/JetBrains/Toolbox/apps");
+        let toolbox_apps =
+            dirs::home_dir()?.join("Library/Application Support/JetBrains/Toolbox/apps");
 
         if !toolbox_apps.exists() {
             return None;
@@ -71,7 +72,10 @@ impl JetBrainsManager {
                 if let Some(latest_version) = Self::find_latest_subdir(&channel_dir) {
                     let app_path = latest_version.join(&app_name);
                     if app_path.exists() {
-                        debug!("Found {} Toolbox installation at {:?}", self.display_name, app_path);
+                        debug!(
+                            "Found {} Toolbox installation at {:?}",
+                            self.display_name, app_path
+                        );
                         return Some(app_path);
                     }
                 }
@@ -96,7 +100,10 @@ impl JetBrainsManager {
                 if let Some(latest_version) = Self::find_latest_subdir(&channel_dir) {
                     let app_path = latest_version.join(app_name);
                     if app_path.exists() {
-                        debug!("Found {} via heuristic search at {:?}", self.display_name, app_path);
+                        debug!(
+                            "Found {} via heuristic search at {:?}",
+                            self.display_name, app_path
+                        );
                         return Some(app_path);
                     }
                 }
@@ -159,7 +166,10 @@ impl JetBrainsManager {
                     if let Some(latest_version) = Self::find_latest_subdir(&channel_dir) {
                         let bin_dir = latest_version.join("bin");
                         if let Some(exe) = Self::pick_windows_exe(&bin_dir, &self.id) {
-                            debug!("Found {} Toolbox installation at {:?}", self.display_name, exe);
+                            debug!(
+                                "Found {} Toolbox installation at {:?}",
+                                self.display_name, exe
+                            );
                             return Some(exe);
                         }
                     }
@@ -190,7 +200,10 @@ impl JetBrainsManager {
                 if let Some(latest_version) = Self::find_latest_subdir(&channel_dir) {
                     let bin_dir = latest_version.join("bin");
                     if let Some(exe) = Self::pick_windows_exe(&bin_dir, &self.id) {
-                        debug!("Found {} via heuristic search at {:?}", self.display_name, exe);
+                        debug!(
+                            "Found {} via heuristic search at {:?}",
+                            self.display_name, exe
+                        );
                         return Some(exe);
                     }
                 }
@@ -205,7 +218,8 @@ impl JetBrainsManager {
         use std::env;
 
         let pf = env::var("ProgramFiles").unwrap_or_else(|_| "C:\\Program Files".to_string());
-        let pf86 = env::var("ProgramFiles(x86)").unwrap_or_else(|_| "C:\\Program Files (x86)".to_string());
+        let pf86 =
+            env::var("ProgramFiles(x86)").unwrap_or_else(|_| "C:\\Program Files (x86)".to_string());
 
         let candidates = vec![
             PathBuf::from(&pf).join("JetBrains\\IntelliJ IDEA\\bin\\idea64.exe"),
@@ -225,7 +239,9 @@ impl JetBrainsManager {
         for candidate in candidates {
             if candidate.exists() {
                 let candidate_str = candidate.to_string_lossy().to_lowercase();
-                if candidate_str.contains(&self.id) || (self.id == "intellij" && candidate_str.contains("idea")) {
+                if candidate_str.contains(&self.id)
+                    || (self.id == "intellij" && candidate_str.contains("idea"))
+                {
                     debug!("Found {} standalone at {:?}", self.display_name, candidate);
                     return Some(candidate);
                 }
@@ -297,7 +313,10 @@ impl JetBrainsManager {
                     if let Some(latest_version) = Self::find_latest_subdir(&channel_dir) {
                         let bin_dir = latest_version.join("bin");
                         if let Some(script) = Self::pick_linux_script(&bin_dir, &self.id) {
-                            debug!("Found {} Toolbox installation at {:?}", self.display_name, script);
+                            debug!(
+                                "Found {} Toolbox installation at {:?}",
+                                self.display_name, script
+                            );
                             return Some(script);
                         }
                     }
@@ -327,7 +346,10 @@ impl JetBrainsManager {
                 if let Some(latest_version) = Self::find_latest_subdir(&channel_dir) {
                     let bin_dir = latest_version.join("bin");
                     if let Some(script) = Self::pick_linux_script(&bin_dir, &self.id) {
-                        debug!("Found {} via heuristic search at {:?}", self.display_name, script);
+                        debug!(
+                            "Found {} via heuristic search at {:?}",
+                            self.display_name, script
+                        );
                         return Some(script);
                     }
                 }
@@ -346,11 +368,7 @@ impl JetBrainsManager {
         let files: Vec<_> = std::fs::read_dir(bin_dir)
             .ok()?
             .filter_map(|e| e.ok())
-            .filter(|e| {
-                e.path()
-                    .to_string_lossy()
-                    .ends_with(".sh")
-            })
+            .filter(|e| e.path().to_string_lossy().ends_with(".sh"))
             .collect();
 
         // Prefer matching name
@@ -376,6 +394,40 @@ impl JetBrainsManager {
         files.first().map(|e| e.path())
     }
 
+    #[cfg(target_os = "linux")]
+    async fn find_standalone_binary_linux(&self) -> Option<PathBuf> {
+        // Check common locations and PATH
+        let candidates = vec![
+            PathBuf::from(format!("/usr/local/bin/{}", self.toolbox_id)),
+            PathBuf::from(format!("/usr/bin/{}", self.toolbox_id)),
+            PathBuf::from(format!("/snap/bin/{}", self.toolbox_id)),
+            PathBuf::from(format!("/opt/{}/bin/{}.sh", self.toolbox_id, self.toolbox_id)),
+        ];
+
+        for path in candidates {
+            if path.exists() {
+                debug!("Found {} standalone at {:?}", self.display_name, path);
+                return Some(path);
+            }
+        }
+
+        // Fallback: use `which` to find in PATH
+        if let Ok(output) = Command::new("which").arg(&self.toolbox_id).output() {
+            if output.status.success() {
+                let path_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                if !path_str.is_empty() {
+                    let path = PathBuf::from(path_str);
+                    if path.exists() {
+                        debug!("Found {} via which: {:?}", self.display_name, path);
+                        return Some(path);
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
     fn spawn_editor(&self, binary: &Path, args: &[String]) -> Result<(), String> {
         #[cfg(target_os = "macos")]
         {
@@ -384,10 +436,7 @@ impl JetBrainsManager {
             // Use -n to always open a new instance so arguments are properly passed
             // Without -n, if the app is already running, it just activates it and ignores args
             let mut cmd = Command::new("open");
-            cmd.arg("-n")
-                .arg("-a")
-                .arg(binary)
-                .arg("--args");
+            cmd.arg("-n").arg("-a").arg(binary).arg("--args");
 
             for arg in args {
                 cmd.arg(arg);
@@ -409,7 +458,7 @@ impl JetBrainsManager {
             let mut cmd = Command::new("cmd.exe");
             cmd.arg("/c")
                 .arg("start")
-                .arg("\"\"")  // Empty window title
+                .arg("\"\"") // Empty window title
                 .arg(&*binary_str);
 
             for arg in args {
@@ -450,6 +499,10 @@ impl EditorManager for JetBrainsManager {
         &self.display_name
     }
 
+    fn supports_folders(&self) -> bool {
+        true
+    }
+
     async fn find_binary(&self) -> Option<PathBuf> {
         if let Some(cached) = self.get_cached_binary() {
             return Some(cached);
@@ -482,6 +535,11 @@ impl EditorManager for JetBrainsManager {
                 self.cache_binary(Some(path.clone()));
                 return Some(path);
             }
+
+            if let Some(path) = self.find_standalone_binary_linux().await {
+                self.cache_binary(Some(path.clone()));
+                return Some(path);
+            }
         }
 
         self.cache_binary(None);
@@ -489,15 +547,21 @@ impl EditorManager for JetBrainsManager {
     }
 
     async fn open(&self, path: &Path, options: &OpenOptions) -> EditorResult<()> {
-        let binary = self.find_binary().await
+        let binary = self
+            .find_binary()
+            .await
             .ok_or(EditorError::BinaryNotFound)?;
 
         let mut args = vec![];
 
-        // Add line number as separate --line argument if specified
         if let Some(line) = options.line {
             args.push("--line".to_string());
             args.push(line.to_string());
+        }
+
+        if let Some(column) = options.column {
+            args.push("--column".to_string());
+            args.push(column.to_string());
         }
 
         args.push(path.display().to_string());
@@ -508,7 +572,10 @@ impl EditorManager for JetBrainsManager {
         let launch_result = self.spawn_editor(&binary, &args);
 
         if let Err(e) = launch_result {
-            warn!("Failed to launch {}: {}. Invalidating cache and retrying...", self.display_name, e);
+            warn!(
+                "Failed to launch {}: {}. Invalidating cache and retrying...",
+                self.display_name, e
+            );
 
             // Invalidate cache
             self.cache_binary(None);
@@ -516,7 +583,8 @@ impl EditorManager for JetBrainsManager {
             // Retry with fresh binary discovery
             if let Some(retry_binary) = self.find_binary().await {
                 debug!("Retrying with fresh binary: {:?}", retry_binary);
-                return self.spawn_editor(&retry_binary, &args)
+                return self
+                    .spawn_editor(&retry_binary, &args)
                     .map_err(|e| EditorError::LaunchFailed(format!("Retry failed: {}", e)));
             }
 

@@ -84,15 +84,10 @@ fn map_app_name_to_editor(app_name: &str) -> Option<String> {
 
 #[cfg(target_os = "macos")]
 async fn detect_vscodium_via_ps() -> Option<String> {
-    let output = Command::new("ps")
-        .arg("aux")
-        .output()
-        .ok()?;
+    let output = Command::new("ps").arg("aux").output().ok()?;
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    if stdout.contains("VSCodium.app/Contents/MacOS/Electron")
-        && !stdout.contains("Helper")
-    {
+    if stdout.contains("VSCodium.app/Contents/MacOS/Electron") && !stdout.contains("Helper") {
         return Some("vscodium".to_string());
     }
     None
@@ -100,10 +95,7 @@ async fn detect_vscodium_via_ps() -> Option<String> {
 
 #[cfg(target_os = "macos")]
 async fn detect_terminal_editor() -> Option<String> {
-    let output = Command::new("ps")
-        .arg("aux")
-        .output()
-        .ok()?;
+    let output = Command::new("ps").arg("aux").output().ok()?;
 
     let stdout = String::from_utf8_lossy(&output.stdout);
 

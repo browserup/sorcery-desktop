@@ -1,4 +1,4 @@
-use super::traits::{EditorManager, OpenOptions, EditorInstance, EditorResult, EditorError};
+use super::traits::{EditorError, EditorInstance, EditorManager, EditorResult, OpenOptions};
 use async_trait::async_trait;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -14,7 +14,13 @@ pub struct VSCodeManager {
 }
 
 impl VSCodeManager {
-    pub fn new(id: &str, display_name: &str, cli_name: &str, macos_app_name: &str, _windows_exe_name: &str) -> Self {
+    pub fn new(
+        id: &str,
+        display_name: &str,
+        cli_name: &str,
+        macos_app_name: &str,
+        _windows_exe_name: &str,
+    ) -> Self {
         Self {
             id: id.to_string(),
             display_name: display_name.to_string(),
@@ -28,8 +34,10 @@ impl VSCodeManager {
     #[cfg(target_os = "macos")]
     async fn find_binary_macos(&self) -> Option<PathBuf> {
         let candidates = vec![
-            PathBuf::from(format!("/Applications/{}.app/Contents/Resources/app/bin/{}",
-                self.macos_app_name, self.cli_name)),
+            PathBuf::from(format!(
+                "/Applications/{}.app/Contents/Resources/app/bin/{}",
+                self.macos_app_name, self.cli_name
+            )),
             PathBuf::from(format!("/usr/local/bin/{}", self.cli_name)),
             PathBuf::from(format!("/opt/homebrew/bin/{}", self.cli_name)),
         ];
@@ -60,10 +68,14 @@ impl VSCodeManager {
     #[cfg(target_os = "windows")]
     async fn find_binary_windows(&self) -> Option<PathBuf> {
         let candidates = vec![
-            PathBuf::from(format!("C:\\Program Files\\{}\\bin\\{}.cmd",
-                self.windows_exe_name, self.cli_name)),
-            PathBuf::from(format!("C:\\Program Files (x86)\\{}\\bin\\{}.cmd",
-                self.windows_exe_name, self.cli_name)),
+            PathBuf::from(format!(
+                "C:\\Program Files\\{}\\bin\\{}.cmd",
+                self.windows_exe_name, self.cli_name
+            )),
+            PathBuf::from(format!(
+                "C:\\Program Files (x86)\\{}\\bin\\{}.cmd",
+                self.windows_exe_name, self.cli_name
+            )),
         ];
 
         for path in candidates {
@@ -73,7 +85,10 @@ impl VSCodeManager {
             }
         }
 
-        if let Ok(output) = Command::new("where").arg(&format!("{}.cmd", self.cli_name)).output() {
+        if let Ok(output) = Command::new("where")
+            .arg(&format!("{}.cmd", self.cli_name))
+            .output()
+        {
             if output.status.success() {
                 let path_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
                 if !path_str.is_empty() {
@@ -131,6 +146,10 @@ impl EditorManager for VSCodeManager {
         &self.display_name
     }
 
+    fn supports_folders(&self) -> bool {
+        true
+    }
+
     async fn find_binary(&self) -> Option<PathBuf> {
         #[cfg(target_os = "macos")]
         return self.find_binary_macos().await;
@@ -143,30 +162,46 @@ impl EditorManager for VSCodeManager {
     }
 
     async fn open(&self, path: &Path, options: &OpenOptions) -> EditorResult<()> {
-        let binary = self.find_binary().await
+        let binary = self
+            .find_binary()
+            .await
             .ok_or(EditorError::BinaryNotFound)?;
 
         let mut args = vec![];
 
-        if !options.new_window {
-            args.push("--reuse-window");
-        } else {
-            args.push("--new-window");
+        // VSCode/VSCodium require --no-sandbox and --user-data-dir when running as root on Linux
+        #[cfg(target_os = "linux")]
+        if unsafe { libc::geteuid() == 0 } {
+            args.push("--no-sandbox".to_string());
+            args.push(format!("--user-data-dir=/tmp/{}-root", self.cli_name));
         }
 
-        let goto_arg = if let Some(line) = options.line {
-            let col = options.column.unwrap_or(1);
-            format!("--goto {}:{}:{}", path.display(), line, col)
+        if !options.new_window {
+            args.push("--reuse-window".to_string());
         } else {
-            path.display().to_string()
-        };
+            args.push("--new-window".to_string());
+        }
 
-        args.push(&goto_arg);
+        let is_directory = path.is_dir();
+
+        if is_directory {
+            args.push(path.display().to_string());
+        } else {
+            args.push("--goto".to_string());
+
+            let goto_arg = match (options.line, options.column) {
+                (Some(line), Some(column)) => format!("{}:{}:{}", path.display(), line, column),
+                (Some(line), None) => format!("{}:{}:1", path.display(), line),
+                _ => path.display().to_string(),
+            };
+
+            args.push(goto_arg);
+        }
 
         debug!("Launching {} with args: {:?}", self.display_name, args);
 
         let result = Command::new(&binary)
-            .args(&args)
+            .args(args.iter().map(|s| s.as_str()))
             .output();
 
         match result {
@@ -175,10 +210,16 @@ impl EditorManager for VSCodeManager {
             }
             Ok(output) => {
                 let stderr = String::from_utf8_lossy(&output.stderr);
-                debug!("Failed to launch {} with primary binary: {}", self.display_name, stderr);
+                debug!(
+                    "Failed to launch {} with primary binary: {}",
+                    self.display_name, stderr
+                );
             }
             Err(e) => {
-                debug!("Failed to exec {} with primary binary: {}", self.display_name, e);
+                debug!(
+                    "Failed to exec {} with primary binary: {}",
+                    self.display_name, e
+                );
             }
         }
 
@@ -187,17 +228,22 @@ impl EditorManager for VSCodeManager {
         {
             let app_path = PathBuf::from(format!("/Applications/{}.app", self.macos_app_name));
             if app_path.exists() {
-                let cli_path = app_path.join("Contents/Resources/app/bin").join(&self.cli_name);
+                let cli_path = app_path
+                    .join("Contents/Resources/app/bin")
+                    .join(&self.cli_name);
                 debug!("Trying app bundle fallback at {:?}", cli_path);
 
                 if cli_path.exists() {
                     let fallback_result = Command::new(&cli_path)
-                        .args(&args)
+                        .args(args.iter().map(|s| s.as_str()))
                         .output();
 
                     match fallback_result {
                         Ok(output) if output.status.success() => {
-                            debug!("Successfully launched {} via app bundle fallback", self.display_name);
+                            debug!(
+                                "Successfully launched {} via app bundle fallback",
+                                self.display_name
+                            );
                             return Ok(());
                         }
                         Ok(output) => {
@@ -212,7 +258,10 @@ impl EditorManager for VSCodeManager {
             }
         }
 
-        Err(EditorError::LaunchFailed(format!("Failed to launch {}", self.display_name)))
+        Err(EditorError::LaunchFailed(format!(
+            "Failed to launch {}",
+            self.display_name
+        )))
     }
 
     async fn get_running_instances(&self) -> EditorResult<Vec<EditorInstance>> {
@@ -277,7 +326,10 @@ impl EditorManager for VSCodeManager {
             }
 
             let stdout = String::from_utf8_lossy(&output.stdout);
-            if stdout.to_lowercase().contains(&self.cli_name.to_lowercase()) {
+            if stdout
+                .to_lowercase()
+                .contains(&self.cli_name.to_lowercase())
+            {
                 return Ok(vec![EditorInstance {
                     pid: 0,
                     workspace: Some("detected (workspace unknown)".to_string()),

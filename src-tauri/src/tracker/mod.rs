@@ -19,7 +19,7 @@ pub struct ActiveEditorTracker {
 impl ActiveEditorTracker {
     pub fn new(registry: Arc<EditorRegistry>) -> Self {
         let last_seen_path = Self::get_last_seen_path()
-            .unwrap_or_else(|_| PathBuf::from("/tmp/hypredit_last_seen.yaml"));
+            .unwrap_or_else(|_| PathBuf::from("/tmp/sorcery_desktop_last_seen.yaml"));
 
         Self {
             last_seen: Arc::new(RwLock::new(LastSeenData::default())),
@@ -29,14 +29,13 @@ impl ActiveEditorTracker {
     }
 
     fn get_last_seen_path() -> Result<PathBuf> {
-        let config_dir = dirs::config_dir()
-            .context("Could not find config directory")?;
+        let config_dir = dirs::config_dir().context("Could not find config directory")?;
 
-        let hypredit_dir = config_dir.join("hypredit");
-        std::fs::create_dir_all(&hypredit_dir)
-            .context("Failed to create hypredit config directory")?;
+        let sorcery_dir = config_dir.join("sorcery");
+        std::fs::create_dir_all(&sorcery_dir)
+            .context("Failed to create sorcery config directory")?;
 
-        Ok(hypredit_dir.join("last_seen.yaml"))
+        Ok(sorcery_dir.join("last_seen.yaml"))
     }
 
     pub async fn load(&self) -> Result<()> {
@@ -45,11 +44,12 @@ impl ActiveEditorTracker {
             return Ok(());
         }
 
-        let contents = tokio::fs::read_to_string(&self.last_seen_path).await
+        let contents = tokio::fs::read_to_string(&self.last_seen_path)
+            .await
             .context("Failed to read last_seen file")?;
 
-        let data: LastSeenData = serde_yaml::from_str(&contents)
-            .context("Failed to parse YAML last_seen data")?;
+        let data: LastSeenData =
+            serde_yaml::from_str(&contents).context("Failed to parse YAML last_seen data")?;
 
         let mut current = self.last_seen.write().await;
         *current = data;
@@ -61,10 +61,11 @@ impl ActiveEditorTracker {
     async fn save(&self) -> Result<()> {
         let data = self.last_seen.read().await.clone();
 
-        let yaml_string = serde_yaml::to_string(&data)
-            .context("Failed to serialize last_seen data to YAML")?;
+        let yaml_string =
+            serde_yaml::to_string(&data).context("Failed to serialize last_seen data to YAML")?;
 
-        tokio::fs::write(&self.last_seen_path, yaml_string).await
+        tokio::fs::write(&self.last_seen_path, yaml_string)
+            .await
             .context("Failed to write last_seen file")?;
 
         debug!("Last seen data saved to {:?}", self.last_seen_path);

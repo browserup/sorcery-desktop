@@ -1,5 +1,6 @@
-mod models;
 mod manager;
+mod models;
 
-pub use models::{Settings, LastSeenData};
 pub use manager::SettingsManager;
+#[allow(unused_imports)]
+pub use models::{LastSeenData, Settings, WorkspaceConfig};

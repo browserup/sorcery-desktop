@@ -1,4 +1,4 @@
-use super::traits::{EditorManager, OpenOptions, EditorInstance, EditorResult, EditorError};
+use super::traits::{EditorError, EditorInstance, EditorManager, EditorResult, OpenOptions};
 use async_trait::async_trait;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -25,6 +25,10 @@ impl EditorManager for XcodeManager {
         "Xcode"
     }
 
+    fn supports_folders(&self) -> bool {
+        true
+    }
+
     async fn find_binary(&self) -> Option<PathBuf> {
         let xcode_path = PathBuf::from("/Applications/Xcode.app/Contents/MacOS/Xcode");
         if xcode_path.exists() {
@@ -35,7 +39,8 @@ impl EditorManager for XcodeManager {
     }
 
     async fn open(&self, path: &Path, _options: &OpenOptions) -> EditorResult<()> {
-        self.find_binary().await
+        self.find_binary()
+            .await
             .ok_or(EditorError::BinaryNotFound)?;
 
         debug!("Opening in Xcode: {:?}", path);
@@ -73,12 +78,24 @@ impl EditorManager for ZedManager {
         "Zed"
     }
 
+    fn supports_folders(&self) -> bool {
+        true
+    }
+
     async fn find_binary(&self) -> Option<PathBuf> {
         #[cfg(target_os = "macos")]
         {
-            let zed_cli = PathBuf::from("/usr/local/bin/zed");
-            if zed_cli.exists() {
-                return Some(zed_cli);
+            let candidates = vec![
+                PathBuf::from("/Applications/Zed.app/Contents/MacOS/cli"),
+                PathBuf::from("/usr/local/bin/zed"),
+                PathBuf::from("/opt/homebrew/bin/zed"),
+            ];
+
+            for path in candidates {
+                if path.exists() {
+                    debug!("Found Zed at {:?}", path);
+                    return Some(path);
+                }
             }
         }
 
@@ -95,7 +112,9 @@ impl EditorManager for ZedManager {
     }
 
     async fn open(&self, path: &Path, options: &OpenOptions) -> EditorResult<()> {
-        let binary = self.find_binary().await
+        let binary = self
+            .find_binary()
+            .await
             .ok_or(EditorError::BinaryNotFound)?;
 
         let mut args = vec![];
@@ -131,6 +150,84 @@ impl SublimeManager {
     }
 }
 
+pub struct GeditManager;
+
+impl GeditManager {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+#[async_trait]
+impl EditorManager for GeditManager {
+    fn id(&self) -> &str {
+        "gedit"
+    }
+
+    fn display_name(&self) -> &str {
+        "Gedit"
+    }
+
+    fn supports_folders(&self) -> bool {
+        false
+    }
+
+    async fn find_binary(&self) -> Option<PathBuf> {
+        #[cfg(target_os = "linux")]
+        {
+            let candidates = vec![
+                PathBuf::from("/usr/bin/gedit"),
+                PathBuf::from("/usr/local/bin/gedit"),
+            ];
+
+            for path in candidates {
+                if path.exists() {
+                    return Some(path);
+                }
+            }
+        }
+
+        if let Ok(output) = Command::new("which").arg("gedit").output() {
+            if output.status.success() {
+                let path_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                if !path_str.is_empty() {
+                    return Some(PathBuf::from(path_str));
+                }
+            }
+        }
+
+        None
+    }
+
+    async fn open(&self, path: &Path, options: &OpenOptions) -> EditorResult<()> {
+        let binary = self
+            .find_binary()
+            .await
+            .ok_or(EditorError::BinaryNotFound)?;
+
+        let mut args = vec![];
+
+        if let Some(line) = options.line {
+            args.push(format!("+{}", line));
+        }
+
+        args.push(path.display().to_string());
+
+        debug!("Launching Gedit with args: {:?}", args);
+
+        Command::new(&binary)
+            .args(&args)
+            .spawn()
+            .map_err(|e| EditorError::LaunchFailed(e.to_string()))?;
+
+        Ok(())
+    }
+
+    async fn get_running_instances(&self) -> EditorResult<Vec<EditorInstance>> {
+        Ok(Vec::new())
+    }
+}
+
 #[async_trait]
 impl EditorManager for SublimeManager {
     fn id(&self) -> &str {
@@ -141,10 +238,15 @@ impl EditorManager for SublimeManager {
         "Sublime Text"
     }
 
+    fn supports_folders(&self) -> bool {
+        true
+    }
+
     async fn find_binary(&self) -> Option<PathBuf> {
         #[cfg(target_os = "macos")]
         {
-            let subl = PathBuf::from("/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl");
+            let subl =
+                PathBuf::from("/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl");
             if subl.exists() {
                 return Some(subl);
             }
@@ -176,15 +278,17 @@ impl EditorManager for SublimeManager {
     }
 
     async fn open(&self, path: &Path, options: &OpenOptions) -> EditorResult<()> {
-        let binary = self.find_binary().await
+        let binary = self
+            .find_binary()
+            .await
             .ok_or(EditorError::BinaryNotFound)?;
 
         let mut args = vec![];
 
-        let file_arg = if let Some(line) = options.line {
-            format!("{}:{}", path.display(), line)
-        } else {
-            path.display().to_string()
+        let file_arg = match (options.line, options.column) {
+            (Some(line), Some(column)) => format!("{}:{}:{}", path.display(), line, column),
+            (Some(line), None) => format!("{}:{}", path.display(), line),
+            _ => path.display().to_string(),
         };
 
         args.push(file_arg);

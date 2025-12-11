@@ -1,10 +1,12 @@
 use crate::editors::{EditorRegistry, OpenOptions};
+use crate::git_command_log::GIT_COMMAND_LOG;
 use crate::path_validator::PathValidator;
 use crate::settings::SettingsManager;
 use crate::tracker::ActiveEditorTracker;
 use anyhow::{Context, Result};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
+use std::time::Instant;
 use tracing::{debug, info};
 
 pub struct EditorDispatcher {
@@ -33,48 +35,111 @@ impl EditorDispatcher {
         &self,
         path_str: &str,
         line: Option<usize>,
+        column: Option<usize>,
         new_window: bool,
         editor_hint: Option<String>,
     ) -> Result<()> {
-        info!("open() called with path: {}, line: {:?}, editor_hint: {:?}", path_str, line, editor_hint);
+        let start = Instant::now();
+        info!(
+            "open() called with path: {}, line: {:?}, column: {:?}, editor_hint: {:?}",
+            path_str, line, column, editor_hint
+        );
 
-        let validated_path = self.path_validator.validate(path_str).await
+        let validated_path = self
+            .path_validator
+            .validate_any(path_str)
+            .await
             .context("Path validation failed")?;
 
-        info!("Path validated: {}", validated_path.display());
+        let is_directory = validated_path.is_dir();
+        info!(
+            "Path validated: {} (is_directory: {})",
+            validated_path.display(),
+            is_directory
+        );
 
         let editor_id = self.determine_editor(&validated_path, editor_hint).await?;
         info!("Determined editor: {}", editor_id);
 
-        let manager = self.editor_registry.get(&editor_id)
+        let manager = self
+            .editor_registry
+            .get(&editor_id)
             .ok_or_else(|| anyhow::anyhow!("Editor '{}' not found in registry", editor_id))?;
+
+        if is_directory && !manager.supports_folders() {
+            let duration = start.elapsed();
+            GIT_COMMAND_LOG.log_editor_launch(
+                &editor_id,
+                path_str,
+                line,
+                false,
+                Some(&format!(
+                    "Editor '{}' does not support opening folders",
+                    editor_id
+                )),
+                duration,
+            );
+            return Err(anyhow::anyhow!(
+                "Editor '{}' does not support opening folders. Try using a different editor like VS Code or a JetBrains IDE.",
+                manager.display_name()
+            ));
+        }
 
         let is_installed = manager.is_installed().await;
         info!("Editor '{}' is_installed: {}", editor_id, is_installed);
 
         if !is_installed {
+            let duration = start.elapsed();
+            GIT_COMMAND_LOG.log_editor_launch(
+                &editor_id,
+                path_str,
+                line,
+                false,
+                Some(&format!("Editor '{}' is not installed", editor_id)),
+                duration,
+            );
             return Err(anyhow::anyhow!("Editor '{}' is not installed", editor_id));
         }
 
+        let terminal_preference = self.settings_manager.get_preferred_terminal().await;
+
         let options = OpenOptions {
-            line,
-            column: None,
+            line: if is_directory { None } else { line },
+            column: if is_directory { None } else { column },
             new_window,
+            terminal_preference: Some(terminal_preference),
         };
 
         info!("Calling manager.open() for {}", editor_id);
-        manager.open(&validated_path, &options).await
-            .map_err(|e| anyhow::anyhow!("Failed to open in {}: {}", editor_id, e))?;
+        let result = manager.open(&validated_path, &options).await;
 
-        info!("Successfully opened {} in {}", validated_path.display(), editor_id);
-        Ok(())
+        let duration = start.elapsed();
+
+        match &result {
+            Ok(_) => {
+                info!(
+                    "Successfully opened {} in {}",
+                    validated_path.display(),
+                    editor_id
+                );
+                GIT_COMMAND_LOG.log_editor_launch(&editor_id, path_str, line, true, None, duration);
+            }
+            Err(e) => {
+                GIT_COMMAND_LOG.log_editor_launch(
+                    &editor_id,
+                    path_str,
+                    line,
+                    false,
+                    Some(&e.to_string()),
+                    duration,
+                );
+            }
+        }
+
+        result.map_err(|e| anyhow::anyhow!("Failed to open in {}: {}", editor_id, e))
     }
 
-    async fn determine_editor(
-        &self,
-        path: &Path,
-        editor_hint: Option<String>,
-    ) -> Result<String> {
+    async fn determine_editor(&self, path: &Path, editor_hint: Option<String>) -> Result<String> {
         if let Some(hint) = editor_hint {
             if hint == "most-recent" {
                 if let Some(recent) = self.tracker.get_most_recent_editor().await {
@@ -87,78 +152,30 @@ impl EditorDispatcher {
             }
         }
 
-        if let Some(workspace) = self.settings_manager.get_workspace_for_path(path).await {
-            debug!("Using workspace editor: {} for path {:?}", workspace.editor, path);
-            return Ok(workspace.editor);
+        let in_workspace =
+            if let Some(workspace) = self.settings_manager.get_workspace_for_path(path).await {
+                if !workspace.editor.is_empty() {
+                    debug!(
+                        "Using workspace editor: {} for path {:?}",
+                        workspace.editor, path
+                    );
+                    return Ok(workspace.editor);
+                }
+                debug!("Workspace editor is empty, falling back to default");
+                true
+            } else {
+                false
+            };
+
+        if !in_workspace && !self.settings_manager.allows_non_workspace_files().await {
+            return Err(anyhow::anyhow!(
+                "File is not in any configured workspace and opening non-workspace files is disabled. \
+                Enable 'Allow opening files outside of configured workspaces' in settings to open this file."
+            ));
         }
 
         let default_editor = self.settings_manager.get_default_editor().await;
         debug!("Using default editor: {}", default_editor);
         Ok(default_editor)
     }
-
-    // TODO: Implement deep link parsing per ai/11-deep-link-handler.md
-    #[allow(dead_code)]
-    pub async fn parse_deep_link(&self, url: &str) -> Result<DeepLinkRequest> {
-        let parsed_url = url::Url::parse(url)
-            .context("Failed to parse deep link URL")?;
-
-        if parsed_url.scheme() != "hypredit" {
-            return Err(anyhow::anyhow!("Invalid scheme: expected 'hypredit', got '{}'", parsed_url.scheme()));
-        }
-
-        let host = parsed_url.host_str()
-            .ok_or_else(|| anyhow::anyhow!("Deep link missing host (workspace name)"))?;
-
-        let mut path_segments: Vec<&str> = parsed_url.path_segments()
-            .ok_or_else(|| anyhow::anyhow!("Deep link has no path"))?
-            .collect();
-
-        if path_segments.is_empty() {
-            return Err(anyhow::anyhow!("Deep link has empty path"));
-        }
-
-        let file_part = path_segments.pop().unwrap();
-
-        let (file_name, line) = if let Some(colon_pos) = file_part.rfind(':') {
-            let (name, line_str) = file_part.split_at(colon_pos);
-            let line_num = line_str[1..].parse::<usize>().ok();
-            (name, line_num)
-        } else {
-            (file_part, None)
-        };
-
-        let mut full_path = PathBuf::new();
-        for segment in &path_segments {
-            full_path.push(segment);
-        }
-        full_path.push(file_name);
-
-        let workspace_name = host.to_string();
-
-        let settings = self.settings_manager.get().await;
-        let workspace = settings.repos.iter()
-            .find(|w| w.name.as_deref() == Some(&workspace_name))
-            .ok_or_else(|| anyhow::anyhow!("Workspace '{}' not found", workspace_name))?;
-
-        let workspace_root = workspace.normalized_path.as_ref()
-            .ok_or_else(|| anyhow::anyhow!("Workspace '{}' has no normalized path", workspace_name))?;
-
-        let absolute_path = workspace_root.join(&full_path);
-
-        Ok(DeepLinkRequest {
-            path: absolute_path.to_string_lossy().to_string(),
-            line,
-            editor: Some(workspace.editor.clone()),
-        })
-    }
-}
-
-// TODO: Implement deep link parsing per ai/11-deep-link-handler.md
-#[allow(dead_code)]
-#[derive(Debug)]
-pub struct DeepLinkRequest {
-    pub path: String,
-    pub line: Option<usize>,
-    pub editor: Option<String>,
 }
