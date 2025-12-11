@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Choose Workspace</title>
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --primary: #6366f1;
+      --primary-hover: #4f46e5;
+      --primary-active: #4338ca;
+      --bg-primary: #121212;
+      --bg-surface: #1e1e1e;
+      --bg-elevated: #2d2d2d;
+      --text-primary: #f5f5f5;
+      --text-secondary: #a0a0a0;
+      --border: #333333;
+      --border-hover: #444444;
+      --shadow: rgba(0, 0, 0, 0.3);
+    }
+
+    html {
+      background: var(--bg-primary);
+    }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Roboto, 'Helvetica Neue', sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      padding: 1.5rem;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      color: var(--text-primary);
+    }
+
+    .subtitle {
+      color: var(--text-secondary);
+      font-size: 0.875rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .workspace-list {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      margin-bottom: 1rem;
+    }
+
+    .workspace-option {
+      padding: 1rem;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      transition: background 0.15s;
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+    }
+
+    .workspace-option:last-child {
+      border-bottom: none;
+    }
+
+    .workspace-option:hover {
+      background: var(--bg-elevated);
+    }
+
+    .workspace-option.selected {
+      background: rgba(99, 102, 241, 0.15);
+      border-left: 3px solid var(--primary);
+      padding-left: calc(1rem - 3px);
+    }
+
+    .workspace-option input[type="radio"] {
+      margin-top: 0.25rem;
+      cursor: pointer;
+      accent-color: var(--primary);
+    }
+
+    .workspace-info {
+      flex: 1;
+    }
+
+    .workspace-name {
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 0.25rem;
+      font-size: 0.9375rem;
+    }
+
+    .workspace-path {
+      color: var(--text-secondary);
+      font-size: 0.8125rem;
+      font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+      word-break: break-all;
+    }
+
+    .path-preview {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .path-preview-label {
+      color: var(--text-secondary);
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.5rem;
+    }
+
+    .path-preview-value {
+      color: var(--text-primary);
+      font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+      font-size: 0.8125rem;
+      word-break: break-all;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 0.75rem;
+      justify-content: flex-end;
+    }
+
+    .button {
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 0.625rem 1.25rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.875rem;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+
+    .button:hover:not(:disabled) {
+      background: var(--primary-hover);
+    }
+
+    .button:active:not(:disabled) {
+      background: var(--primary-active);
+    }
+
+    .button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .button.secondary {
+      background: var(--bg-elevated);
+      color: var(--text-primary);
+    }
+
+    .button.secondary:hover {
+      background: var(--border-hover);
+    }
+
+    .recent-badge {
+      display: inline-block;
+      background: rgba(16, 185, 129, 0.15);
+      color: #6ee7b7;
+      font-size: 0.6875rem;
+      padding: 0.125rem 0.5rem;
+      border-radius: 4px;
+      font-weight: 600;
+      margin-left: 0.5rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>This file appears in multiple workspaces. Choose which one</h1>
+    <p class="subtitle">Select the workspace where you want to open this file</p>
+
+    <div class="workspace-list" id="workspace-list"></div>
+
+    <div class="path-preview">
+      <div class="path-preview-label">Full Path</div>
+      <div class="path-preview-value" id="path-preview">No workspace selected</div>
+    </div>
+
+    <div class="button-group">
+      <button class="button secondary" onclick="cancel()">Cancel</button>
+      <button class="button" id="open-button" onclick="openSelected()" disabled>Open</button>
+    </div>
+  </div>
+
+  <script>
+    let matches = [];
+    let selectedIndex = null;
+
+    async function init() {
+      try {
+        const data = await window.__TAURI__.core.invoke('get_workspace_chooser_data');
+        matches = data.matches;
+
+        if (matches.length > 0) {
+          selectedIndex = 0;
+        }
+
+        renderWorkspaces();
+        updatePreview();
+
+        document.addEventListener('keydown', handleKeyPress);
+      } catch (e) {
+        console.error('Failed to load chooser data:', e);
+      }
+    }
+
+    function renderWorkspaces() {
+      const list = document.getElementById('workspace-list');
+
+      list.innerHTML = matches.map((match, index) => {
+        const isRecent = index === 0 && match.last_seen;
+        return `
+          <div class="workspace-option ${selectedIndex === index ? 'selected' : ''}"
+               onclick="selectWorkspace(${index})">
+            <input type="radio"
+                   name="workspace"
+                   value="${index}"
+                   ${selectedIndex === index ? 'checked' : ''}
+                   onchange="selectWorkspace(${index})">
+            <div class="workspace-info">
+              <div class="workspace-name">
+                ${match.workspace_name}
+                ${isRecent ? '<span class="recent-badge">MOST RECENT</span>' : ''}
+              </div>
+              <div class="workspace-path">${match.workspace_path}</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function selectWorkspace(index) {
+      selectedIndex = index;
+      renderWorkspaces();
+      updatePreview();
+      document.getElementById('open-button').disabled = false;
+    }
+
+    function updatePreview() {
+      const preview = document.getElementById('path-preview');
+      if (selectedIndex !== null && matches[selectedIndex]) {
+        preview.textContent = matches[selectedIndex].full_file_path;
+      } else {
+        preview.textContent = 'No workspace selected';
+      }
+    }
+
+    async function openSelected() {
+      if (selectedIndex === null) return;
+
+      try {
+        await window.__TAURI__.core.invoke('workspace_chosen', { index: selectedIndex });
+        window.close();
+      } catch (e) {
+        console.error('Failed to open workspace:', e);
+      }
+    }
+
+    function cancel() {
+      window.__TAURI__.core.invoke('workspace_chooser_cancelled').catch(() => {});
+      window.close();
+    }
+
+    function handleKeyPress(e) {
+      if (e.key === 'Enter' && selectedIndex !== null) {
+        openSelected();
+      } else if (e.key === 'Escape') {
+        cancel();
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (selectedIndex < matches.length - 1) {
+          selectWorkspace(selectedIndex + 1);
+        }
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (selectedIndex > 0) {
+          selectWorkspace(selectedIndex - 1);
+        }
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>
