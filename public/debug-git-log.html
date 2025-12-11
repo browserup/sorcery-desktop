@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Git Command History - Debug</title>
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --success: #22c55e;
+      --error: #ef4444;
+      --bg-primary: #121212;
+      --bg-surface: #1e1e1e;
+      --bg-elevated: #2d2d2d;
+      --text-primary: #f5f5f5;
+      --text-secondary: #a0a0a0;
+      --border: #333333;
+      --border-hover: #444444;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Roboto, 'Helvetica Neue', sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      padding: 1.5rem;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+    }
+
+    .subtitle {
+      color: var(--text-secondary);
+      font-size: 0.875rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+      align-items: center;
+    }
+
+    .search-box {
+      flex: 1;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.5rem 0.75rem;
+      color: var(--text-primary);
+      font-size: 0.875rem;
+    }
+
+    .search-box:focus {
+      outline: none;
+      border-color: var(--border-hover);
+    }
+
+    .filter-group {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .filter-button {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      padding: 0.5rem 0.875rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.875rem;
+      transition: all 0.2s;
+    }
+
+    .filter-button:hover {
+      border-color: var(--border-hover);
+      color: var(--text-primary);
+    }
+
+    .filter-button.active {
+      background: var(--bg-elevated);
+      color: var(--text-primary);
+      border-color: var(--border-hover);
+    }
+
+    .refresh-button {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+      padding: 0.5rem 0.875rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.875rem;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+
+    .refresh-button:hover {
+      background: var(--border-hover);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--bg-surface);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    thead {
+      background: var(--bg-elevated);
+    }
+
+    th {
+      text-align: left;
+      padding: 0.75rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-secondary);
+    }
+
+    td {
+      padding: 0.75rem;
+      border-top: 1px solid var(--border);
+      font-size: 0.875rem;
+    }
+
+    tr.expandable {
+      cursor: pointer;
+    }
+
+    tr.expandable:hover {
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+      margin-right: 0.5rem;
+    }
+
+    .status-dot.success {
+      background: var(--success);
+    }
+
+    .status-dot.error {
+      background: var(--error);
+    }
+
+    .code {
+      font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+      font-size: 0.8125rem;
+      background: var(--bg-primary);
+      padding: 0.125rem 0.375rem;
+      border-radius: 3px;
+    }
+
+    .expand-row {
+      display: none;
+      background: var(--bg-primary);
+    }
+
+    .expand-row.visible {
+      display: table-row;
+    }
+
+    .expand-content {
+      padding: 1rem;
+    }
+
+    .output-section {
+      margin-bottom: 1rem;
+    }
+
+    .output-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-secondary);
+      margin-bottom: 0.5rem;
+    }
+
+    .output-text {
+      font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+      font-size: 0.8125rem;
+      background: var(--bg-surface);
+      padding: 0.75rem;
+      border-radius: 6px;
+      white-space: pre-wrap;
+      word-break: break-all;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 3rem;
+      color: var(--text-secondary);
+    }
+
+    .duration {
+      color: var(--text-secondary);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Git Command History</h1>
+    <p class="subtitle">Debug log showing the last 30 git commands executed</p>
+
+    <div class="toolbar">
+      <input type="text" class="search-box" id="search-box" placeholder="Search commands, args, or output...">
+
+      <div class="filter-group">
+        <button class="filter-button active" data-filter="all" onclick="setFilter('all')">All</button>
+        <button class="filter-button" data-filter="success" onclick="setFilter('success')">Success</button>
+        <button class="filter-button" data-filter="error" onclick="setFilter('error')">Errors</button>
+      </div>
+
+      <button class="refresh-button" onclick="loadHistory()">Refresh</button>
+    </div>
+
+    <div id="table-container">
+      <table id="history-table">
+        <thead>
+          <tr>
+            <th style="width: 40px;"></th>
+            <th style="width: 150px;">Time</th>
+            <th>Command</th>
+            <th style="width: 100px;">Exit Code</th>
+            <th style="width: 100px;">Duration</th>
+          </tr>
+        </thead>
+        <tbody id="history-body">
+        </tbody>
+      </table>
+    </div>
+
+    <div id="empty-state" class="empty-state" style="display: none;">
+      <p>No git commands have been executed yet.</p>
+    </div>
+  </div>
+
+  <script>
+    let commandHistory = [];
+    let currentFilter = 'all';
+    let expandedRows = new Set();
+
+    async function loadHistory() {
+      try {
+        commandHistory = await window.__TAURI__.core.invoke('get_git_command_history');
+        renderHistory();
+      } catch (e) {
+        console.error('Failed to load command history:', e);
+      }
+    }
+
+    function setFilter(filter) {
+      currentFilter = filter;
+      document.querySelectorAll('.filter-button').forEach(btn => {
+        btn.classList.remove('active');
+      });
+      document.querySelector(`[data-filter="${filter}"]`).classList.add('active');
+      renderHistory();
+    }
+
+    function formatTimestamp(timestamp) {
+      const date = new Date(timestamp);
+      return date.toLocaleTimeString();
+    }
+
+    function formatCommand(cmd, args) {
+      return `${cmd} ${args.join(' ')}`;
+    }
+
+    function toggleRow(index) {
+      const expandRow = document.getElementById(`expand-${index}`);
+      if (expandedRows.has(index)) {
+        expandedRows.delete(index);
+        expandRow.classList.remove('visible');
+      } else {
+        expandedRows.add(index);
+        expandRow.classList.add('visible');
+      }
+    }
+
+    function renderHistory() {
+      const searchTerm = document.getElementById('search-box').value.toLowerCase();
+
+      let filtered = commandHistory.filter(entry => {
+        if (currentFilter === 'success' && !entry.success) return false;
+        if (currentFilter === 'error' && entry.success) return false;
+
+        if (searchTerm) {
+          const searchableText = `${entry.command} ${entry.args.join(' ')} ${entry.stdout} ${entry.stderr}`.toLowerCase();
+          if (!searchableText.includes(searchTerm)) return false;
+        }
+
+        return true;
+      });
+
+      const tbody = document.getElementById('history-body');
+      const emptyState = document.getElementById('empty-state');
+      const tableContainer = document.getElementById('table-container');
+
+      if (filtered.length === 0) {
+        tableContainer.style.display = 'none';
+        emptyState.style.display = 'block';
+        return;
+      }
+
+      tableContainer.style.display = 'block';
+      emptyState.style.display = 'none';
+
+      tbody.innerHTML = filtered.map((entry, index) => {
+        const isExpanded = expandedRows.has(index);
+        return `
+          <tr class="expandable" onclick="toggleRow(${index})">
+            <td>
+              <span class="status-dot ${entry.success ? 'success' : 'error'}"></span>
+            </td>
+            <td>${formatTimestamp(entry.timestamp)}</td>
+            <td><span class="code">${formatCommand(entry.command, entry.args)}</span></td>
+            <td>${entry.exit_code !== null ? entry.exit_code : 'N/A'}</td>
+            <td class="duration">${entry.duration_ms}ms</td>
+          </tr>
+          <tr class="expand-row ${isExpanded ? 'visible' : ''}" id="expand-${index}">
+            <td colspan="5">
+              <div class="expand-content">
+                <div class="output-section">
+                  <div class="output-label">Working Directory</div>
+                  <div class="output-text">${entry.working_dir}</div>
+                </div>
+                ${entry.stdout ? `
+                  <div class="output-section">
+                    <div class="output-label">Stdout</div>
+                    <div class="output-text">${entry.stdout}</div>
+                  </div>
+                ` : ''}
+                ${entry.stderr ? `
+                  <div class="output-section">
+                    <div class="output-label">Stderr</div>
+                    <div class="output-text">${entry.stderr}</div>
+                  </div>
+                ` : ''}
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    document.getElementById('search-box').addEventListener('input', renderHistory);
+
+    loadHistory();
+    setInterval(loadHistory, 5000);
+  </script>
+</body>
+</html>
