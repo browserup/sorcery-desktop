@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Clone Repository</title>
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --primary: #6366f1;
+      --primary-hover: #4f46e5;
+      --primary-active: #4338ca;
+      --bg-primary: #121212;
+      --bg-surface: #1e1e1e;
+      --bg-elevated: #2d2d2d;
+      --text-primary: #f5f5f5;
+      --text-secondary: #a0a0a0;
+      --border: #333333;
+      --border-hover: #444444;
+      --info: #3b82f6;
+      --info-bg: rgba(59, 130, 246, 0.15);
+    }
+
+    html {
+      background: var(--bg-primary);
+    }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Roboto, 'Helvetica Neue', sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      padding: 1.25rem;
+      line-height: 1.4;
+      -webkit-font-smoothing: antialiased;
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+
+    .container {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      max-width: 600px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .icon {
+      width: 20px;
+      height: 20px;
+      color: var(--info);
+    }
+
+    h1 {
+      font-size: 1.125rem;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .subtitle {
+      color: var(--text-secondary);
+      font-size: 0.8125rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .info-box {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.875rem;
+    }
+
+    .info-item {
+      display: flex;
+      align-items: baseline;
+      gap: 0.75rem;
+      margin-bottom: 0.625rem;
+    }
+
+    .info-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .info-label {
+      color: var(--text-secondary);
+      font-size: 0.6875rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      flex-shrink: 0;
+      width: 65px;
+    }
+
+    .info-value {
+      color: var(--text-primary);
+      font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+      font-size: 0.8125rem;
+      word-break: break-all;
+      flex: 1;
+    }
+
+    .remote-value {
+      color: var(--info);
+    }
+
+    .change-btn {
+      background: var(--bg-elevated);
+      color: var(--text-secondary);
+      border: 1px solid var(--border);
+      padding: 0.125rem 0.375rem;
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 0.625rem;
+      font-weight: 500;
+      transition: all 0.2s;
+      flex-shrink: 0;
+      margin-left: 0.25rem;
+    }
+
+    .change-btn:hover {
+      background: var(--border-hover);
+      color: var(--text-primary);
+    }
+
+    .notice {
+      color: var(--text-secondary);
+      font-size: 0.8125rem;
+      margin: 1rem 0;
+      padding: 0.625rem 0.875rem;
+      background: var(--info-bg);
+      border-radius: 4px;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 0.75rem;
+      justify-content: flex-end;
+      margin-top: auto;
+      padding-top: 0.75rem;
+    }
+
+    .button {
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 0.5rem 1rem;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+
+    .button:hover:not(:disabled) {
+      background: var(--primary-hover);
+    }
+
+    .button:active:not(:disabled) {
+      background: var(--primary-active);
+    }
+
+    .button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .button.secondary {
+      background: var(--bg-elevated);
+      color: var(--text-primary);
+    }
+
+    .button.secondary:hover {
+      background: var(--border-hover);
+    }
+
+    .status {
+      padding: 0.5rem;
+      border-radius: 4px;
+      font-size: 0.8125rem;
+      display: none;
+      margin-bottom: 0.5rem;
+    }
+
+    .status.loading {
+      display: block;
+      background: var(--info-bg);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      color: var(--text-secondary);
+    }
+
+    .status.error {
+      display: block;
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #f87171;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border: 2px solid var(--info);
+      border-radius: 50%;
+      border-top-color: transparent;
+      animation: spin 1s linear infinite;
+      margin-right: 0.375rem;
+      vertical-align: middle;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+      </svg>
+      <h1>Clone Repository?</h1>
+    </div>
+
+    <p class="subtitle">
+      The workspace "<span id="workspace-name">...</span>" is not available locally.
+    </p>
+
+    <div class="info-box">
+      <div class="info-item">
+        <span class="info-label">Remote</span>
+        <span class="info-value remote-value" id="remote-url">Loading...</span>
+      </div>
+      <div class="info-item">
+        <span class="info-label">Clone to</span>
+        <span class="info-value" id="clone-path">Loading...</span>
+        <button class="change-btn" onclick="changeLocation()">Change</button>
+      </div>
+      <div class="info-item">
+        <span class="info-label">File</span>
+        <span class="info-value" id="file-path">Loading...</span>
+      </div>
+      <div class="info-item" id="ref-row" style="display: none;">
+        <span class="info-label">Reference</span>
+        <span class="info-value" id="git-ref"></span>
+      </div>
+    </div>
+
+    <div class="notice">
+      Cloning will add this repository to your workspaces.
+    </div>
+
+    <div id="status" class="status"></div>
+
+    <div class="button-group">
+      <button class="button secondary" id="cancel-btn" onclick="cancel()">Cancel</button>
+      <button class="button" id="clone-btn" onclick="clone()">Clone & Open</button>
+    </div>
+  </div>
+
+  <script>
+    const { invoke } = window.__TAURI__.core;
+    const { getCurrentWindow } = window.__TAURI__.window;
+    const { open } = window.__TAURI__.dialog;
+
+    let currentClonePath = '';
+    let workspaceName = '';
+
+    async function init() {
+      try {
+        const data = await invoke('get_clone_dialog_data');
+
+        workspaceName = data.workspace_name;
+        currentClonePath = data.clone_path;
+
+        document.getElementById('workspace-name').textContent = data.workspace_name;
+        document.getElementById('remote-url').textContent = data.remote_url;
+        document.getElementById('clone-path').textContent = data.clone_path;
+        document.getElementById('file-path').textContent = data.file_path;
+
+        if (data.git_ref) {
+          document.getElementById('git-ref').textContent = data.git_ref;
+          document.getElementById('ref-row').style.display = 'flex';
+        }
+
+        document.addEventListener('keydown', handleKeyPress);
+      } catch (e) {
+        console.error('Failed to load dialog data:', e);
+      }
+    }
+
+    async function changeLocation() {
+      try {
+        const parentDir = currentClonePath.substring(0, currentClonePath.lastIndexOf('/'));
+
+        const selected = await open({
+          directory: true,
+          multiple: false,
+          defaultPath: parentDir,
+          title: 'Select Clone Location'
+        });
+
+        if (selected) {
+          const newPath = selected + '/' + workspaceName;
+          currentClonePath = newPath;
+          document.getElementById('clone-path').textContent = newPath;
+          await invoke('update_clone_path', { newPath: newPath });
+        }
+      } catch (e) {
+        console.error('Failed to select directory:', e);
+      }
+    }
+
+    async function clone() {
+      const status = document.getElementById('status');
+      const cloneBtn = document.getElementById('clone-btn');
+      const cancelBtn = document.getElementById('cancel-btn');
+
+      status.className = 'status loading';
+      status.innerHTML = '<span class="spinner"></span>Cloning repository...';
+      cloneBtn.disabled = true;
+      cancelBtn.disabled = true;
+
+      try {
+        await invoke('clone_and_open');
+        getCurrentWindow().close();
+      } catch (e) {
+        console.error('Failed to clone:', e);
+        status.className = 'status error';
+        status.textContent = 'Clone failed: ' + e;
+        cloneBtn.disabled = false;
+        cancelBtn.disabled = false;
+      }
+    }
+
+    function cancel() {
+      invoke('clone_cancelled').catch(() => {});
+      getCurrentWindow().close();
+    }
+
+    function handleKeyPress(e) {
+      if (e.key === 'Enter' && !document.getElementById('clone-btn').disabled) {
+        clone();
+      } else if (e.key === 'Escape') {
+        cancel();
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>

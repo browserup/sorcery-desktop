@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Open File Outside Workspace</title>
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --primary: #6366f1;
+      --primary-hover: #4f46e5;
+      --primary-active: #4338ca;
+      --bg-primary: #121212;
+      --bg-surface: #1e1e1e;
+      --bg-elevated: #2d2d2d;
+      --text-primary: #f5f5f5;
+      --text-secondary: #a0a0a0;
+      --border: #333333;
+      --border-hover: #444444;
+      --warning: #f59e0b;
+      --warning-bg: rgba(245, 158, 11, 0.15);
+      --shadow: rgba(0, 0, 0, 0.3);
+    }
+
+    html {
+      background: var(--bg-primary);
+    }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Roboto, 'Helvetica Neue', sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      padding: 1.5rem;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .warning-header {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+
+    .warning-icon {
+      width: 24px;
+      height: 24px;
+      color: var(--warning);
+    }
+
+    h1 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .subtitle {
+      color: var(--text-secondary);
+      font-size: 0.875rem;
+      margin-bottom: 1.5rem;
+      line-height: 1.6;
+    }
+
+    .info-box {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .info-label {
+      color: var(--text-secondary);
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.5rem;
+    }
+
+    .info-value {
+      color: var(--text-primary);
+      font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+      font-size: 0.8125rem;
+      word-break: break-all;
+      margin-bottom: 0.75rem;
+    }
+
+    .info-value:last-child {
+      margin-bottom: 0;
+    }
+
+    .editor-value {
+      color: var(--primary);
+      font-weight: 600;
+    }
+
+    .notice-box {
+      background: var(--warning-bg);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      border-radius: 8px;
+      padding: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .notice-box p {
+      color: var(--text-secondary);
+      font-size: 0.8125rem;
+      line-height: 1.5;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 0.75rem;
+      justify-content: flex-end;
+    }
+
+    .button {
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 0.625rem 1.25rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.875rem;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+
+    .button:hover:not(:disabled) {
+      background: var(--primary-hover);
+    }
+
+    .button:active:not(:disabled) {
+      background: var(--primary-active);
+    }
+
+    .button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .button.secondary {
+      background: var(--bg-elevated);
+      color: var(--text-primary);
+    }
+
+    .button.secondary:hover {
+      background: var(--border-hover);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="warning-header">
+      <svg class="warning-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+      </svg>
+      <h1>Open File Outside Workspace?</h1>
+    </div>
+
+    <p class="subtitle">
+      This file is not in any of your configured workspaces. Are you sure you want to open it?
+    </p>
+
+    <div class="info-box">
+      <div class="info-label">File Path</div>
+      <div class="info-value" id="file-path">Loading...</div>
+
+      <div class="info-label">Editor</div>
+      <div class="info-value editor-value" id="editor">Loading...</div>
+
+      <div class="info-label" id="location-label" style="display: none;">Line & Column</div>
+      <div class="info-value" id="location" style="display: none;"></div>
+    </div>
+
+    <div class="notice-box">
+      <p>
+        Files outside your workspace will be opened with your default editor settings.
+        You can disable this permission in settings to prevent opening non-workspace files.
+      </p>
+    </div>
+
+    <div class="button-group">
+      <button class="button secondary" onclick="cancel()">Cancel</button>
+      <button class="button" onclick="confirm()">Open File</button>
+    </div>
+  </div>
+
+  <script>
+    const { invoke } = window.__TAURI__.core;
+
+    async function init() {
+      try {
+        const data = await invoke('get_non_workspace_dialog_data');
+
+        document.getElementById('file-path').textContent = data.file_path;
+        document.getElementById('editor').textContent = data.editor;
+
+        if (data.line || data.column) {
+          const locationParts = [];
+          if (data.line) locationParts.push(`Line ${data.line}`);
+          if (data.column) locationParts.push(`Column ${data.column}`);
+
+          document.getElementById('location').textContent = locationParts.join(', ');
+          document.getElementById('location-label').style.display = 'block';
+          document.getElementById('location').style.display = 'block';
+        }
+
+        document.addEventListener('keydown', handleKeyPress);
+      } catch (e) {
+        console.error('Failed to load dialog data:', e);
+      }
+    }
+
+    async function confirm() {
+      try {
+        await invoke('non_workspace_confirmed');
+        window.close();
+      } catch (e) {
+        console.error('Failed to confirm:', e);
+        alert('Failed to open file: ' + e);
+      }
+    }
+
+    function cancel() {
+      invoke('non_workspace_cancelled').catch(() => {});
+      window.close();
+    }
+
+    function handleKeyPress(e) {
+      if (e.key === 'Enter') {
+        confirm();
+      } else if (e.key === 'Escape') {
+        cancel();
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>
