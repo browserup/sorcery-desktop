@@ -1,0 +1,23 @@
+services:
+  test-env:
+    build:
+      context: .
+      dockerfile: tests/docker/Dockerfile
+    container_name: sorcery-test-env
+    volumes:
+      - .:/workspace/sorcery
+      - cargo-cache:/root/.cargo/registry
+      - target-cache:/workspace/sorcery/target
+    environment:
+      - DISPLAY=:99
+      - RUST_LOG=debug
+      - RUST_BACKTRACE=1
+    working_dir: /workspace/sorcery
+    stdin_open: true
+    tty: true
+    # Keep container running for interactive testing
+    command: /bin/bash
+
+volumes:
+  cargo-cache:
+  target-cache:
