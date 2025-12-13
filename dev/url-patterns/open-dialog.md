@@ -1,0 +1,1 @@
+When a user has clicked a sorsori link protocol link, they are 

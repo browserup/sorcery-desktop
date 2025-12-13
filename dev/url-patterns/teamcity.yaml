@@ -1,0 +1,264 @@
+# TeamCity URL Pattern Configuration
+# For converting TeamCity web URLs to srcuri:// protocol links
+#
+# TeamCity is a CI/CD server from JetBrains
+# Demo instance: https://teamcity.jetbrains.com
+# Docs: https://www.jetbrains.com/teamcity/
+
+platform:
+  name: TeamCity
+  type: ci-cd
+  self_hosted: true
+  description: "JetBrains CI/CD server with build automation and deployment"
+
+# Common TeamCity instances (can be extended)
+known_instances:
+  - domain: teamcity.jetbrains.com
+    name: "JetBrains TeamCity"
+  # Add your self-hosted instances here
+  # - domain: teamcity.example.com
+  #   name: "My Company TeamCity"
+
+# URL patterns to match
+url_patterns:
+  # Change/commit detail view
+  - name: change_detail
+    pattern: '^https?://([^/]+)/change/(\d+)(?:\?.*)?(?:#.*)?$'
+    description: "Commit/change detail page"
+    groups:
+      domain: 1
+      change_id: 2
+    example: "https://teamcity.jetbrains.com/change/11212308?personal=false&tab=files"
+    notes: "Change ID is TeamCity's internal ID, not git commit hash"
+
+  # Diff view for specific file in a change
+  - name: diff_view
+    pattern: '^https?://([^/]+)/diffView\.html\?id=(\d+)&vcsFileName=([^&]+)(?:&.*)?$'
+    description: "File diff view within a change"
+    groups:
+      domain: 1
+      change_id: 2
+      file_path: 3
+    example: "https://teamcity.jetbrains.com/diffView.html?id=11212308&vcsFileName=src%2Fmain%2Forg%2Fapache%2Ftools%2Fant%2Ftypes%2FResourceCollection.java"
+    notes: "File path is URL-encoded, need to decode %2F to /"
+
+  # Build configuration view
+  - name: build_config
+    pattern: '^https?://([^/]+)/buildConfiguration/([^/]+)/(\d+)(?:\?.*)?$'
+    description: "Build configuration page with build number"
+    groups:
+      domain: 1
+      build_config_id: 2
+      build_number: 3
+    example: "https://teamcity.jetbrains.com/buildConfiguration/bt134/5416383"
+    notes: "Build page - may contain stack traces in build log"
+
+  # Build log view
+  - name: build_log
+    pattern: '^https?://([^/]+)/viewLog\.html\?buildId=(\d+)(?:&.*)?$'
+    description: "Build log view"
+    groups:
+      domain: 1
+      build_id: 2
+    example: "https://teamcity.jetbrains.com/viewLog.html?buildId=12345&tab=buildLog"
+    notes: "Build logs may contain compilation errors with file paths"
+
+  # Build test results
+  - name: build_tests
+    pattern: '^https?://([^/]+)/viewLog\.html\?buildId=(\d+)&tab=testsInfo$'
+    description: "Build test results"
+    groups:
+      domain: 1
+      build_id: 2
+    example: "https://teamcity.jetbrains.com/viewLog.html?buildId=12345&tab=testsInfo"
+    notes: "Test failures may include file paths and line numbers"
+
+# DOM selectors for the Chrome extension to enhance
+dom_selectors:
+  # Change files list
+  change_files:
+    selector: '.ChangeFiles-module__outerItemContainer--V6'
+    description: "List of changed files in a commit"
+    file_link: 'a.ring-link-link[href*="diffView.html"]'
+    file_name: '.MiddleEllipsis-module__searchable--YN'
+    change_type: '.ChangeFiles-module__changeTypeCol--jh'
+    notes: |
+      - Change types: edited, added, deleted
+      - File names are in MiddleEllipsis component for long paths
+      - Links point to diffView.html with vcsFileName parameter
+
+  # Change details
+  change_details:
+    selector: '.ChangeDetails-module__changeInfo--TV'
+    description: "Change/commit metadata"
+    revision: '[data-test-change-revision-id]'
+    vcs_root: '.ChangeDetailsInfo-module__row--Lw'
+    notes: |
+      - Revision shows full git commit hash
+      - VCS root shows repository name
+      - Can extract commit hash for ?rev= parameter
+
+  # Build log content
+  build_log:
+    selector: '.buildLog'
+    description: "Build log output area"
+    log_lines: '.logLine'
+    error_lines: '.error'
+    notes: |
+      - Logs are in .buildLog container
+      - Error lines have .error class
+      - May contain compilation errors with file:line format
+
+  # Test results
+  test_results:
+    selector: '.testList'
+    description: "Test results list"
+    test_row: '.testRow'
+    stack_trace: '.stacktrace'
+    notes: |
+      - Stack traces in test failures
+      - May include file paths and line numbers
+      - Usually Java/JVM stack trace format
+
+# Conversion logic hints
+conversion:
+  workspace_mapping:
+    # Strategy to map TeamCity VCS root to local workspace
+    strategies:
+      - type: vcs_root_name
+        description: "Match by VCS root name from change details"
+        priority: 1
+        note: "TeamCity shows VCS root like 'Apache Ant @ apache.org'"
+
+      - type: git_commit_hash
+        description: "Match by git commit hash from revision"
+        priority: 2
+        note: "Extract full hash from [data-test-change-revision-id]"
+
+      - type: manual_mapping
+        description: "User-configured mapping in settings"
+        priority: 3
+
+  file_path:
+    # File path handling
+    url_encoding: true
+    note: "Paths in vcsFileName parameter are URL-encoded (%2F for /)"
+    decoding_example: "src%2Fmain%2Forg%2Fapache%2Ftools%2Fant%2Ftypes%2FResourceCollection.java"
+    decoded_example: "src/main/org/apache/tools/ant/types/ResourceCollection.java"
+
+  line_number:
+    # Line numbers not typically in URLs, must extract from logs
+    from_build_log:
+      pattern: '([^\s:]+\.(?:java|kt|scala|groovy)):(\d+)(?::(\d+))?'
+      note: "Java/JVM format: FileName.java:123 or with column :123:45"
+    from_stack_trace:
+      pattern: 'at .+?\(([^:]+):(\d+)\)'
+      note: "Stack trace format: at package.Class.method(File.java:123)"
+
+  revision:
+    # Git revision handling
+    extract_from_dom: true
+    selector: '[data-test-change-revision-id]'
+    note: "Full git hash available in change details"
+    usage: "Pass as ?rev=<hash> to srcuri URL"
+
+# Example transformations
+examples:
+  - teamcity_url: "https://teamcity.jetbrains.com/diffView.html?id=11212308&vcsFileName=src%2Fmain%2Forg%2Fapache%2Ftools%2Fant%2Ftypes%2FResourceCollection.java"
+    srcuri_url: "srcuri://ant/src/main/org/apache/tools/ant/types/ResourceCollection.java"
+    notes: "Assumes 'ant' workspace configured for Apache Ant"
+
+  - teamcity_url: "https://teamcity.jetbrains.com/change/11212308"
+    extracted_commit: "033eee2aebce1d2baf3d043f0054b6709baea335"
+    file_from_list: "src/main/org/apache/tools/ant/types/ResourceCollection.java"
+    srcuri_url: "srcuri://ant/src/main/org/apache/tools/ant/types/ResourceCollection.java?rev=033eee2a"
+    notes: "Extract commit hash from DOM, file from change files list"
+
+  - teamcity_url: "https://teamcity.jetbrains.com/buildConfiguration/bt134/5416383"
+    build_log_error: "src/main/Foo.java:42: error: cannot find symbol"
+    srcuri_url: "srcuri://myproject/src/main/Foo.java:42"
+    notes: "Parse build log to extract file paths and line numbers"
+
+# Implementation notes for Chrome extension
+implementation_notes:
+  - "TeamCity uses React with CSS modules (class names like ChangeFiles-module__xxx--YY)"
+  - "Class names are obfuscated and may change between versions"
+  - "Use data-test attributes where available for more stable selectors"
+  - "File paths in URLs are URL-encoded - decode %2F, %2E, etc."
+  - "Change IDs are TeamCity-internal, not git commit hashes"
+  - "Git commit hash available in DOM via [data-test-change-revision-id]"
+  - "VCS root name format: 'RepoName @ host' or 'RepoName @ host (description)'"
+  - "Build logs may contain multiple file references - scan all log lines"
+  - "Test stack traces follow JVM format: at package.Class.method(File.java:line)"
+  - "Self-hosted TeamCity may have different base URL schemes"
+  - "Consider adding support for build artifacts that contain source files"
+
+# Testing URLs (from the provided HTML)
+test_urls:
+  - url: "https://teamcity.jetbrains.com/change/11212308?personal=false&tab=files"
+    expected_workspace: "ant"
+    expected_file: "src/main/org/apache/tools/ant/types/ResourceCollection.java"
+    expected_revision: "033eee2aebce1d2baf3d043f0054b6709baea335"
+    notes: "Change detail page with file list"
+
+  - url: "https://teamcity.jetbrains.com/diffView.html?id=11212308&vcsFileName=src%2Fmain%2Forg%2Fapache%2Ftools%2Fant%2Ftypes%2FResourceCollection.java&personal=false"
+    expected_workspace: "ant"
+    expected_file: "src/main/org/apache/tools/ant/types/ResourceCollection.java"
+    expected_line: null
+    notes: "File diff view - no line number in URL"
+
+  - url: "https://teamcity.jetbrains.com/buildConfiguration/bt134/5416383"
+    expected_workspace: null
+    expected_file: null
+    notes: "Build page - may need to parse build log for file references"
+
+# Chrome extension: content script injection points
+content_script:
+  matches:
+    - "*://*/change/*"
+    - "*://*/diffView.html*"
+    - "*://*/buildConfiguration/*/*"
+    - "*://*/viewLog.html*"
+
+  run_at: "document_end"
+
+  inject_on:
+    - path: "/change/{id}"
+      description: "Change/commit detail page with file list"
+    - path: "/diffView.html"
+      description: "File diff view"
+    - path: "/buildConfiguration/{id}/{buildNum}"
+      description: "Build configuration page"
+    - path: "/viewLog.html"
+      description: "Build log and test results"
+
+# Additional extraction logic
+extraction_examples:
+  # Extract VCS root name to map to workspace
+  vcs_root_extraction:
+    html: '<div class="ChangeDetailsInfo-module__row--Lw"><span class="ChangeDetailsInfo-module__rowHeading--Rk">VCS root</span>: Apache Ant @ apache.org (github mirror)</div>'
+    extracted: "Apache Ant"
+    workspace_mapping: "ant"
+    notes: "Extract text before @ or use full name for matching"
+
+  # Extract commit hash
+  commit_hash_extraction:
+    html: '<span data-test-change-revision-id="true">033eee2aebce1d2baf3d043f0054b6709baea335</span>'
+    extracted: "033eee2aebce1d2baf3d043f0054b6709baea335"
+    short_hash: "033eee2a"
+    usage: "?rev=033eee2a in srcuri URL"
+
+  # Decode file path from URL
+  file_path_decoding:
+    encoded: "src%2Fmain%2Forg%2Fapache%2Ftools%2Fant%2Ftypes%2FResourceCollection.java"
+    decoded: "src/main/org/apache/tools/ant/types/ResourceCollection.java"
+    method: "decodeURIComponent()"
+
+  # Extract from build log
+  build_log_parsing:
+    log_line: "[ERROR] /path/to/src/main/java/com/example/Foo.java:[42,15] error: cannot find symbol"
+    regex: '([^\s:]+\.java):\[?(\d+)(?:,\d+)?\]?'
+    extracted_file: "/path/to/src/main/java/com/example/Foo.java"
+    extracted_line: 42
+    relative_path: "src/main/java/com/example/Foo.java"
+    srcuri_url: "srcuri://myproject/src/main/java/com/example/Foo.java:42"

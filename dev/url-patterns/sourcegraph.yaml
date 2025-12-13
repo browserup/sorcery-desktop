@@ -1,0 +1,447 @@
+# Sourcegraph URL Pattern Configuration
+# For converting Sourcegraph web URLs to srcuri:// protocol links
+#
+# Sourcegraph is a code search and navigation platform
+# Demo instance: https://sourcegraph.com
+# Docs: https://docs.sourcegraph.com
+
+platform:
+  name: Sourcegraph
+  type: code-search
+  self_hosted: true
+  description: "Universal code search and intelligence platform"
+
+# Common Sourcegraph instances (can be extended)
+known_instances:
+  - domain: sourcegraph.com
+    name: "Sourcegraph Cloud"
+  # Add your self-hosted instances here
+  # - domain: sourcegraph.example.com
+  #   name: "My Company Sourcegraph"
+
+# URL patterns to match
+url_patterns:
+  # Commit view
+  - name: commit_view
+    pattern: '^https?://([^/]+)/([^/]+)/([^/]+)/([^/]+)/-/commit/([a-f0-9]{7,40})(?:\?.*)?$'
+    description: "Commit detail view"
+    groups:
+      domain: 1
+      host: 2        # e.g., "github.com"
+      owner: 3
+      repo: 4
+      commit: 5
+    example: "https://sourcegraph.com/github.com/EbookFoundation/free-programming-books/-/commit/78c0ae44e9e7f5d60ec6716962f3b0af532203bb"
+    notes: "Sourcegraph indexes multiple code hosts (GitHub, GitLab, etc.)"
+
+  # File blob view
+  - name: blob_view
+    pattern: '^https?://([^/]+)/([^/]+)/([^/]+)/([^/]+)@([^/]+)/-/blob/(.+?)(?:#L(\d+)(?:-L(\d+))?)?$'
+    description: "File view at specific revision"
+    groups:
+      domain: 1
+      host: 2
+      owner: 3
+      repo: 4
+      revision: 5    # branch, tag, or commit
+      path: 6
+      line_start: 7
+      line_end: 8
+    example: "https://sourcegraph.com/github.com/torvalds/linux@master/-/blob/kernel/sched/core.c#L100-L120"
+
+  # Search results
+  - name: search_results
+    pattern: '^https?://([^/]+)/search(?:\?.*)?$'
+    description: "Code search results page"
+    groups:
+      domain: 1
+    example: "https://sourcegraph.com/search?q=context:global+lang:go+http.Server&patternType=standard"
+    notes: "Search results contain file paths and line numbers, extract from DOM"
+
+  # Tree/directory view
+  - name: tree_view
+    pattern: '^https?://([^/]+)/([^/]+)/([^/]+)/([^/]+)@([^/]+)/-/tree/(.+)$'
+    description: "Directory tree view"
+    groups:
+      domain: 1
+      host: 2
+      owner: 3
+      repo: 4
+      revision: 5
+      path: 6
+    example: "https://sourcegraph.com/github.com/golang/go@master/-/tree/src/net/http"
+
+  # Commit diff with file
+  - name: commit_diff_file
+    pattern: '^https?://([^/]+)/([^/]+)/([^/]+)/([^/]+)/-/commit/([a-f0-9]{7,40})#diff-([a-f0-9]+)$'
+    description: "Specific file in commit diff"
+    groups:
+      domain: 1
+      host: 2
+      owner: 3
+      repo: 4
+      commit: 5
+      file_hash: 6
+    example: "https://sourcegraph.com/github.com/EbookFoundation/free-programming-books/-/commit/78c0ae44#diff-abc123"
+    notes: "File hash, need to extract filename from DOM"
+
+# DOM selectors for the Chrome extension to enhance
+dom_selectors:
+  # Commit diff hunks
+  commit_diff:
+    selector: 'ul.diffs li[data-file-diff-header]'
+    description: "List of file diffs in commit"
+    file_link: 'a[href*="/-/blob/"]'
+    file_name: 'a[href*="/-/blob/"]'
+    hunk_table: 'table[data-view="unified"]'
+    notes: |
+      - Svelte-based UI with scoped CSS classes (e.g., svelte-fgl8vv)
+      - File links are anchors with href to blob view
+      - Example: href="/github.com/EbookFoundation/free-programming-books@78c0ae44/-/blob/more/free-programming-playgrounds.md"
+
+  # Diff hunk lines
+  diff_lines:
+    selector: 'tr[data-testid="FileDiffHunks.hunkline"]'
+    description: "Individual lines in diff"
+    line_num_left: 'td.num[data-side="left"]'
+    line_num_right: 'td.num[data-side="right"]'
+    line_content: 'td.content'
+    line_kind: 'td[data-kind]'
+    notes: |
+      - data-kind values: "unchanged", "added", "deleted", "empty"
+      - data-side values: "left" (before), "right" (after)
+      - Line numbers are text content of td.num elements
+      - Left side shows old line numbers, right side shows new
+
+  # Diff stats
+  diff_stats:
+    selector: 'div[data-file-diff-header] .header'
+    description: "File diff header with stats"
+    added_lines: 'small.added'
+    deleted_lines: 'small.deleted'
+    notes: |
+      - Shows "+N lines added" and "-N lines removed"
+      - Visual indicator with colored squares
+
+  # File header
+  file_header:
+    selector: 'div[data-file-diff-header] .header'
+    description: "File diff header"
+    file_link: 'a[href*="/-/blob/"]'
+    expand_button: 'button[aria-label*="file diff"]'
+
+  # Search results
+  search_results:
+    selector: '.search-result'
+    description: "Code search result items"
+    file_path: '.file-match-path'
+    line_number: '.line-number'
+    code_preview: '.code-excerpt'
+
+  # File tree sidebar
+  file_tree:
+    selector: 'aside[data-testid="sidebar"] ul[role="tree"]'
+    description: "File tree navigation sidebar"
+    tree_item: 'li[role="treeitem"][data-treeitem]'
+    file_link: 'a[data-tree-path]'
+    folder_link: 'a[data-tree-path][href*="/-/tree/"]'
+    blob_link: 'a[data-tree-path][href*="/-/blob/"]'
+    expand_button: 'button[data-expand-button]'
+    notes: |
+      - Tree items have data-tree-path attribute with file/folder path
+      - Links have data-ide-path and data-ide-repo attributes
+      - aria-selected="true" indicates current file
+      - File links: href="/github.com/owner/repo@rev/-/blob/path"
+      - Folder links: href="/github.com/owner/repo@rev/-/tree/path"
+      - Expandable folders have aria-expanded attribute
+
+  # File content viewer (CodeMirror)
+  code_viewer:
+    selector: '.cm-editor'
+    description: "CodeMirror-based file content viewer"
+    scroller: '.cm-scroller'
+    content: '.cm-content[role="textbox"]'
+    line: '.cm-line'
+    line_numbers: '.cm-gutter.cm-lineNumbers'
+    line_number_element: '.cm-gutterElement'
+    fold_gutter: '.cm-gutter.cm-foldGutter'
+    selection: '.cm-selectionBackground'
+    notes: |
+      - CodeMirror 6 editor with virtual scrolling
+      - Line numbers in .cm-gutter.cm-lineNumbers gutter
+      - Each line number is in a .cm-gutterElement span
+      - Line numbers are 1-indexed text content
+      - Content lines in .cm-content with .cm-line elements
+      - Virtual scrolling uses .cm-gap elements for performance
+      - Syntax highlighting with nested spans (class prefix "ͼ")
+      - Fold markers in .cm-foldGutter for collapsible regions
+      - aria-readonly="true" on content area
+
+# Conversion logic hints
+conversion:
+  workspace_mapping:
+    # Strategy to map Sourcegraph repo to local workspace
+    strategies:
+      - type: git_remote
+        description: "Match by git remote URL constructed from host/owner/repo"
+        priority: 1
+        example: "github.com/EbookFoundation/free-programming-books → git@github.com:EbookFoundation/free-programming-books.git"
+
+      - type: repo_name
+        description: "Match by repository name"
+        priority: 2
+        note: "May have collisions"
+
+      - type: owner_repo
+        description: "Match by owner/repo combination"
+        priority: 3
+
+      - type: manual_mapping
+        description: "User-configured mapping in settings"
+        priority: 4
+
+  multi_host_support:
+    description: "Sourcegraph indexes code from multiple hosts"
+    hosts:
+      - github.com
+      - gitlab.com
+      - bitbucket.org
+      - git.host.com
+    note: "Extract host from URL to construct proper git remote"
+
+  line_number:
+    # Line number format
+    hash_format: '#L{line}'           # Single line: #L125
+    range_format: '#L{start}-L{end}'  # Range: #L100-L120
+
+  revision:
+    # Git revision handling
+    format: "@{revision}"
+    types:
+      - branch: "master, main, develop"
+      - tag: "v1.0.0"
+      - commit: "78c0ae44e9e7f5d60ec6716962f3b0af532203bb"
+    strategy: "use_revision_param"
+    note: "Pass as ?rev=<revision> to srcuri URL"
+
+# Example transformations
+examples:
+  - sourcegraph_url: "https://sourcegraph.com/github.com/EbookFoundation/free-programming-books/-/commit/78c0ae44e9e7f5d60ec6716962f3b0af532203bb"
+    extracted:
+      host: "github.com"
+      owner: "EbookFoundation"
+      repo: "free-programming-books"
+      commit: "78c0ae44e9e7f5d60ec6716962f3b0af532203bb"
+      file_from_dom: "more/free-programming-playgrounds.md"
+      line_from_dom: 125
+    srcuri_url: "srcuri://free-programming-books/more/free-programming-playgrounds.md:125?rev=78c0ae44"
+    notes: "File path and line number extracted from DOM"
+
+  - sourcegraph_url: "https://sourcegraph.com/github.com/torvalds/linux@master/-/blob/kernel/sched/core.c#L100-L120"
+    extracted:
+      host: "github.com"
+      owner: "torvalds"
+      repo: "linux"
+      revision: "master"
+      path: "kernel/sched/core.c"
+      line_start: 100
+      line_end: 120
+    srcuri_url: "srcuri://linux/kernel/sched/core.c:100"
+    notes: "Direct file blob view with line range"
+
+  - sourcegraph_url: "https://sourcegraph.com/github.com/golang/go@v1.21.0/-/blob/src/net/http/server.go#L50"
+    extracted:
+      host: "github.com"
+      owner: "golang"
+      repo: "go"
+      revision: "v1.21.0"
+      path: "src/net/http/server.go"
+      line: 50
+    srcuri_url: "srcuri://go/src/net/http/server.go:50?rev=v1.21.0"
+    notes: "Tagged version"
+
+# Implementation notes for Chrome extension
+implementation_notes:
+  - "Sourcegraph uses Svelte framework with scoped CSS classes"
+  - "Class names include random suffixes (e.g., svelte-fgl8vv)"
+  - "Use data-testid attributes for stable selectors where available"
+  - "URLs include code host prefix (github.com, gitlab.com, etc.)"
+  - "Must extract code host to construct proper git remote for workspace matching"
+  - "File paths in commit diffs must be extracted from DOM (href attributes)"
+  - "Diff view uses unified format with separate left/right line numbers"
+  - "data-side='left' = old version, data-side='right' = new version"
+  - "Search results require separate handling - extract from result items"
+  - "Self-hosted Sourcegraph may index internal git servers"
+  - "Syntax highlighting uses .hl-* classes (nested spans)"
+  - "File tree links have title attribute with srcuri:// URL (malformed, includes full Sourcegraph path)"
+  - "title='srcuri://github.com//github.com/owner/repo@rev/-/blob/path' - double slash and full URL path"
+  - "This suggests Sourcegraph may have IDE integration - could be enhanced by extension"
+  - "File content viewer uses CodeMirror 6 editor"
+  - "CodeMirror line numbers have no data attributes - extract from text content"
+  - "CodeMirror uses virtual scrolling - only visible lines are in DOM"
+  - "Make line number gutter elements clickable to open in srcuri at that line"
+
+# Testing URLs (from the provided HTML)
+test_urls:
+  - url: "https://sourcegraph.com/github.com/EbookFoundation/free-programming-books/-/commit/78c0ae44e9e7f5d60ec6716962f3b0af532203bb"
+    expected_workspace: "free-programming-books"
+    expected_host: "github.com"
+    expected_commit: "78c0ae44e9e7f5d60ec6716962f3b0af532203bb"
+    expected_file: "more/free-programming-playgrounds.md"
+    expected_line: 125
+    notes: "Commit view with file diff - extract file and line from DOM"
+
+  - url: "https://sourcegraph.com/github.com/torvalds/linux@master/-/blob/kernel/sched/core.c#L100"
+    expected_workspace: "linux"
+    expected_host: "github.com"
+    expected_path: "kernel/sched/core.c"
+    expected_line: 100
+    notes: "Blob view with line number in URL"
+
+  - url: "https://sourcegraph.com/github.com/golang/go@v1.21.0/-/tree/src/net/http"
+    expected_workspace: "go"
+    expected_host: "github.com"
+    expected_path: "src/net/http"
+    expected_line: null
+    notes: "Tree/directory view - no specific line"
+
+# Chrome extension: content script injection points
+content_script:
+  matches:
+    - "*://sourcegraph.com/*/*/*/*/-/commit/*"
+    - "*://sourcegraph.com/*/*/*/*@*/-/blob/*"
+    - "*://sourcegraph.com/*/*/*/*@*/-/tree/*"
+    - "*://sourcegraph.com/search*"
+    # Self-hosted instances
+    - "*://*/*/*/*/-/commit/*"
+    - "*://*/*/*/*@*/-/blob/*"
+    - "*://*/*/*/*@*/-/tree/*"
+
+  run_at: "document_end"
+
+  inject_on:
+    - path: "/{host}/{owner}/{repo}/-/commit/{hash}"
+      description: "Commit view with file diffs"
+    - path: "/{host}/{owner}/{repo}@{rev}/-/blob/{path}"
+      description: "File blob view"
+    - path: "/{host}/{owner}/{repo}@{rev}/-/tree/{path}"
+      description: "Directory tree view"
+    - path: "/search"
+      description: "Code search results"
+
+# Additional extraction logic
+extraction_examples:
+  # Extract file path from diff header
+  file_path_extraction:
+    html: '<a target="_blank" href="/github.com/EbookFoundation/free-programming-books@78c0ae44e9e7f5d60ec6716962f3b0af532203bb/-/blob/more/free-programming-playgrounds.md">more/free-programming-playgrounds.md</a>'
+    href: "/github.com/EbookFoundation/free-programming-books@78c0ae44e9e7f5d60ec6716962f3b0af532203bb/-/blob/more/free-programming-playgrounds.md"
+    extracted_path: "more/free-programming-playgrounds.md"
+    method: "Extract from href after /-/blob/"
+
+  # Extract line number from diff
+  line_number_extraction:
+    html: '<td class="num svelte-ywnksc" data-side="right" data-kind="added">125<!----></td>'
+    data_side: "right"
+    data_kind: "added"
+    line_number: 125
+    notes: "Line number is text content of td.num element"
+
+  # Construct git remote from URL components
+  git_remote_construction:
+    url: "https://sourcegraph.com/github.com/EbookFoundation/free-programming-books/-/commit/78c0ae44"
+    host: "github.com"
+    owner: "EbookFoundation"
+    repo: "free-programming-books"
+    git_remote_https: "https://github.com/EbookFoundation/free-programming-books.git"
+    git_remote_ssh: "git@github.com:EbookFoundation/free-programming-books.git"
+    notes: "Try matching both HTTPS and SSH remote formats"
+
+  # Extract from blob URL href
+  blob_url_parsing:
+    href: "/github.com/torvalds/linux@master/-/blob/kernel/sched/core.c"
+    regex: '^/([^/]+)/([^/]+)/([^/]+)@([^/]+)/-/blob/(.+)$'
+    matches:
+      host: "github.com"
+      owner: "torvalds"
+      repo: "linux"
+      revision: "master"
+      path: "kernel/sched/core.c"
+
+  # Extract from file tree sidebar
+  file_tree_extraction:
+    html: |
+      <a class="svelte-13mbu42" tabindex="-1"
+         href="/github.com/EbookFoundation/free-programming-books@78c0ae44e9e7f5d60ec6716962f3b0af532203bb/-/blob/LICENSE"
+         data-tree-path="LICENSE"
+         data-ide-path="/github.com/EbookFoundation/free-programming-books@78c0ae44e9e7f5d60ec6716962f3b0af532203bb/-/blob/LICENSE"
+         data-ide-repo="github.com"
+         title="srcuri://github.com//github.com/EbookFoundation/free-programming-books@78c0ae44e9e7f5d60ec6716962f3b0af532203bb/-/blob/LICENSE">
+        LICENSE
+      </a>
+    extracted:
+      path: "LICENSE"
+      href: "/github.com/EbookFoundation/free-programming-books@78c0ae44e9e7f5d60ec6716962f3b0af532203bb/-/blob/LICENSE"
+      host: "github.com"
+      repo: "free-programming-books"
+      revision: "78c0ae44e9e7f5d60ec6716962f3b0af532203bb"
+    parsing:
+      - "Extract data-tree-path for file path"
+      - "Parse href to get host, owner, repo, revision"
+      - "Regex: ^/([^/]+)/([^/]+)/([^/]+)@([^/]+)/-/blob/(.+)$"
+    srcuri_url: "srcuri://free-programming-books/LICENSE?rev=78c0ae44"
+
+  # Extract from CodeMirror line numbers
+  codemirror_line_extraction:
+    html: |
+      <div class="cm-gutter cm-lineNumbers">
+        <div class="cm-gutterElement" style="top: 0px; height: 22.4px;">1</div>
+        <div class="cm-gutterElement" style="top: 22.4px; height: 22.4px;">2</div>
+        <div class="cm-gutterElement" style="top: 44.8px; height: 22.4px;">3</div>
+      </div>
+    interaction: "User clicks on line number element"
+    extraction:
+      - "Find clicked .cm-gutterElement within .cm-gutter.cm-lineNumbers"
+      - "Text content is the line number (e.g., '3')"
+      - "Extract file path from page URL"
+      - "Construct srcuri URL with file:line"
+    example_click: "User clicks gutterElement with text '3'"
+    line_number: 3
+    page_url: "https://sourcegraph.com/github.com/EbookFoundation/free-programming-books@78c0ae44/-/blob/LICENSE"
+    srcuri_url: "srcuri://free-programming-books/LICENSE:3?rev=78c0ae44"
+    notes: |
+      - Line numbers are simple text content in gutterElement divs
+      - No special data attributes, just sequential rendering
+      - Virtual scrolling means only visible lines are in DOM
+      - Use element.textContent.trim() to get line number
+
+  # Complete extraction from commit diff
+  complete_example:
+    page_url: "https://sourcegraph.com/github.com/EbookFoundation/free-programming-books/-/commit/78c0ae44"
+    diff_item_html: |
+      <li>
+        <div data-file-diff-header>
+          <div class="header">
+            <small class="added">+1</small>
+            <small class="deleted">-0</small>
+            <a href="/github.com/EbookFoundation/free-programming-books@78c0ae44/-/blob/more/free-programming-playgrounds.md">
+              more/free-programming-playgrounds.md
+            </a>
+          </div>
+        </div>
+        <div class="hunks">
+          <table data-view="unified">
+            <tr data-testid="FileDiffHunks.hunkline">
+              <td class="num" data-side="right" data-kind="added">125</td>
+              <td class="content" data-side="right" data-kind="added">
+                <div>* [Online Clojure IDE](https://www.jdoodle.com/execute-clojure-online)</div>
+              </td>
+            </tr>
+          </table>
+        </div>
+      </li>
+    extracted:
+      file: "more/free-programming-playgrounds.md"
+      line: 125
+      kind: "added"
+      commit: "78c0ae44"
+    srcuri_url: "srcuri://free-programming-books/more/free-programming-playgrounds.md:125?rev=78c0ae44"

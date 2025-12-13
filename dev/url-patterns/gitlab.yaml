@@ -1,0 +1,328 @@
+# GitLab URL Pattern Configuration
+# For converting GitLab web URLs to srcuri:// protocol links
+#
+# GitLab is a DevOps platform for the entire software development lifecycle
+# Public instance: https://gitlab.com
+# Docs: https://docs.gitlab.com
+
+platform:
+  name: GitLab
+  type: code-hosting
+  self_hosted: true
+  description: "DevOps platform with Git repository management, CI/CD, and more"
+
+# Common GitLab instances (can be extended)
+known_instances:
+  - domain: gitlab.com
+    name: "GitLab.com"
+  # Add your self-hosted instances here
+  # - domain: gitlab.example.com
+  #   name: "My Company GitLab"
+
+# URL patterns to match
+url_patterns:
+  # Tree/directory view
+  - name: tree_view
+    pattern: '^https?://([^/]+)/([^/]+)/([^/]+)/-/tree/([^/?#]+)(?:/(.+?))?(?:\?.*)?(?:#.*)?$'
+    description: "Directory tree view"
+    groups:
+      domain: 1
+      owner: 2      # Can be user or group
+      repo: 3
+      ref: 4        # branch, tag, or commit
+      path: 5       # optional subdirectory
+    example: "https://gitlab.com/gitlab-org/gitlab-foss/-/tree/master/app"
+    notes: "Path is optional for root directory"
+
+  # File blob view
+  - name: blob_view
+    pattern: '^https?://([^/]+)/([^/]+)/([^/]+)/-/blob/([^/]+)/(.+?)(?:#L(\d+)(?:-(\d+))?)?$'
+    description: "File view at specific revision"
+    groups:
+      domain: 1
+      owner: 2
+      repo: 3
+      ref: 4
+      path: 5
+      line_start: 6
+      line_end: 7
+    example: "https://gitlab.com/gitlab-org/gitlab-foss/-/blob/master/README.md#L10-L20"
+
+  # Commit view
+  - name: commit_view
+    pattern: '^https?://([^/]+)/([^/]+)/([^/]+)/-/commit/([a-f0-9]{7,40})(?:\?.*)?$'
+    description: "Commit detail view"
+    groups:
+      domain: 1
+      owner: 2
+      repo: 3
+      commit: 4
+    example: "https://gitlab.com/gitlab-org/gitlab-foss/-/commit/751547b2ad6ff6a6c8761ada3fcb14f7f9f9d293"
+
+  # Merge request files view
+  - name: merge_request_files
+    pattern: '^https?://([^/]+)/([^/]+)/([^/]+)/-/merge_requests/(\d+)/diffs(?:\?.*)?(?:#([a-f0-9]+))?$'
+    description: "Merge request diffs view"
+    groups:
+      domain: 1
+      owner: 2
+      repo: 3
+      mr_number: 4
+      file_hash: 5   # optional, from URL fragment
+    example: "https://gitlab.com/gitlab-org/gitlab-foss/-/merge_requests/123/diffs#abc123"
+
+  # Compare view
+  - name: compare_view
+    pattern: '^https?://([^/]+)/([^/]+)/([^/]+)/-/compare/([^.]+)\.\.\.([^?#]+)(?:\?.*)?$'
+    description: "Compare two refs (branches/commits)"
+    groups:
+      domain: 1
+      owner: 2
+      repo: 3
+      from_ref: 4
+      to_ref: 5
+    example: "https://gitlab.com/gitlab-org/gitlab-foss/-/compare/v1.0...v2.0"
+
+# DOM selectors for the Chrome extension to enhance
+dom_selectors:
+  # File tree in repository view
+  file_tree:
+    selector: 'table[data-testid="file-tree-table"]'
+    description: "File and directory tree table"
+    tree_row: 'tr.tree-item'
+    file_link: 'a.tree-item-link[data-testid="file-name-link"]'
+    file_name: 'span[data-testid="truncate-end-container"]'
+    folder_indicator: 'svg[data-testid="folder-icon"]'
+    file_icon: 'svg.file-icon'
+    notes: |
+      - Links have title attribute with srcuri:// URL format
+      - title="srcuri://gitlab-org/README.md" format
+      - data-ide-path attribute contains the file/folder path
+      - data-ide-repo attribute contains the owner (first level)
+      - Folders have folder-icon, files have file-icon
+      - File links go to /-/blob/ URLs
+      - Folder links go to /-/tree/ URLs
+
+  # Commit information
+  commit_info:
+    selector: '.tree-commit'
+    description: "Last commit info for files/folders"
+    commit_link: 'a[href*="/-/commit/"]'
+    commit_message: 'a.tree-commit-link'
+
+  # Time information
+  time_info:
+    selector: '.tree-time-ago'
+    description: "Last update time for files/folders"
+    time_element: 'time[datetime]'
+
+# Conversion logic hints
+conversion:
+  workspace_mapping:
+    # Strategy to map GitLab repo to local workspace
+    strategies:
+      - type: git_remote
+        description: "Match by git remote URL"
+        priority: 1
+        formats:
+          - "git@{domain}:{owner}/{repo}.git"
+          - "https://{domain}/{owner}/{repo}.git"
+        example: "git@gitlab.com:gitlab-org/gitlab-foss.git"
+
+      - type: repo_name
+        description: "Match by repository name"
+        priority: 2
+        note: "May have collisions, use owner/repo if needed"
+
+      - type: owner_repo
+        description: "Match by owner/repo combination"
+        priority: 3
+
+      - type: manual_mapping
+        description: "User-configured mapping in settings"
+        priority: 4
+
+  line_number:
+    # Line number format
+    hash_format: '#L{line}'           # Single line: #L125
+    range_format: '#L{start}-{end}'   # Range: #L10-20 (no L prefix on end)
+    notes: "GitLab uses #L10-20 format (no second L)"
+
+  revision:
+    # Git revision handling
+    format: "/{ref}/"
+    types:
+      - branch: "master, main, develop"
+      - tag: "v1.0.0"
+      - commit: "751547b2ad6ff6a6c8761ada3fcb14f7f9f9d293"
+    strategy: "use_revision_param"
+    note: "Pass as ?rev=<revision> to srcuri URL"
+
+  srcuri_in_dom:
+    description: "GitLab already includes srcuri:// URLs in title attributes!"
+    title_format: 'srcuri://{owner}/{path}'
+    notes: |
+      - File tree links have title="srcuri://gitlab-org/README.md"
+      - This is simpler than other platforms - can extract directly
+      - However, doesn't include full owner/repo or revision info
+      - May need to construct full URL from context
+
+# Example transformations
+examples:
+  - gitlab_url: "https://gitlab.com/gitlab-org/gitlab-foss/-/tree/master"
+    srcuri_url: "srcuri://gitlab-foss/"
+    notes: "Root directory view"
+
+  - gitlab_url: "https://gitlab.com/gitlab-org/gitlab-foss/-/tree/master/app"
+    srcuri_url: "srcuri://gitlab-foss/app/"
+    notes: "Subdirectory view"
+
+  - gitlab_url: "https://gitlab.com/gitlab-org/gitlab-foss/-/blob/master/README.md#L10-20"
+    extracted:
+      owner: "gitlab-org"
+      repo: "gitlab-foss"
+      ref: "master"
+      path: "README.md"
+      line_start: 10
+      line_end: 20
+    srcuri_url: "srcuri://gitlab-foss/README.md:10"
+    notes: "File view with line range - open at start line"
+
+  - gitlab_url: "https://gitlab.com/gitlab-org/gitlab-foss/-/blob/master/LICENSE"
+    extracted_from_dom:
+      title: "srcuri://gitlab-org/LICENSE"
+      data_ide_path: "LICENSE"
+      data_ide_repo: "gitlab-org"
+    srcuri_url: "srcuri://gitlab-foss/LICENSE"
+    notes: "Can extract from DOM title attribute or construct from URL"
+
+# Implementation notes for Chrome extension
+implementation_notes:
+  - "GitLab uses Vue.js framework with utility-first CSS (similar to Tailwind)"
+  - "Class names use gl- prefix (e.g., gl-border, gl-rounded-base)"
+  - "data-testid attributes provide stable selectors"
+  - "File tree already has srcuri:// URLs in title attributes!"
+  - "title format: 'srcuri://{owner}/{path}' (simplified, missing full context)"
+  - "data-ide-path attribute contains the file/folder path"
+  - "data-ide-repo attribute contains the owner (first component only)"
+  - "File links use /-/blob/ pattern, folders use /-/tree/"
+  - "Line number format: #L10-20 (no L prefix on end number)"
+  - "Groups can be nested (e.g., gitlab-org is a group)"
+  - "Self-hosted GitLab instances may have different base URLs"
+  - "Some instances may disable certain features"
+
+# Testing URLs
+test_urls:
+  - url: "https://gitlab.com/gitlab-org/gitlab-foss/-/tree/master"
+    expected_workspace: "gitlab-foss"
+    expected_path: ""
+    expected_ref: "master"
+    notes: "Root directory"
+
+  - url: "https://gitlab.com/gitlab-org/gitlab-foss/-/tree/master/app"
+    expected_workspace: "gitlab-foss"
+    expected_path: "app"
+    expected_ref: "master"
+    notes: "Subdirectory"
+
+  - url: "https://gitlab.com/gitlab-org/gitlab-foss/-/blob/master/README.md#L10-20"
+    expected_workspace: "gitlab-foss"
+    expected_path: "README.md"
+    expected_line: 10
+    expected_ref: "master"
+    notes: "File with line range"
+
+  - url: "https://gitlab.com/gitlab-org/gitlab-foss/-/commit/751547b2ad6ff6a6c8761ada3fcb14f7f9f9d293"
+    expected_workspace: "gitlab-foss"
+    expected_commit: "751547b2ad6ff6a6c8761ada3fcb14f7f9f9d293"
+    notes: "Commit view - extract files from DOM"
+
+# Chrome extension: content script injection points
+content_script:
+  matches:
+    - "*://*/*/-/tree/*"
+    - "*://*/*/-/blob/*"
+    - "*://*/*/-/commit/*"
+    - "*://*/*/-/merge_requests/*/diffs*"
+    - "*://*/*/-/compare/*"
+
+  run_at: "document_end"
+
+  inject_on:
+    - path: "/{owner}/{repo}/-/tree/{ref}[/{path}]"
+      description: "Repository tree view"
+    - path: "/{owner}/{repo}/-/blob/{ref}/{path}"
+      description: "File blob view"
+    - path: "/{owner}/{repo}/-/commit/{hash}"
+      description: "Commit view"
+    - path: "/{owner}/{repo}/-/merge_requests/{id}/diffs"
+      description: "Merge request diffs"
+
+# Additional extraction logic
+extraction_examples:
+  # Extract from file tree DOM
+  file_tree_extraction:
+    html: |
+      <a href="/gitlab-org/gitlab-foss/-/tree/master/.devfile"
+         class="tree-item-link gl-inline-flex gl-min-w-0 gl-max-w-full"
+         title="srcuri://gitlab-org/.devfile"
+         data-testid="file-name-link"
+         data-ide-path=".devfile"
+         data-ide-repo="gitlab-org"
+         style="cursor: pointer;">
+        <span data-testid="truncate-end-container" title=".devfile">
+          <span class="gl-truncate-end">.devfile</span>
+        </span>
+      </a>
+    extracted:
+      title: "srcuri://gitlab-org/.devfile"
+      path: ".devfile"
+      repo_prefix: "gitlab-org"
+      href: "/gitlab-org/gitlab-foss/-/tree/master/.devfile"
+    parsing:
+      - "Extract data-ide-path for file path"
+      - "Extract title attribute (has srcuri:// URL)"
+      - "Parse href to get owner, repo, ref"
+      - "Regex: ^/([^/]+)/([^/]+)/-/(?:tree|blob)/([^/]+)/(.+)$"
+    srcuri_url: "srcuri://gitlab-foss/.devfile"
+    notes: "GitLab provides srcuri:// in title, but missing full context"
+
+  # Extract from blob URL
+  blob_url_extraction:
+    url: "https://gitlab.com/gitlab-org/gitlab-foss/-/blob/master/README.md#L10-20"
+    regex: '^https?://([^/]+)/([^/]+)/([^/]+)/-/blob/([^/]+)/(.+?)(?:#L(\d+)(?:-(\d+))?)?$'
+    matches:
+      domain: "gitlab.com"
+      owner: "gitlab-org"
+      repo: "gitlab-foss"
+      ref: "master"
+      path: "README.md"
+      line_start: "10"
+      line_end: "20"
+    git_remote_ssh: "git@gitlab.com:gitlab-org/gitlab-foss.git"
+    git_remote_https: "https://gitlab.com/gitlab-org/gitlab-foss.git"
+    srcuri_url: "srcuri://gitlab-foss/README.md:10?rev=master"
+
+  # Extract from tree URL
+  tree_url_extraction:
+    url: "https://gitlab.com/gitlab-org/gitlab-foss/-/tree/master/app"
+    regex: '^https?://([^/]+)/([^/]+)/([^/]+)/-/tree/([^/]+)(?:/(.+))?$'
+    matches:
+      domain: "gitlab.com"
+      owner: "gitlab-org"
+      repo: "gitlab-foss"
+      ref: "master"
+      path: "app"
+    srcuri_url: "srcuri://gitlab-foss/app/"
+    notes: "Directory path - may want to show in file browser"
+
+  # Handle groups (nested owners)
+  group_handling:
+    url: "https://gitlab.com/gitlab-org/gitlab-foss/-/blob/master/LICENSE"
+    owner: "gitlab-org"
+    repo: "gitlab-foss"
+    notes: |
+      - gitlab-org is a group (can contain subgroups)
+      - Full path might be group/subgroup/project
+      - For srcuri, use final project name as workspace
+      - Git remote uses full path: git@gitlab.com:gitlab-org/gitlab-foss.git

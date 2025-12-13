@@ -1,0 +1,301 @@
+# Gitea URL Pattern Configuration
+# For converting Gitea web URLs to srcuri:// protocol links
+#
+# Gitea is a lightweight, self-hosted Git service similar to GitHub/GitLab
+# Demo instance: https://demo.gitea.com
+# Docs: https://docs.gitea.com
+
+platform:
+  name: Gitea
+  type: code-hosting
+  self_hosted: true
+  description: "Lightweight Git service with GitHub-like interface"
+
+# Common Gitea instances (can be extended)
+known_instances:
+  - domain: demo.gitea.com
+    name: "Gitea Demo"
+  - domain: gitea.com
+    name: "Gitea Official"
+  - domain: codeberg.org
+    name: "Codeberg (Gitea-based)"
+  # Add your self-hosted instances here
+  # - domain: git.example.com
+  #   name: "My Company Gitea"
+
+# URL patterns to match
+url_patterns:
+  # File view in repository
+  - name: file_view
+    pattern: '^https?://([^/]+)/([^/]+)/([^/]+)/src/(?:branch|commit|tag)/([^/]+)/(.+?)(?:#L(\d+)(?:-L(\d+))?)?$'
+    description: "File view in branch/commit/tag"
+    groups:
+      domain: 1
+      owner: 2
+      repo: 3
+      ref: 4
+      path: 5
+      line_start: 6
+      line_end: 7
+    example: "https://demo.gitea.com/wediaklup/calc/src/branch/master/add.c#L10"
+
+  # Blob view (alternative URL format)
+  - name: blob_view
+    pattern: '^https?://([^/]+)/([^/]+)/([^/]+)/blob/([^/]+)/(.+?)(?:#L(\d+)(?:-L(\d+))?)?$'
+    description: "Blob view (alternative format)"
+    groups:
+      domain: 1
+      owner: 2
+      repo: 3
+      ref: 4
+      path: 5
+      line_start: 6
+      line_end: 7
+    example: "https://demo.gitea.com/wediaklup/calc/blob/master/mul.c#L5-L10"
+
+  # Raw file view
+  - name: raw_file
+    pattern: '^https?://([^/]+)/([^/]+)/([^/]+)/raw/(?:branch|commit|tag)/([^/]+)/(.+)$'
+    description: "Raw file content"
+    groups:
+      domain: 1
+      owner: 2
+      repo: 3
+      ref: 4
+      path: 5
+    example: "https://demo.gitea.com/wediaklup/calc/raw/branch/master/Makefile"
+
+  # Commit view with file
+  - name: commit_file
+    pattern: '^https?://([^/]+)/([^/]+)/([^/]+)/commit/([a-f0-9]{7,40})#diff-[a-f0-9]+(?:R(\d+))?$'
+    description: "File in commit diff view"
+    groups:
+      domain: 1
+      owner: 2
+      repo: 3
+      commit: 4
+      line: 5
+    example: "https://demo.gitea.com/wediaklup/calc/commit/afa626e5234875ed9ccd0b3bae59fb88c829a69b#diff-abc123R10"
+
+  # Compare/diff view
+  - name: compare_view
+    pattern: '^https?://([^/]+)/([^/]+)/([^/]+)/compare/([^.]+)\.\.\.([^#]+)(?:#diff-.+)?$'
+    description: "Compare branches/commits"
+    groups:
+      domain: 1
+      owner: 2
+      repo: 3
+      base_ref: 4
+      head_ref: 5
+    example: "https://demo.gitea.com/wediaklup/calc/compare/master...feature"
+
+  # Pull request files view
+  - name: pull_request_files
+    pattern: '^https?://([^/]+)/([^/]+)/([^/]+)/pulls/(\d+)/files(?:#diff-([a-f0-9]+)(?:[LR](\d+))?)?$'
+    description: "Pull request files/diff view"
+    groups:
+      domain: 1
+      owner: 2
+      repo: 3
+      pr_number: 4
+      file_hash: 5
+      line: 6
+    example: "http://demo.gitea.com/adamm2/foo/pulls/2/files#diff-8ec9a00bR3"
+    notes: "Line numbers prefixed with L (old) or R (new) in hash fragment"
+
+  # Pull request single file diff
+  - name: pull_request_file_path
+    pattern: '^https?://([^/]+)/([^/]+)/([^/]+)/pulls/(\d+)/files#diff-[a-f0-9]+$'
+    description: "Specific file in PR diff"
+    groups:
+      domain: 1
+      owner: 2
+      repo: 3
+      pr_number: 4
+    example: "http://demo.gitea.com/adamm2/foo/pulls/2/files#diff-8ec9a00bfd09b3190ac6b22251dbb1aa95a0579d"
+    notes: "File hash in URL, need to extract filename from DOM"
+
+# DOM selectors for the Chrome extension to enhance
+dom_selectors:
+  # File browser table
+  file_list:
+    selector: '#repo-files-table .repo-file-item'
+    description: "Repository file browser"
+    link_selector: 'a.entry-name'
+
+  # File content view
+  file_content:
+    selector: '.file-content .lines-code'
+    description: "File source code view"
+    line_selector: '.lines-num span[id^="L"]'
+
+  # Commit diff view
+  commit_diff:
+    selector: '.diff-file-box'
+    description: "Commit diff file sections"
+    file_header: '.diff-file-header'
+    line_num: 'td.lines-num[data-line-num]'
+
+  # Breadcrumb navigation
+  breadcrumb:
+    selector: '.repo-path .breadcrumb'
+    description: "File path breadcrumb"
+
+  # Pull request diff view
+  pr_diff:
+    selector: '.diff-file-box'
+    description: "Pull request file diff boxes"
+    file_header: '.diff-file-header'
+    file_name: '.diff-file-header .file-link'
+    line_num_old: 'td.lines-num-old[data-line-num]'
+    line_num_new: 'td.lines-num-new[data-line-num]'
+    diff_row: 'tr[data-line-type]'
+    notes: |
+      - Each file has a unique ID: #diff-{hash}
+      - Line numbers have data-line-num attribute
+      - Old lines have rel="diff-{hash}L{num}"
+      - New lines have rel="diff-{hash}R{num}"
+      - data-line-type: "add", "del", "same", "tag"
+
+# Conversion logic hints
+conversion:
+  workspace_mapping:
+    # Strategy to map Gitea repo to local workspace
+    strategies:
+      - type: git_remote
+        description: "Match by git remote URL"
+        priority: 1
+
+      - type: repo_name
+        description: "Match by repository name"
+        priority: 2
+        note: "May have collisions if multiple repos with same name"
+
+      - type: owner_repo
+        description: "Match by owner/repo combination"
+        priority: 3
+
+      - type: manual_mapping
+        description: "User-configured mapping in settings"
+        priority: 4
+
+  line_number:
+    # How to extract and convert line numbers
+    hash_format: '#L{line}'           # Single line: #L10
+    range_format: '#L{start}-L{end}'  # Range: #L10-L20
+
+  revision:
+    # How to handle git refs
+    branch:
+      strategy: "checkout_if_exists"
+      note: "If branch exists locally, use it; otherwise use HEAD"
+    commit:
+      strategy: "use_revision_param"
+      note: "Pass as ?rev=<commit> to srcuri URL"
+    tag:
+      strategy: "checkout_if_exists"
+      note: "Tags can be checked out like branches"
+
+# Example transformations
+examples:
+  - gitea_url: "https://demo.gitea.com/wediaklup/calc/src/branch/master/add.c#L10"
+    srcuri_url: "srcuri://calc/add.c:10"
+    notes: "Assumes 'calc' workspace configured locally"
+
+  - gitea_url: "https://demo.gitea.com/wediaklup/calc/src/branch/master/sub.c#L5-L15"
+    srcuri_url: "srcuri://calc/sub.c:5"
+    notes: "Line ranges converted to start line (editor will show range context)"
+
+  - gitea_url: "https://demo.gitea.com/wediaklup/calc/src/commit/afa626e5234875ed9ccd0b3bae59fb88c829a69b/mul.c#L8"
+    srcuri_url: "srcuri://calc/mul.c:8?rev=afa626e5"
+    notes: "Commit hash passed as revision parameter"
+
+  - gitea_url: "https://git.mycompany.com/backend/api-server/src/branch/develop/src/handlers/user.go#L42"
+    srcuri_url: "srcuri://api-server/src/handlers/user.go:42"
+    notes: "Works with self-hosted Gitea instances"
+
+  - gitea_url: "http://demo.gitea.com/adamm2/foo/pulls/2/files#diff-8ec9a00bfd09b3190ac6b22251dbb1aa95a0579dR3"
+    srcuri_url: "srcuri://foo/README.md:3"
+    notes: "PR diff with line number - 'R3' means line 3 in new version, file path extracted from DOM"
+
+  - gitea_url: "http://demo.gitea.com/adamm2/foo/pulls/2/files#diff-8ec9a00bfd09b3190ac6b22251dbb1aa95a0579d"
+    srcuri_url: "srcuri://foo/README.md"
+    notes: "PR diff without line number - just open the file"
+
+# Implementation notes for Chrome extension
+implementation_notes:
+  - "Gitea UI is similar to GitHub but with different class names and structure"
+  - "File browser uses .repo-file-item instead of GitHub's file-list pattern"
+  - "Line numbers in file view have id='L{num}' format"
+  - "Commit hashes can be 7-40 characters (short or full SHA)"
+  - "Self-hosted instances may have custom domains - use domain matching"
+  - "Forgejo is a Gitea fork with identical URL structure (can reuse patterns)"
+  - "PR diff view: file path must be extracted from DOM (.file-link in .diff-file-header)"
+  - "PR line numbers use L prefix for old lines, R prefix for new lines in hash fragment"
+  - "PR file hash is in div id='diff-{hash}' and data-old-filename/data-new-filename attributes"
+  - "The .diff-file-box table uses data-new-comment-url and data-path attributes"
+
+# Testing URLs (from the provided HTML)
+test_urls:
+  - url: "https://demo.gitea.com/wediaklup/calc/src/branch/master/.gitignore"
+    expected_workspace: "calc"
+    expected_path: ".gitignore"
+    expected_line: null
+
+  - url: "https://demo.gitea.com/wediaklup/calc/src/branch/master/add.c"
+    expected_workspace: "calc"
+    expected_path: "add.c"
+    expected_line: null
+
+  - url: "https://demo.gitea.com/wediaklup/calc/src/branch/master/mul.c#L15"
+    expected_workspace: "calc"
+    expected_path: "mul.c"
+    expected_line: 15
+
+  - url: "http://demo.gitea.com/adamm2/foo/pulls/2/files"
+    expected_workspace: "foo"
+    expected_path: null
+    expected_line: null
+    notes: "PR files overview - may have multiple files"
+
+  - url: "http://demo.gitea.com/adamm2/foo/pulls/2/files#diff-8ec9a00bfd09b3190ac6b22251dbb1aa95a0579d"
+    expected_workspace: "foo"
+    expected_path: "README.md"
+    expected_line: null
+    notes: "PR diff for specific file - path extracted from DOM data-path='README.md'"
+
+  - url: "http://demo.gitea.com/adamm2/foo/pulls/2/files#diff-8ec9a00bfd09b3190ac6b22251dbb1aa95a0579dR3"
+    expected_workspace: "foo"
+    expected_path: "README.md"
+    expected_line: 3
+    notes: "PR diff line 3 in new version (R3), file path from DOM"
+
+  - url: "http://demo.gitea.com/adamm2/foo/pulls/2/files#diff-8ec9a00bfd09b3190ac6b22251dbb1aa95a0579dL1"
+    expected_workspace: "foo"
+    expected_path: "README.md"
+    expected_line: 1
+    notes: "PR diff line 1 in old version (L1), shows deleted content"
+
+# Chrome extension: content script injection points
+content_script:
+  matches:
+    - "*://*/*/src/branch/*"
+    - "*://*/*/src/commit/*"
+    - "*://*/*/src/tag/*"
+    - "*://*/*/blob/*"
+    - "*://*/*/commit/*"
+    - "*://*/*/compare/*"
+    - "*://*/*/commits/*"
+    - "*://*/*/pulls/*/files*"
+
+  run_at: "document_end"
+
+  inject_on:
+    - path: "/{owner}/{repo}/src/**"
+      description: "File browser and file view pages"
+    - path: "/{owner}/{repo}/commit/*"
+      description: "Commit view with diffs"
+    - path: "/{owner}/{repo}/commits/*"
+      description: "Commit history list"
+    - path: "/{owner}/{repo}/pulls/*/files"
+      description: "Pull request files/diff view"
