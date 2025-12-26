@@ -30,6 +30,7 @@ ehthumbs.db
 .env
 .env.*
 !.env.example
+.claude/settings.local.json
 
 # ---------- Optional (if using npm/yarn) ----------
 package-lock.json
