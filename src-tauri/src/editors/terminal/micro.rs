@@ -75,28 +75,25 @@ impl EditorManager for MicroManager {
             .await
             .ok_or(EditorError::BinaryNotFound)?;
 
-        let mut micro_args = vec![];
-        match (options.line, options.column) {
+        let micro_args: Vec<String> = match (options.line, options.column) {
             (Some(line), Some(column)) => {
-                micro_args.push(format!("'{}':{}:{}", path.display(), line, column));
+                vec![format!("{}:{}:{}", path.display(), line, column)]
             }
             (Some(line), None) => {
-                micro_args.push(format!("'{}':{}", path.display(), line));
+                vec![format!("{}:{}", path.display(), line)]
             }
             _ => {
-                micro_args.push(format!("'{}'", path.display()));
+                vec![path.display().to_string()]
             }
-        }
+        };
 
-        let micro_cmd = format!("micro {}", micro_args.join(" "));
-
-        debug!("Opening in terminal with micro: {}", micro_cmd);
+        debug!("Opening micro with args: {:?}", micro_args);
 
         let terminal_pref = options.terminal_preference.as_deref();
         if let Some(terminal) = TerminalApp::detect_installed_with_preference(terminal_pref) {
             debug!("Using terminal: {:?}", terminal);
             terminal
-                .launch_command(&micro_cmd)
+                .launch_editor("micro", &micro_args)
                 .map_err(|e| EditorError::LaunchFailed(e))?;
         } else {
             return Err(EditorError::Other(

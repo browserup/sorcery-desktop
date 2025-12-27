@@ -75,21 +75,19 @@ impl EditorManager for NanoManager {
             .await
             .ok_or(EditorError::BinaryNotFound)?;
 
-        let mut nano_args = vec![];
+        let mut nano_args: Vec<String> = vec![];
         if let Some(line) = options.line {
             nano_args.push(format!("+{}", line));
         }
-        nano_args.push(format!("'{}'", path.display()));
+        nano_args.push(path.display().to_string());
 
-        let nano_cmd = format!("nano {}", nano_args.join(" "));
-
-        debug!("Opening in terminal with nano: {}", nano_cmd);
+        debug!("Opening nano with args: {:?}", nano_args);
 
         let terminal_pref = options.terminal_preference.as_deref();
         if let Some(terminal) = TerminalApp::detect_installed_with_preference(terminal_pref) {
             debug!("Using terminal: {:?}", terminal);
             terminal
-                .launch_command(&nano_cmd)
+                .launch_editor("nano", &nano_args)
                 .map_err(|e| EditorError::LaunchFailed(e))?;
         } else {
             return Err(EditorError::Other(
