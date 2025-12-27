@@ -79,27 +79,26 @@ impl EditorManager for VimManager {
             .await
             .ok_or(EditorError::BinaryNotFound)?;
 
-        let mut vim_args = vec![];
+        let mut vim_args: Vec<String> = vec![];
         match (options.line, options.column) {
             (Some(line), Some(column)) => {
-                vim_args.push(format!("-c \"call cursor({},{})\"", line, column));
+                vim_args.push("-c".to_string());
+                vim_args.push(format!("call cursor({},{})", line, column));
             }
             (Some(line), None) => {
                 vim_args.push(format!("+{}", line));
             }
             _ => {}
         }
-        vim_args.push(format!("'{}'", path.display()));
+        vim_args.push(path.display().to_string());
 
-        let vim_cmd = format!("vim {}", vim_args.join(" "));
-
-        debug!("Opening in terminal with vim: {}", vim_cmd);
+        debug!("Opening vim with args: {:?}", vim_args);
 
         let terminal_pref = options.terminal_preference.as_deref();
         if let Some(terminal) = TerminalApp::detect_installed_with_preference(terminal_pref) {
             debug!("Using terminal: {:?}", terminal);
             terminal
-                .launch_command(&vim_cmd)
+                .launch_editor("vim", &vim_args)
                 .map_err(|e| EditorError::LaunchFailed(e))?;
         } else {
             return Err(EditorError::Other(

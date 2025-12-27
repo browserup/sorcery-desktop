@@ -1,3 +1,6 @@
+use std::fs;
+use std::io::Write;
+use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use std::process::Command;
 use tracing::debug;
@@ -146,40 +149,41 @@ impl TerminalApp {
             .unwrap_or(false)
     }
 
-    pub fn launch_command(&self, command: &str) -> Result<(), String> {
+    pub fn launch_editor(&self, editor: &str, args: &[String]) -> Result<(), String> {
+        debug!("Launching editor '{}' with args: {:?}", editor, args);
         match self {
             #[cfg(target_os = "macos")]
-            Self::ITerm2 => self.launch_iterm2(command),
+            Self::ITerm2 => self.launch_via_script("iTerm", editor, args),
 
             #[cfg(target_os = "macos")]
-            Self::Alacritty => self.launch_alacritty_macos(command),
+            Self::Terminal => self.launch_via_script("Terminal", editor, args),
 
             #[cfg(target_os = "macos")]
-            Self::Kitty => self.launch_kitty_macos(command),
+            Self::Alacritty => self.launch_alacritty_macos_direct(editor, args),
 
             #[cfg(target_os = "macos")]
-            Self::WezTerm => self.launch_wezterm_macos(command),
+            Self::Kitty => self.launch_kitty_macos_direct(editor, args),
 
             #[cfg(target_os = "macos")]
-            Self::Terminal => self.launch_terminal_app(command),
+            Self::WezTerm => self.launch_wezterm_macos_direct(editor, args),
 
             #[cfg(target_os = "linux")]
-            Self::Alacritty => self.launch_alacritty_linux(command),
+            Self::Alacritty => self.launch_alacritty_linux_direct(editor, args),
 
             #[cfg(target_os = "linux")]
-            Self::Kitty => self.launch_kitty_linux(command),
+            Self::Kitty => self.launch_kitty_linux_direct(editor, args),
 
             #[cfg(target_os = "linux")]
-            Self::WezTerm => self.launch_wezterm_linux(command),
+            Self::WezTerm => self.launch_wezterm_linux_direct(editor, args),
 
             #[cfg(target_os = "linux")]
-            Self::GnomeTerminal => self.launch_gnome_terminal(command),
+            Self::GnomeTerminal => self.launch_gnome_terminal_direct(editor, args),
 
             #[cfg(target_os = "linux")]
-            Self::Konsole => self.launch_konsole(command),
+            Self::Konsole => self.launch_konsole_direct(editor, args),
 
             #[cfg(target_os = "linux")]
-            Self::Xterm => self.launch_xterm(command),
+            Self::Xterm => self.launch_xterm_direct(editor, args),
 
             #[allow(unreachable_patterns)]
             _ => Err("Terminal not supported on this platform".to_string()),
@@ -187,46 +191,61 @@ impl TerminalApp {
     }
 
     #[cfg(target_os = "macos")]
-    fn launch_iterm2(&self, command: &str) -> Result<(), String> {
+    fn launch_via_script(&self, app_name: &str, editor: &str, args: &[String]) -> Result<(), String> {
         use std::process::Stdio;
+        use std::time::{SystemTime, UNIX_EPOCH};
 
-        let script = format!(
-            "tell application \"iTerm\"\n\
-             activate\n\
-             create window with default profile\n\
-             tell current session of current window\n\
-                 write text \"{}\"\n\
-             end tell\n\
-             end tell",
-            command.replace("\"", "\\\"")
-        );
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let script_path = format!("/tmp/sorcery_launch_{}.sh", timestamp);
 
-        Command::new("osascript")
-            .arg("-e")
-            .arg(&script)
+        let mut script_content = String::from("#!/bin/bash\n");
+        script_content.push_str(&shell_escape::escape(editor.into()));
+        for arg in args {
+            script_content.push(' ');
+            script_content.push_str(&shell_escape::escape(arg.into()));
+        }
+        script_content.push('\n');
+
+        let mut file = fs::File::create(&script_path)
+            .map_err(|e| format!("Failed to create launch script: {}", e))?;
+        file.write_all(script_content.as_bytes())
+            .map_err(|e| format!("Failed to write launch script: {}", e))?;
+        fs::set_permissions(&script_path, fs::Permissions::from_mode(0o755))
+            .map_err(|e| format!("Failed to set script permissions: {}", e))?;
+
+        Command::new("open")
+            .arg("-a")
+            .arg(app_name)
+            .arg(&script_path)
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()
-            .map_err(|e| format!("Failed to launch iTerm2: {}", e))?;
+            .map_err(|e| format!("Failed to launch {}: {}", app_name, e))?;
 
         Ok(())
     }
 
     #[cfg(target_os = "macos")]
-    fn launch_alacritty_macos(&self, command: &str) -> Result<(), String> {
+    fn launch_alacritty_macos_direct(&self, editor: &str, args: &[String]) -> Result<(), String> {
         use std::process::Stdio;
 
-        Command::new("open")
-            .arg("-a")
+        let mut cmd = Command::new("open");
+        cmd.arg("-a")
             .arg("Alacritty")
             .arg("-n")
             .arg("--args")
             .arg("-e")
-            .arg("sh")
-            .arg("-c")
-            .arg(command)
-            .stdin(Stdio::null())
+            .arg(editor);
+
+        for arg in args {
+            cmd.arg(arg);
+        }
+
+        cmd.stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()
@@ -236,18 +255,21 @@ impl TerminalApp {
     }
 
     #[cfg(target_os = "macos")]
-    fn launch_kitty_macos(&self, command: &str) -> Result<(), String> {
+    fn launch_kitty_macos_direct(&self, editor: &str, args: &[String]) -> Result<(), String> {
         use std::process::Stdio;
 
-        Command::new("open")
-            .arg("-a")
+        let mut cmd = Command::new("open");
+        cmd.arg("-a")
             .arg("kitty")
             .arg("-n")
             .arg("--args")
-            .arg("sh")
-            .arg("-c")
-            .arg(command)
-            .stdin(Stdio::null())
+            .arg(editor);
+
+        for arg in args {
+            cmd.arg(arg);
+        }
+
+        cmd.stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()
@@ -257,19 +279,23 @@ impl TerminalApp {
     }
 
     #[cfg(target_os = "macos")]
-    fn launch_wezterm_macos(&self, command: &str) -> Result<(), String> {
+    fn launch_wezterm_macos_direct(&self, editor: &str, args: &[String]) -> Result<(), String> {
         use std::process::Stdio;
 
-        Command::new("open")
-            .arg("-a")
+        let mut cmd = Command::new("open");
+        cmd.arg("-a")
             .arg("WezTerm")
             .arg("-n")
             .arg("--args")
             .arg("start")
-            .arg("sh")
-            .arg("-c")
-            .arg(command)
-            .stdin(Stdio::null())
+            .arg("--")
+            .arg(editor);
+
+        for arg in args {
+            cmd.arg(arg);
+        }
+
+        cmd.stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()
@@ -278,40 +304,18 @@ impl TerminalApp {
         Ok(())
     }
 
-    #[cfg(target_os = "macos")]
-    fn launch_terminal_app(&self, command: &str) -> Result<(), String> {
-        use std::process::Stdio;
-
-        let script = format!(
-            "tell application \"Terminal\"\n\
-             activate\n\
-             do script \"{}\"\n\
-             end tell",
-            command.replace("\"", "\\\"")
-        );
-
-        Command::new("osascript")
-            .arg("-e")
-            .arg(&script)
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-            .map_err(|e| format!("Failed to launch Terminal: {}", e))?;
-
-        Ok(())
-    }
-
     #[cfg(target_os = "linux")]
-    fn launch_alacritty_linux(&self, command: &str) -> Result<(), String> {
+    fn launch_alacritty_linux_direct(&self, editor: &str, args: &[String]) -> Result<(), String> {
         use std::process::Stdio;
 
-        Command::new("alacritty")
-            .arg("-e")
-            .arg("sh")
-            .arg("-c")
-            .arg(command)
-            .stdin(Stdio::null())
+        let mut cmd = Command::new("alacritty");
+        cmd.arg("-e").arg(editor);
+
+        for arg in args {
+            cmd.arg(arg);
+        }
+
+        cmd.stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()
@@ -321,14 +325,17 @@ impl TerminalApp {
     }
 
     #[cfg(target_os = "linux")]
-    fn launch_kitty_linux(&self, command: &str) -> Result<(), String> {
+    fn launch_kitty_linux_direct(&self, editor: &str, args: &[String]) -> Result<(), String> {
         use std::process::Stdio;
 
-        Command::new("kitty")
-            .arg("sh")
-            .arg("-c")
-            .arg(command)
-            .stdin(Stdio::null())
+        let mut cmd = Command::new("kitty");
+        cmd.arg(editor);
+
+        for arg in args {
+            cmd.arg(arg);
+        }
+
+        cmd.stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()
@@ -338,15 +345,17 @@ impl TerminalApp {
     }
 
     #[cfg(target_os = "linux")]
-    fn launch_wezterm_linux(&self, command: &str) -> Result<(), String> {
+    fn launch_wezterm_linux_direct(&self, editor: &str, args: &[String]) -> Result<(), String> {
         use std::process::Stdio;
 
-        Command::new("wezterm")
-            .arg("start")
-            .arg("sh")
-            .arg("-c")
-            .arg(command)
-            .stdin(Stdio::null())
+        let mut cmd = Command::new("wezterm");
+        cmd.arg("start").arg("--").arg(editor);
+
+        for arg in args {
+            cmd.arg(arg);
+        }
+
+        cmd.stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()
@@ -356,15 +365,17 @@ impl TerminalApp {
     }
 
     #[cfg(target_os = "linux")]
-    fn launch_gnome_terminal(&self, command: &str) -> Result<(), String> {
+    fn launch_gnome_terminal_direct(&self, editor: &str, args: &[String]) -> Result<(), String> {
         use std::process::Stdio;
 
-        Command::new("gnome-terminal")
-            .arg("--")
-            .arg("sh")
-            .arg("-c")
-            .arg(command)
-            .stdin(Stdio::null())
+        let mut cmd = Command::new("gnome-terminal");
+        cmd.arg("--").arg(editor);
+
+        for arg in args {
+            cmd.arg(arg);
+        }
+
+        cmd.stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()
@@ -374,15 +385,17 @@ impl TerminalApp {
     }
 
     #[cfg(target_os = "linux")]
-    fn launch_konsole(&self, command: &str) -> Result<(), String> {
+    fn launch_konsole_direct(&self, editor: &str, args: &[String]) -> Result<(), String> {
         use std::process::Stdio;
 
-        Command::new("konsole")
-            .arg("-e")
-            .arg("sh")
-            .arg("-c")
-            .arg(command)
-            .stdin(Stdio::null())
+        let mut cmd = Command::new("konsole");
+        cmd.arg("-e").arg(editor);
+
+        for arg in args {
+            cmd.arg(arg);
+        }
+
+        cmd.stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()
@@ -392,15 +405,17 @@ impl TerminalApp {
     }
 
     #[cfg(target_os = "linux")]
-    fn launch_xterm(&self, command: &str) -> Result<(), String> {
+    fn launch_xterm_direct(&self, editor: &str, args: &[String]) -> Result<(), String> {
         use std::process::Stdio;
 
-        Command::new("xterm")
-            .arg("-e")
-            .arg("sh")
-            .arg("-c")
-            .arg(command)
-            .stdin(Stdio::null())
+        let mut cmd = Command::new("xterm");
+        cmd.arg("-e").arg(editor);
+
+        for arg in args {
+            cmd.arg(arg);
+        }
+
+        cmd.stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()

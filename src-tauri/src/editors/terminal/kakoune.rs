@@ -74,7 +74,7 @@ impl EditorManager for KakouneManager {
             .await
             .ok_or(EditorError::BinaryNotFound)?;
 
-        let mut kak_args = vec![];
+        let mut kak_args: Vec<String> = vec![];
         match (options.line, options.column) {
             (Some(line), Some(column)) => {
                 kak_args.push(format!("+{}:{}", line, column));
@@ -84,17 +84,15 @@ impl EditorManager for KakouneManager {
             }
             _ => {}
         }
-        kak_args.push(format!("'{}'", path.display()));
+        kak_args.push(path.display().to_string());
 
-        let kak_cmd = format!("kak {}", kak_args.join(" "));
-
-        debug!("Opening in terminal with kakoune: {}", kak_cmd);
+        debug!("Opening kakoune with args: {:?}", kak_args);
 
         let terminal_pref = options.terminal_preference.as_deref();
         if let Some(terminal) = TerminalApp::detect_installed_with_preference(terminal_pref) {
             debug!("Using terminal: {:?}", terminal);
             terminal
-                .launch_command(&kak_cmd)
+                .launch_editor("kak", &kak_args)
                 .map_err(|e| EditorError::LaunchFailed(e))?;
         } else {
             return Err(EditorError::Other(

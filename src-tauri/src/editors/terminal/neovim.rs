@@ -251,10 +251,11 @@ impl EditorManager for NeovimManager {
 
         tracing::info!("[NVIM-DEBUG] Spawning new nvim instance");
 
-        let mut nvim_args = vec![];
+        let mut nvim_args: Vec<String> = vec![];
         match (options.line, options.column) {
             (Some(line), Some(column)) => {
-                nvim_args.push(format!("-c \"call cursor({},{})\"", line, column));
+                nvim_args.push("-c".to_string());
+                nvim_args.push(format!("call cursor({},{})", line, column));
             }
             (Some(line), None) => {
                 nvim_args.push(format!("+{}", line));
@@ -263,14 +264,12 @@ impl EditorManager for NeovimManager {
         }
         nvim_args.push(path.display().to_string());
 
-        let nvim_cmd = format!("nvim {}", nvim_args.join(" "));
-
-        debug!("Spawning nvim in new terminal window: {}", nvim_cmd);
+        debug!("Spawning nvim with args: {:?}", nvim_args);
 
         let terminal_pref = options.terminal_preference.as_deref();
         if let Some(terminal) = TerminalApp::detect_installed_with_preference(terminal_pref) {
             tracing::info!("[NVIM-DEBUG] Using terminal: {:?}", terminal);
-            terminal.launch_command(&nvim_cmd).map_err(|e| {
+            terminal.launch_editor("nvim", &nvim_args).map_err(|e| {
                 tracing::error!("[NVIM-DEBUG] Terminal launch failed: {}", e);
                 EditorError::LaunchFailed(e)
             })?;
