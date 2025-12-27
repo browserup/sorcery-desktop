@@ -265,10 +265,16 @@ impl SrcuriParser {
         query_part.and_then(|q| {
             for pair in q.split('&') {
                 if let Some((key, value)) = pair.split_once('=') {
+                    // URL-decode ref values to handle special characters like + # =
+                    // Examples: "inputprocessing%2Fc%2B%2B" → "inputprocessing/c++"
+                    //           "%23pr470" → "#pr470"
+                    // The server URL-encodes these because + means space and # is fragment delimiter.
+                    let decoded = urlencoding::decode(value)
+                        .unwrap_or(std::borrow::Cow::Borrowed(value));
                     match key {
-                        "commit" | "sha" => return Some(GitRef::Commit(value.to_string())),
-                        "branch" => return Some(GitRef::Branch(value.to_string())),
-                        "tag" => return Some(GitRef::Tag(value.to_string())),
+                        "commit" | "sha" => return Some(GitRef::Commit(decoded.into_owned())),
+                        "branch" => return Some(GitRef::Branch(decoded.into_owned())),
+                        "tag" => return Some(GitRef::Tag(decoded.into_owned())),
                         _ => {}
                     }
                 }
@@ -1134,6 +1140,78 @@ mod tests {
                 git_ref: Some(GitRef::Branch("main".to_string())),
                 workspace_override: None,
                 fragment: None,
+            }
+        );
+    }
+
+    // URL decoding tests for branch names with special characters
+    // Real examples: "inputprocessing/c++" and "#pr470" from GitHub repos
+
+    #[test]
+    fn test_branch_with_plus_is_decoded() {
+        // "c++" encoded as "c%2B%2B" - without decoding, + becomes space
+        let request =
+            SrcuriParser::parse("srcuri://myrepo/file.rs:1?branch=feature%2Fc%2B%2B").unwrap();
+        assert_eq!(
+            request,
+            SrcuriRequest::RevisionPath {
+                workspace: "myrepo".to_string(),
+                path: "file.rs".to_string(),
+                git_ref: GitRef::Branch("feature/c++".to_string()),
+                line: Some(1),
+                column: None,
+                remote: None,
+            }
+        );
+    }
+
+    #[test]
+    fn test_branch_with_hash_is_decoded() {
+        // "#pr470" encoded as "%23pr470" - without decoding, # truncates at fragment
+        let request = SrcuriParser::parse("srcuri://myrepo/file.rs:1?branch=%23pr470").unwrap();
+        assert_eq!(
+            request,
+            SrcuriRequest::RevisionPath {
+                workspace: "myrepo".to_string(),
+                path: "file.rs".to_string(),
+                git_ref: GitRef::Branch("#pr470".to_string()),
+                line: Some(1),
+                column: None,
+                remote: None,
+            }
+        );
+    }
+
+    #[test]
+    fn test_branch_with_equals_is_decoded() {
+        // "fix=memory" encoded as "fix%3Dmemory" - without decoding, = splits key/value
+        let request = SrcuriParser::parse("srcuri://myrepo/file.rs:1?branch=fix%3Dmemory").unwrap();
+        assert_eq!(
+            request,
+            SrcuriRequest::RevisionPath {
+                workspace: "myrepo".to_string(),
+                path: "file.rs".to_string(),
+                git_ref: GitRef::Branch("fix=memory".to_string()),
+                line: Some(1),
+                column: None,
+                remote: None,
+            }
+        );
+    }
+
+    #[test]
+    fn test_tag_with_plus_is_decoded() {
+        // Tags can also have special characters
+        let request = SrcuriParser::parse("srcuri://myrepo/file.rs:1?tag=v1.0%2B").unwrap();
+        assert_eq!(
+            request,
+            SrcuriRequest::RevisionPath {
+                workspace: "myrepo".to_string(),
+                path: "file.rs".to_string(),
+                git_ref: GitRef::Tag("v1.0+".to_string()),
+                line: Some(1),
+                column: None,
+                remote: None,
             }
         );
     }
