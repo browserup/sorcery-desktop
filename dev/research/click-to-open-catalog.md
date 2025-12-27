@@ -44,6 +44,7 @@ A living, categorized catalog of web apps and UIs where developers routinely see
 []- OpenGrok
 []- Livegrep / Zoekt / Hound
 []- GitHub/GitLab built‑in code search
+[]- Foregejo
 
 ### CI/CD (jobs with file/line annotations, test summaries, rich log widgets)
 []- GitHub Actions
