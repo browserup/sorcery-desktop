@@ -839,7 +839,7 @@
       if (tabName === 'workspaces') {
         renderWorkspaces();
       } else if (tabName === 'testbed') {
-        loadTestbedData();
+        loadEditorsTabData();
       } else if (tabName === 'debug') {
         loadGitHistory();
       }
@@ -1148,7 +1148,7 @@
       displayEditors(allEditors, currentMostRecent);
     }
 
-    async function loadTestbedData() {
+    async function loadEditorsTabData() {
       try {
         const data = await window.__TAURI__.core.invoke('get_editor_testbed_data');
         allEditors = data.editors;
@@ -1454,10 +1454,11 @@
 
     // Initialize
     loadSettings();
+    loadEditorsTabData();
     setInterval(() => {
       const activeTab = document.querySelector('.tab.active').dataset.tab;
       if (activeTab === 'testbed') {
-        loadTestbedData();
+        loadEditorsTabData();
       } else if (activeTab === 'debug') {
         loadGitHistory();
       }
