@@ -479,6 +479,24 @@ srcuri://myrepo/README.md:1?branch=develop
 - Useful for feature branch discussions
 - Branch must exist in the repository
 
+**URL Encoding for Special Characters:**
+
+Branch names containing URL-special characters are automatically encoded/decoded:
+
+| Character | Problem | Encoded | Example |
+|-----------|---------|---------|---------|
+| `+` | Means space in URLs | `%2B` | `inputprocessing/c++` → `?branch=inputprocessing%2Fc%2B%2B` |
+| `#` | Fragment delimiter | `%23` | `#pr470` → `?branch=%23pr470` |
+| `=` | Key/value separator | `%3D` | `fix=memory` → `?branch=fix%3Dmemory` |
+
+Without encoding:
+- `?branch=c++` would parse as `c  ` (plus signs become spaces)
+- `?branch=#pr470` would be lost entirely (everything after `#` is a fragment)
+- `?branch=fix=issue` would parse as just `fix`
+
+The server URL-encodes branch names when generating srcuri:// URLs, and the desktop
+app automatically URL-decodes them when parsing. This is transparent to users.
+
 #### `tag=<name>`
 
 References a git tag (typically a release version).
