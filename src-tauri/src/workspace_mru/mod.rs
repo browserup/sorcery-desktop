@@ -32,7 +32,7 @@ impl ActiveWorkspaceTracker {
             mru_data: Arc::new(RwLock::new(WorkspaceMruData::default())),
             mru_path,
             settings_manager,
-            system: Arc::new(RwLock::new(System::new_all())),
+            system: Arc::new(RwLock::new(System::new())),
         }
     }
 
@@ -81,9 +81,9 @@ impl ActiveWorkspaceTracker {
     }
 
     pub async fn start_polling(self: Arc<Self>) {
-        info!("Starting workspace MRU tracking (20s interval)");
+        info!("Starting workspace MRU tracking (60s interval)");
 
-        let mut ticker = interval(Duration::from_secs(20));
+        let mut ticker = interval(Duration::from_secs(60));
 
         loop {
             ticker.tick().await;
