@@ -55,6 +55,65 @@ pub enum SrcuriRequest {
 
 pub struct SrcuriParser;
 
+// Parameter validation functions for srcuri:// protocol security
+
+/// Validate branch names - allows chars found in real GitHub branch names
+fn is_valid_branch_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= 128
+        && name.chars().all(|c| {
+            c.is_ascii_alphanumeric()
+                || matches!(c, '-' | '_' | '.' | '/' | '@' | ',' | '(' | ')' | '+' | '#' | '=')
+        })
+        && !name.starts_with('/')
+        && !name.ends_with('/')
+        && !name.contains("..")
+}
+
+/// Validate tag names - semver-focused subset of branch chars
+fn is_valid_tag_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= 128
+        && name.chars().all(|c| {
+            c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | '/' | '+')
+        })
+        && !name.starts_with('/')
+        && !name.ends_with('/')
+        && !name.contains("..")
+}
+
+/// Validate commit SHA - hex only (7-64 chars for short SHA to SHA-256)
+fn is_valid_commit_sha(sha: &str) -> bool {
+    let len = sha.len();
+    (7..=64).contains(&len) && sha.chars().all(|c| c.is_ascii_hexdigit())
+}
+
+/// Validate remote URL structure
+fn is_valid_remote_url(url: &str) -> bool {
+    let path = url
+        .trim_start_matches("https://")
+        .trim_start_matches("http://")
+        .trim_start_matches("git@");
+
+    !path.is_empty()
+        && path.len() <= 256
+        && path.chars().all(|c| {
+            c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | '/' | ':' | '@')
+        })
+        && !path.contains("..")
+        && !path.contains("//")
+        && !path.starts_with('/')
+}
+
+/// Validate workspace/repo names - project name format
+fn is_valid_workspace_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= 128
+        && name.chars().all(|c| {
+            c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.')
+        })
+}
+
 impl SrcuriParser {
     pub fn parse(link: &str) -> Result<SrcuriRequest> {
         let link = link.trim();
@@ -84,9 +143,9 @@ impl SrcuriParser {
             (remainder_no_fragment, None)
         };
 
-        let git_ref = Self::parse_git_ref_param(query_part);
-        let remote = Self::parse_remote_param(query_part);
-        let workspace_override = Self::parse_workspace_param(query_part);
+        let git_ref = Self::parse_git_ref_param(query_part)?;
+        let remote = Self::parse_remote_param(query_part)?;
+        let workspace_override = Self::parse_workspace_param(query_part)?;
 
         // Check if first segment contains a dot AND has additional path segments
         // This indicates provider-passthrough (e.g., github.com/owner/repo)
@@ -261,53 +320,105 @@ impl SrcuriParser {
         (digits.parse().ok(), remainder)
     }
 
-    fn parse_git_ref_param(query_part: Option<&str>) -> Option<GitRef> {
-        query_part.and_then(|q| {
-            for pair in q.split('&') {
-                if let Some((key, value)) = pair.split_once('=') {
-                    // URL-decode ref values to handle special characters like + # =
-                    // Examples: "inputprocessing%2Fc%2B%2B" → "inputprocessing/c++"
-                    //           "%23pr470" → "#pr470"
-                    // The server URL-encodes these because + means space and # is fragment delimiter.
-                    let decoded = urlencoding::decode(value)
-                        .unwrap_or(std::borrow::Cow::Borrowed(value));
-                    match key {
-                        "commit" | "sha" => return Some(GitRef::Commit(decoded.into_owned())),
-                        "branch" => return Some(GitRef::Branch(decoded.into_owned())),
-                        "tag" => return Some(GitRef::Tag(decoded.into_owned())),
-                        _ => {}
+    fn parse_git_ref_param(query_part: Option<&str>) -> Result<Option<GitRef>> {
+        let Some(q) = query_part else {
+            return Ok(None);
+        };
+
+        for pair in q.split('&') {
+            if let Some((key, value)) = pair.split_once('=') {
+                // URL-decode ref values to handle special characters like + # =
+                // Examples: "inputprocessing%2Fc%2B%2B" → "inputprocessing/c++"
+                //           "%23pr470" → "#pr470"
+                // The server URL-encodes these because + means space and # is fragment delimiter.
+                let decoded = urlencoding::decode(value)
+                    .unwrap_or(std::borrow::Cow::Borrowed(value));
+                let decoded_str = decoded.into_owned();
+
+                match key {
+                    "commit" | "sha" => {
+                        if !is_valid_commit_sha(&decoded_str) {
+                            bail!(
+                                "Invalid commit SHA '{}': must be 7-64 hexadecimal characters",
+                                Self::safe_display(&decoded_str)
+                            );
+                        }
+                        return Ok(Some(GitRef::Commit(decoded_str)));
                     }
+                    "branch" => {
+                        if !is_valid_branch_name(&decoded_str) {
+                            bail!(
+                                "Invalid branch name '{}': may only contain letters, numbers, and - _ . / @ , ( ) + # =",
+                                Self::safe_display(&decoded_str)
+                            );
+                        }
+                        return Ok(Some(GitRef::Branch(decoded_str)));
+                    }
+                    "tag" => {
+                        if !is_valid_tag_name(&decoded_str) {
+                            bail!(
+                                "Invalid tag name '{}': may only contain letters, numbers, and - _ . / +",
+                                Self::safe_display(&decoded_str)
+                            );
+                        }
+                        return Ok(Some(GitRef::Tag(decoded_str)));
+                    }
+                    _ => {}
                 }
             }
-            None
-        })
+        }
+        Ok(None)
     }
 
-    fn parse_remote_param(query_part: Option<&str>) -> Option<String> {
-        query_part.and_then(|q| {
-            for pair in q.split('&') {
-                if let Some((key, value)) = pair.split_once('=') {
-                    if key == "remote" && !value.is_empty() {
-                        return Some(value.to_string());
+    /// Safely display potentially malicious input by filtering dangerous chars
+    fn safe_display(s: &str) -> String {
+        s.chars()
+            .take(100)
+            .map(|c| if c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | '/' | ' ') { c } else { '?' })
+            .collect()
+    }
+
+    fn parse_remote_param(query_part: Option<&str>) -> Result<Option<String>> {
+        let Some(q) = query_part else {
+            return Ok(None);
+        };
+
+        for pair in q.split('&') {
+            if let Some((key, value)) = pair.split_once('=') {
+                if key == "remote" && !value.is_empty() {
+                    if !is_valid_remote_url(value) {
+                        bail!(
+                            "Invalid remote URL '{}': may only contain letters, numbers, and - _ . / : @",
+                            Self::safe_display(value)
+                        );
                     }
+                    return Ok(Some(value.to_string()));
                 }
             }
-            None
-        })
+        }
+        Ok(None)
     }
 
     /// Parse ?workspace= parameter (escape hatch for dot-containing workspace names)
-    fn parse_workspace_param(query_part: Option<&str>) -> Option<String> {
-        query_part.and_then(|q| {
-            for pair in q.split('&') {
-                if let Some((key, value)) = pair.split_once('=') {
-                    if key == "workspace" && !value.is_empty() {
-                        return Some(value.to_string());
+    fn parse_workspace_param(query_part: Option<&str>) -> Result<Option<String>> {
+        let Some(q) = query_part else {
+            return Ok(None);
+        };
+
+        for pair in q.split('&') {
+            if let Some((key, value)) = pair.split_once('=') {
+                if key == "workspace" && !value.is_empty() {
+                    if !is_valid_workspace_name(value) {
+                        bail!(
+                            "Invalid workspace name '{}': may only contain letters, numbers, and - _ .",
+                            Self::safe_display(value)
+                        );
                     }
+                    return Ok(Some(value.to_string()));
                 }
             }
-            None
-        })
+        }
+        Ok(None)
     }
 
     fn parse_path_with_location(path: &str) -> Result<(String, Option<usize>, Option<usize>)> {
@@ -579,13 +690,13 @@ mod tests {
 
     #[test]
     fn test_commit_without_workspace_fails() {
-        let result = SrcuriParser::parse("srcuri://file.rs?commit=abc123");
+        let result = SrcuriParser::parse("srcuri://file.rs?commit=abc1234");
         assert!(result.is_err());
     }
 
     #[test]
     fn test_commit_with_absolute_path_fails() {
-        let result = SrcuriParser::parse("srcuri:///Users/file.rs?commit=abc123");
+        let result = SrcuriParser::parse("srcuri:///Users/file.rs?commit=abc1234");
         assert!(result.is_err());
     }
 
@@ -842,13 +953,13 @@ mod tests {
     #[test]
     fn test_commit_with_column() {
         let request =
-            SrcuriParser::parse("srcuri://workspace/file.txt:10:5?commit=abc123").unwrap();
+            SrcuriParser::parse("srcuri://workspace/file.txt:10:5?commit=abc1234").unwrap();
         assert_eq!(
             request,
             SrcuriRequest::RevisionPath {
                 workspace: "workspace".to_string(),
                 path: "file.txt".to_string(),
-                git_ref: GitRef::Commit("abc123".to_string()),
+                git_ref: GitRef::Commit("abc1234".to_string()),
                 line: Some(10),
                 column: Some(5),
                 remote: None,
@@ -859,13 +970,13 @@ mod tests {
     #[test]
     fn test_commit_with_invalid_column() {
         let request =
-            SrcuriParser::parse("srcuri://workspace/file.txt:10:999?commit=abc123").unwrap();
+            SrcuriParser::parse("srcuri://workspace/file.txt:10:999?commit=abc1234").unwrap();
         assert_eq!(
             request,
             SrcuriRequest::RevisionPath {
                 workspace: "workspace".to_string(),
                 path: "file.txt".to_string(),
-                git_ref: GitRef::Commit("abc123".to_string()),
+                git_ref: GitRef::Commit("abc1234".to_string()),
                 line: Some(10),
                 column: None,
                 remote: None,
@@ -1214,5 +1325,113 @@ mod tests {
                 remote: None,
             }
         );
+    }
+
+    // Security validation tests
+
+    #[test]
+    fn test_commit_sha_too_short_rejected() {
+        // 6 chars is too short (minimum 7)
+        let result = SrcuriParser::parse("srcuri://myrepo/file.rs?commit=abc123");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Invalid commit SHA"));
+    }
+
+    #[test]
+    fn test_commit_sha_non_hex_rejected() {
+        // Contains 'g' which is not hex
+        let result = SrcuriParser::parse("srcuri://myrepo/file.rs?commit=abc123g");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Invalid commit SHA"));
+    }
+
+    #[test]
+    fn test_commit_sha_valid_short() {
+        // 7 hex chars is valid
+        let result = SrcuriParser::parse("srcuri://myrepo/file.rs?commit=abc1234");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_commit_sha_valid_full() {
+        // 40 hex chars (full SHA-1) is valid
+        let result =
+            SrcuriParser::parse("srcuri://myrepo/file.rs?commit=abc123def456789012345678901234567890abcd");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_branch_with_shell_metachar_rejected() {
+        // Semicolon is a shell metacharacter
+        let result = SrcuriParser::parse("srcuri://myrepo/file.rs?branch=main;rm%20-rf");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Invalid branch name"));
+    }
+
+    #[test]
+    fn test_branch_with_backtick_rejected() {
+        // Backtick enables command substitution
+        let result = SrcuriParser::parse("srcuri://myrepo/file.rs?branch=main%60whoami%60");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_branch_path_traversal_rejected() {
+        // Double-dot path traversal
+        let result = SrcuriParser::parse("srcuri://myrepo/file.rs?branch=../../../etc/passwd");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_tag_with_at_symbol_rejected() {
+        // Tags don't allow @ (but branches do)
+        let result = SrcuriParser::parse("srcuri://myrepo/file.rs?tag=v1.0@latest");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Invalid tag name"));
+    }
+
+    #[test]
+    fn test_remote_with_shell_metachar_rejected() {
+        // Shell metacharacters in remote URL
+        let result =
+            SrcuriParser::parse("srcuri://myrepo/file.rs?remote=github.com/owner/repo;whoami");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Invalid remote URL"));
+    }
+
+    #[test]
+    fn test_remote_path_traversal_rejected() {
+        // Path traversal in remote
+        let result =
+            SrcuriParser::parse("srcuri://myrepo/file.rs?remote=github.com/../../../etc/passwd");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_workspace_with_slash_rejected() {
+        // Workspace names shouldn't have slashes
+        let result = SrcuriParser::parse(
+            "srcuri://github.com/owner/repo/blob/main/file.rs?workspace=my/workspace",
+        );
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Invalid workspace name"));
+    }
+
+    #[test]
+    fn test_valid_remote_url_accepted() {
+        let result = SrcuriParser::parse(
+            "srcuri://myrepo/file.rs?remote=https://github.com/owner/repo",
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_valid_remote_git_ssh_accepted() {
+        let result =
+            SrcuriParser::parse("srcuri://myrepo/file.rs?remote=git@github.com:owner/repo");
+        assert!(result.is_ok());
     }
 }
