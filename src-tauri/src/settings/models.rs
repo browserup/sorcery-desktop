@@ -21,11 +21,11 @@ impl Default for Settings {
 }
 
 impl Settings {
-    /// Create settings with auto-detected repo_base_dir.
+    /// Create settings with auto-detected default_workspaces_folder.
     /// Only use on first run - scans filesystem to find best candidate.
-    pub fn with_detected_repo_base() -> Self {
+    pub fn with_detected_workspaces_folder() -> Self {
         Self {
-            defaults: DefaultEditorConfig::with_detected_repo_base(),
+            defaults: DefaultEditorConfig::with_detected_workspaces_folder(),
             workspaces: Vec::new(),
         }
     }
@@ -42,11 +42,14 @@ pub struct DefaultEditorConfig {
     #[serde(default = "default_terminal")]
     pub preferred_terminal: String,
 
-    #[serde(default = "default_repo_base_dir")]
-    pub repo_base_dir: String,
+    #[serde(default = "default_workspaces_folder", alias = "repo_base_dir")]
+    pub default_workspaces_folder: String,
 
     #[serde(default = "default_auto_switch_clean_branches")]
     pub auto_switch_clean_branches: bool,
+
+    #[serde(default)]
+    pub ignored_workspaces: Vec<String>,
 }
 
 fn default_editor() -> String {
@@ -72,7 +75,7 @@ fn count_git_repos(dir: &std::path::Path) -> usize {
         .unwrap_or(0)
 }
 
-fn default_repo_base_dir() -> String {
+fn default_workspaces_folder() -> String {
     "~/code".to_string()
 }
 
@@ -116,16 +119,17 @@ impl Default for DefaultEditorConfig {
             editor: default_editor(),
             allow_non_workspace_files: default_allow_non_workspace_files(),
             preferred_terminal: default_terminal(),
-            repo_base_dir: default_repo_base_dir(),
+            default_workspaces_folder: default_workspaces_folder(),
             auto_switch_clean_branches: default_auto_switch_clean_branches(),
+            ignored_workspaces: Vec::new(),
         }
     }
 }
 
 impl DefaultEditorConfig {
-    pub fn with_detected_repo_base() -> Self {
+    pub fn with_detected_workspaces_folder() -> Self {
         Self {
-            repo_base_dir: detect_repo_base_dir(),
+            default_workspaces_folder: detect_repo_base_dir(),
             ..Self::default()
         }
     }
@@ -140,6 +144,9 @@ pub struct WorkspaceConfig {
 
     #[serde(default)]
     pub editor: String,
+
+    #[serde(default)]
+    pub auto_discovered: bool,
 
     #[serde(skip)]
     pub normalized_path: Option<PathBuf>,

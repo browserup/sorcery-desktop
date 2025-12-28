@@ -2,7 +2,7 @@ use crate::dispatcher::EditorDispatcher;
 use crate::editors::EditorRegistry;
 use crate::git_command_log::{GitCommandLogEntry, GIT_COMMAND_LOG};
 use crate::protocol_handler::{GitHandler, GitRef, WorkingTreeStatus, WorkspaceMatch};
-use crate::settings::{Settings, SettingsManager};
+use crate::settings::{Settings, SettingsManager, WorkspaceSync};
 use crate::tracker::ActiveEditorTracker;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -82,6 +82,145 @@ pub async fn save_settings(
         .save(settings)
         .await
         .map_err(|e| e.to_string())
+}
+
+#[derive(Serialize)]
+pub struct WorkspaceDisplayInfo {
+    pub name: String,
+    pub path: String,
+    pub editor: Option<String>,
+    pub is_discovered: bool,
+}
+
+#[derive(Serialize)]
+pub struct AllWorkspaces {
+    pub explicit: Vec<WorkspaceDisplayInfo>,
+    pub discovered: Vec<WorkspaceDisplayInfo>,
+}
+
+#[tauri::command]
+pub async fn get_all_workspaces(
+    settings_manager: State<'_, Arc<SettingsManager>>,
+) -> Result<AllWorkspaces, String> {
+    let settings = settings_manager.get().await;
+
+    let mut explicit = Vec::new();
+    let mut discovered = Vec::new();
+
+    for ws in &settings.workspaces {
+        let name = ws.name.clone().unwrap_or_else(|| {
+            ws.normalized_path
+                .as_ref()
+                .and_then(|p| p.file_name())
+                .and_then(|n| n.to_str())
+                .unwrap_or("unknown")
+                .to_string()
+        });
+        let info = WorkspaceDisplayInfo {
+            name,
+            path: ws.path.clone(),
+            editor: if ws.editor.is_empty() {
+                None
+            } else {
+                Some(ws.editor.clone())
+            },
+            is_discovered: ws.auto_discovered,
+        };
+
+        if ws.auto_discovered {
+            discovered.push(info);
+        } else {
+            explicit.push(info);
+        }
+    }
+
+    Ok(AllWorkspaces {
+        explicit,
+        discovered,
+    })
+}
+
+#[tauri::command]
+pub async fn promote_workspace(
+    settings_manager: State<'_, Arc<SettingsManager>>,
+    path: String,
+    name: String,
+) -> Result<(), String> {
+    let mut settings = settings_manager.get().await;
+
+    // Check if already exists
+    let normalized_path = shellexpand::tilde(&path);
+    let target_path = PathBuf::from(normalized_path.as_ref());
+
+    for ws in &settings.workspaces {
+        if let Some(ref existing) = ws.normalized_path {
+            if existing == &target_path {
+                return Err("Workspace already exists in explicit mappings".to_string());
+            }
+        }
+    }
+
+    settings
+        .workspaces
+        .push(crate::settings::WorkspaceConfig {
+            path,
+            name: Some(name),
+            editor: String::new(),
+            auto_discovered: false,
+            normalized_path: Some(target_path),
+        });
+
+    settings_manager
+        .save(settings)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn sync_workspaces(
+    workspace_sync: State<'_, Arc<WorkspaceSync>>,
+) -> Result<crate::settings::SyncResult, String> {
+    workspace_sync.sync().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn delete_workspace(
+    settings_manager: State<'_, Arc<SettingsManager>>,
+    path: String,
+) -> Result<(), String> {
+    let mut settings = settings_manager.get().await;
+
+    let normalized_path = shellexpand::tilde(&path);
+    let target_path = PathBuf::from(normalized_path.as_ref());
+
+    let mut found_index = None;
+    let mut was_auto_discovered = false;
+
+    for (i, ws) in settings.workspaces.iter().enumerate() {
+        if let Some(ref existing) = ws.normalized_path {
+            if existing == &target_path {
+                found_index = Some(i);
+                was_auto_discovered = ws.auto_discovered;
+                break;
+            }
+        }
+    }
+
+    if let Some(index) = found_index {
+        settings.workspaces.remove(index);
+
+        // If it was auto-discovered, add to ignored list so it doesn't reappear
+        if was_auto_discovered {
+            settings.defaults.ignored_workspaces.push(path);
+        }
+
+        settings_manager
+            .save(settings)
+            .await
+            .map_err(|e| e.to_string())?;
+    }
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -709,6 +848,7 @@ pub async fn clone_and_open(
         path: data.clone_path.clone(),
         name: Some(data.workspace_name.clone()),
         editor: String::new(),
+        auto_discovered: false,
         normalized_path: Some(target_path.clone()),
     });
     settings_manager

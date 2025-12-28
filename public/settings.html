@@ -215,6 +215,55 @@
       border-color: var(--border-hover);
     }
 
+    .workspace-item.discovered {
+      opacity: 0.85;
+      border-style: dashed;
+    }
+
+    .badge-auto {
+      background: #6b7280;
+      color: white;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.6875rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      margin-left: 0.5rem;
+    }
+
+    .promote-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      padding: 0.375rem 0.75rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .promote-btn:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    .discovered-section-header {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-top: 1.5rem;
+      margin-bottom: 0.75rem;
+      color: var(--text-secondary);
+      font-size: 0.8125rem;
+    }
+
+    .discovered-section-header .divider {
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
     .workspace-row {
       display: flex;
       gap: 0.5rem;
@@ -633,9 +682,9 @@
             </select>
           </div>
           <div class="form-group">
-            <label for="repo-base-dir">Default Repositories Folder</label>
-            <input type="text" id="repo-base-dir" placeholder="~/code" style="font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;">
-            <p class="help-text">Links with ?remote= will clone here if not found locally</p>
+            <label for="default-workspaces-folder">Default Workspaces Folder</label>
+            <input type="text" id="default-workspaces-folder" placeholder="~/code" style="font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;">
+            <p class="help-text">Git repos here are auto-discovered as workspaces. Clone targets go here too.</p>
           </div>
           <div class="form-group">
             <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
@@ -737,6 +786,14 @@
             Map workspace directories to specific editors. Files will open in the matching editor.
           </p>
           <div id="workspaces-list"></div>
+          <div id="discovered-workspaces-section" style="display: none;">
+            <div class="discovered-section-header">
+              <span class="divider"></span>
+              <span>Auto-discovered workspaces</span>
+              <span class="divider"></span>
+            </div>
+            <div id="discovered-workspaces-list"></div>
+          </div>
         </div>
 
         <div id="workspaces-status-message" class="status-message"></div>
@@ -837,7 +894,7 @@
 
       // Load data for the tab
       if (tabName === 'workspaces') {
-        renderWorkspaces();
+        syncAndReloadWorkspaces();
       } else if (tabName === 'testbed') {
         loadEditorsTabData();
       } else if (tabName === 'debug') {
@@ -894,11 +951,12 @@
 
     // Settings Tab
     let workspaces = [];
+    let discoveredWorkspaces = [];
     let defaultEditor = 'vscode';
     let allowNonWorkspaceFiles = false;
     let preferredTerminal = 'auto';
     let autoSwitchCleanBranches = true;
-    let repoBaseDir = '~/code';
+    let defaultWorkspacesFolder = '~/code';
     let installedEditors = [];
 
     async function loadInstalledEditors() {
@@ -936,21 +994,48 @@
         autoSwitchCleanBranches = settings.defaults?.auto_switch_clean_branches ?? true;
 
         // Auto-detect repo folder on first launch (when not yet saved in settings)
-        if (!settings.defaults?.repo_base_dir) {
-          repoBaseDir = await window.__TAURI__.core.invoke('detect_source_folder');
+        if (!settings.defaults?.default_workspaces_folder) {
+          defaultWorkspacesFolder = await window.__TAURI__.core.invoke('detect_source_folder');
           await saveSettings();
         } else {
-          repoBaseDir = settings.defaults.repo_base_dir;
+          defaultWorkspacesFolder = settings.defaults.default_workspaces_folder;
         }
 
         populateEditorDropdown(document.getElementById('default-editor'), defaultEditor);
         document.getElementById('allow-non-workspace-files').checked = allowNonWorkspaceFiles;
         document.getElementById('preferred-terminal').value = preferredTerminal;
         document.getElementById('auto-switch-clean-branches').checked = autoSwitchCleanBranches;
-        document.getElementById('repo-base-dir').value = repoBaseDir;
+        document.getElementById('default-workspaces-folder').value = defaultWorkspacesFolder;
         renderWorkspaces();
+        await loadDiscoveredWorkspaces();
       } catch (e) {
         showStatus('Error loading settings: ' + e, 'error');
+      }
+    }
+
+    async function loadDiscoveredWorkspaces() {
+      try {
+        const allWorkspaces = await window.__TAURI__.core.invoke('get_all_workspaces');
+        discoveredWorkspaces = allWorkspaces.discovered || [];
+        renderDiscoveredWorkspaces();
+      } catch (e) {
+        console.error('Failed to load discovered workspaces:', e);
+      }
+    }
+
+    async function syncAndReloadWorkspaces() {
+      try {
+        const result = await window.__TAURI__.core.invoke('sync_workspaces');
+        if (result.added.length > 0 || result.removed.length > 0) {
+          console.log('Workspace sync:', result.added.length, 'added,', result.removed.length, 'removed');
+        }
+        // Reload settings to get updated workspaces list
+        const settings = await window.__TAURI__.core.invoke('get_settings');
+        workspaces = settings.workspaces.filter(ws => !ws.auto_discovered) || [];
+        renderWorkspaces();
+        await loadDiscoveredWorkspaces();
+      } catch (e) {
+        console.error('Failed to sync workspaces:', e);
       }
     }
 
@@ -966,7 +1051,7 @@
           allow_non_workspace_files: allowNonWorkspaceFiles,
           preferred_terminal: preferredTerminal,
           auto_switch_clean_branches: autoSwitchCleanBranches,
-          repo_base_dir: repoBaseDir
+          default_workspaces_folder: defaultWorkspacesFolder
         }
       };
 
@@ -1102,6 +1187,75 @@
       container.innerHTML = items;
     }
 
+    function renderDiscoveredWorkspaces() {
+      const section = document.getElementById('discovered-workspaces-section');
+      const container = document.getElementById('discovered-workspaces-list');
+
+      if (discoveredWorkspaces.length === 0) {
+        section.style.display = 'none';
+        return;
+      }
+
+      section.style.display = 'block';
+
+      const defaultEditorName = installedEditors.find(e => e.editor_id === defaultEditor)?.display_name || defaultEditor;
+
+      const items = discoveredWorkspaces.map((ws, idx) => `
+        <div class="workspace-item discovered">
+          <div class="workspace-row">
+            <div class="field-group name-field">
+              <div class="field-label">Name <span class="badge-auto">auto</span></div>
+              <div style="padding: 0.375rem 0; color: var(--text-primary);">${ws.name}</div>
+            </div>
+            <div class="field-group editor-field">
+              <div class="field-label">Editor</div>
+              <div style="padding: 0.375rem 0; color: var(--text-secondary);">${defaultEditorName} (default)</div>
+            </div>
+            <button class="promote-btn" onclick="promoteWorkspace(${idx})" style="align-self: flex-end;">Add as explicit</button>
+            <button class="remove-btn" onclick="deleteDiscoveredWorkspace(${idx})" title="Remove (adds to ignored list)" style="align-self: flex-end;">×</button>
+          </div>
+          <div class="workspace-row">
+            <div class="field-group path-field">
+              <div class="field-label">Path</div>
+              <div style="padding: 0.375rem 0; color: var(--text-secondary); font-size: 0.875rem;">${ws.path}</div>
+            </div>
+          </div>
+        </div>
+      `).join('');
+
+      container.innerHTML = items;
+    }
+
+    async function deleteDiscoveredWorkspace(idx) {
+      const ws = discoveredWorkspaces[idx];
+      if (!ws) return;
+
+      try {
+        await window.__TAURI__.core.invoke('delete_workspace', { path: ws.path });
+        showWorkspacesStatus('Workspace removed (added to ignored list)', 'success');
+        await loadDiscoveredWorkspaces();
+      } catch (e) {
+        showWorkspacesStatus('Failed to remove workspace: ' + e, 'error');
+      }
+    }
+
+    async function promoteWorkspace(idx) {
+      const ws = discoveredWorkspaces[idx];
+      if (!ws) return;
+
+      try {
+        await window.__TAURI__.core.invoke('promote_workspace', {
+          path: ws.path,
+          name: ws.name
+        });
+        showWorkspacesStatus('Workspace promoted to explicit mapping', 'success');
+        // Reload both lists
+        await loadSettings();
+      } catch (e) {
+        showWorkspacesStatus('Failed to promote workspace: ' + e, 'error');
+      }
+    }
+
     function showStatus(message, type) {
       const el = document.getElementById('status-message');
       el.textContent = message;
@@ -1129,9 +1283,10 @@
       await saveSettings();
     });
 
-    document.getElementById('repo-base-dir').addEventListener('change', async (e) => {
-      repoBaseDir = e.target.value || '~/code';
+    document.getElementById('default-workspaces-folder').addEventListener('change', async (e) => {
+      defaultWorkspacesFolder = e.target.value || '~/code';
       await saveSettings();
+      await syncAndReloadWorkspaces();
     });
 
     // Testbed Tab
