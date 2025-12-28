@@ -962,7 +962,9 @@
     async function loadInstalledEditors() {
       try {
         const data = await window.__TAURI__.core.invoke('get_editor_testbed_data');
-        installedEditors = data.editors.filter(e => e.is_installed);
+        installedEditors = data.editors
+          .filter(e => e.is_installed)
+          .sort((a, b) => a.display_name.localeCompare(b.display_name));
         return installedEditors;
       } catch (e) {
         console.error('Failed to load installed editors:', e);
@@ -1283,10 +1285,25 @@
       await saveSettings();
     });
 
-    document.getElementById('default-workspaces-folder').addEventListener('change', async (e) => {
+    let workspacesFolderSaveTimeout = null;
+    document.getElementById('default-workspaces-folder').addEventListener('input', (e) => {
       defaultWorkspacesFolder = e.target.value || '~/code';
-      await saveSettings();
-      await syncAndReloadWorkspaces();
+      clearTimeout(workspacesFolderSaveTimeout);
+      workspacesFolderSaveTimeout = setTimeout(async () => {
+        await saveSettings();
+        await syncAndReloadWorkspaces();
+      }, 500);
+    });
+
+    document.getElementById('default-workspaces-folder').addEventListener('keydown', async (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        clearTimeout(workspacesFolderSaveTimeout);
+        defaultWorkspacesFolder = e.target.value || '~/code';
+        await saveSettings();
+        await syncAndReloadWorkspaces();
+        e.target.blur();
+      }
     });
 
     // Testbed Tab
