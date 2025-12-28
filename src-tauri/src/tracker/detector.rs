@@ -14,21 +14,7 @@ pub async fn detect_active_editor() -> Option<String> {
 
 #[cfg(target_os = "macos")]
 async fn detect_active_editor_macos() -> Option<String> {
-    let output = Command::new("osascript")
-        .args([
-            "-e",
-            "tell application \"System Events\" to get name of first application process whose frontmost is true",
-        ])
-        .output()
-        .ok()?;
-
-    if !output.status.success() {
-        return None;
-    }
-
-    let app_name = String::from_utf8_lossy(&output.stdout)
-        .trim()
-        .to_lowercase();
+    let app_name = get_frontmost_app_native()?.to_lowercase();
 
     debug!("Detected frontmost app: {}", app_name);
 
@@ -45,6 +31,36 @@ async fn detect_active_editor_macos() -> Option<String> {
     }
 
     map_app_name_to_editor(&app_name)
+}
+
+#[cfg(target_os = "macos")]
+fn get_frontmost_app_native() -> Option<String> {
+    use cocoa::base::nil;
+    use objc::runtime::{Class, Object};
+    use objc::{msg_send, sel, sel_impl};
+
+    unsafe {
+        let cls = Class::get("NSWorkspace")?;
+        let workspace: *mut Object = msg_send![cls, sharedWorkspace];
+        let frontmost_app: *mut Object = msg_send![workspace, frontmostApplication];
+
+        if frontmost_app.is_null() || frontmost_app == nil as *mut Object {
+            return None;
+        }
+
+        let name: *mut Object = msg_send![frontmost_app, localizedName];
+        if name.is_null() || name == nil as *mut Object {
+            return None;
+        }
+
+        let utf8: *const std::ffi::c_char = msg_send![name, UTF8String];
+        if utf8.is_null() {
+            return None;
+        }
+
+        let c_str = std::ffi::CStr::from_ptr(utf8);
+        c_str.to_str().ok().map(|s| s.to_string())
+    }
 }
 
 #[cfg(target_os = "macos")]
