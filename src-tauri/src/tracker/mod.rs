@@ -73,9 +73,9 @@ impl ActiveEditorTracker {
     }
 
     pub async fn start_polling(self: Arc<Self>) {
-        info!("Starting active editor tracking (10s interval)");
+        info!("Starting active editor tracking (15s interval)");
 
-        let mut ticker = interval(Duration::from_secs(10));
+        let mut ticker = interval(Duration::from_secs(15));
 
         loop {
             ticker.tick().await;
@@ -87,16 +87,23 @@ impl ActiveEditorTracker {
         if let Some(editor_id) = detector::detect_active_editor().await {
             let timestamp = chrono::Utc::now().timestamp_millis();
 
-            debug!("Detected active editor: {} at {}", editor_id, timestamp);
+            let changed = {
+                let last_seen = self.last_seen.read().await;
+                last_seen.most_recent.as_ref() != Some(&editor_id)
+            };
 
-            {
-                let mut last_seen = self.last_seen.write().await;
-                last_seen.editors.insert(editor_id.clone(), timestamp);
-                last_seen.most_recent = Some(editor_id);
-            }
+            if changed {
+                debug!("Detected active editor: {} at {}", editor_id, timestamp);
 
-            if let Err(e) = self.save().await {
-                warn!("Failed to save last_seen data: {}", e);
+                {
+                    let mut last_seen = self.last_seen.write().await;
+                    last_seen.editors.insert(editor_id.clone(), timestamp);
+                    last_seen.most_recent = Some(editor_id);
+                }
+
+                if let Err(e) = self.save().await {
+                    warn!("Failed to save last_seen data: {}", e);
+                }
             }
         }
     }
