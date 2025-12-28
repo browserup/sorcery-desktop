@@ -1,10 +1,11 @@
 use std::path::Path;
 use std::time::SystemTime;
-use sysinfo::System;
+use sysinfo::{ProcessRefreshKind, System, UpdateKind};
 use tracing::debug;
 
 pub fn refresh_process_snapshot(sys: &mut System) {
-    sys.refresh_processes();
+    let kind = ProcessRefreshKind::new().with_cwd(UpdateKind::Always);
+    sys.refresh_processes_specifics(kind);
 }
 
 pub fn check_running_process(root: &Path, sys: &System) -> Option<SystemTime> {
@@ -42,7 +43,7 @@ mod tests {
 
     #[test]
     fn test_process_detection_current_dir() {
-        let mut sys = System::new_all();
+        let mut sys = System::new();
         refresh_process_snapshot(&mut sys);
 
         let current_dir = env::current_dir().expect("Failed to get current directory");
@@ -57,7 +58,7 @@ mod tests {
 
     #[test]
     fn test_process_detection_nonexistent_path() {
-        let mut sys = System::new_all();
+        let mut sys = System::new();
         refresh_process_snapshot(&mut sys);
 
         let fake_path = Path::new("/nonexistent/workspace/path");
