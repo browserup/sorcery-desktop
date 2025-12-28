@@ -19,7 +19,7 @@ impl SettingsManager {
         let initial = if config_path.exists() {
             Settings::default()
         } else {
-            Settings::with_detected_repo_base()
+            Settings::with_detected_workspaces_folder()
         };
 
         Ok(Self {

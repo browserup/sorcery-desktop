@@ -175,6 +175,7 @@ async fn configure_workspace(
             path: workspace_path.to_string(),
             name: Some(workspace_name),
             editor: "vscodium".to_string(),
+            auto_discovered: false,
             normalized_path: None,
         });
     settings_manager

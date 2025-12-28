@@ -168,7 +168,7 @@ impl ProtocolHandler {
             Err(_) if remote.is_some() => {
                 let remote_url = remote.unwrap();
                 let settings = self.settings_manager.get().await;
-                let repo_base = shellexpand::tilde(&settings.defaults.repo_base_dir);
+                let repo_base = shellexpand::tilde(&settings.defaults.default_workspaces_folder);
                 let clone_path = std::path::PathBuf::from(repo_base.as_ref()).join(workspace);
 
                 info!(
@@ -268,7 +268,7 @@ impl ProtocolHandler {
             Err(_) if remote.is_some() => {
                 let remote_url = remote.unwrap();
                 let settings = self.settings_manager.get().await;
-                let repo_base = shellexpand::tilde(&settings.defaults.repo_base_dir);
+                let repo_base = shellexpand::tilde(&settings.defaults.default_workspaces_folder);
                 let clone_path = std::path::PathBuf::from(repo_base.as_ref()).join(workspace);
 
                 info!(

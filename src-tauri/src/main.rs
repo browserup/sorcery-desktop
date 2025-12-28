@@ -269,6 +269,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let workspace_tracker = Arc::new(workspace_mru::ActiveWorkspaceTracker::new(
         settings_manager.clone(),
     ));
+    let workspace_sync = Arc::new(settings::WorkspaceSync::new(settings_manager.clone()));
     let dispatcher = Arc::new(dispatcher::EditorDispatcher::new(
         settings_manager.clone(),
         path_validator.clone(),
@@ -283,6 +284,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     settings_manager.load().await?;
     tracing::info!("Settings loaded");
+
+    // Sync workspaces from default_workspaces_folder
+    if let Err(e) = workspace_sync.sync().await {
+        tracing::warn!("Failed to sync workspaces: {}", e);
+    }
 
     tracker.load().await?;
     tracing::info!("Last seen data loaded");
@@ -518,6 +524,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .manage(workspace_tracker)
         .manage(dispatcher)
         .manage(protocol_handler)
+        .manage(workspace_sync)
         .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
             let event_time = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -570,6 +577,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             commands::get_settings,
             commands::get_settings_path,
             commands::save_settings,
+            commands::get_all_workspaces,
+            commands::promote_workspace,
+            commands::sync_workspaces,
+            commands::delete_workspace,
             commands::get_editor_testbed_data,
             commands::test_open_file,
             commands::open_in_editor,
