@@ -13,7 +13,14 @@
     ],
     "macOS": {
       "frameworks": [],
-      "minimumSystemVersion": "10.13"
+      "minimumSystemVersion": "10.13",
+      "entitlements": null,
+      "exceptionDomain": null
+    },
+    "windows": {
+      "wix": {
+        "language": "en-US"
+      }
     }
   },
   "app": {

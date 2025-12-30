@@ -1,4 +1,4 @@
-.PHONY: help build build-release install install-quick test-protocol clean dev
+.PHONY: help build build-release build-dmg install install-quick test-protocol clean dev
 
 help:
 	@echo "Sorcery Desktop Development Makefile"
@@ -6,6 +6,7 @@ help:
 	@echo "Available targets:"
 	@echo "  make build          - Build debug version"
 	@echo "  make build-release  - Build release version"
+	@echo "  make build-dmg      - Build signed/notarized DMG for distribution (macOS)"
 	@echo "  make install        - Build and install to /Applications (macOS)"
 	@echo "  make install-quick  - Install existing build (no rebuild)"
 	@echo "  make test-protocol  - Test srcuri:// protocol handler"
@@ -19,6 +20,10 @@ build:
 build-release:
 	@echo "==> Building release version..."
 	cd src-tauri && cargo tauri build
+
+build-dmg:
+	@echo "==> Building signed/notarized DMG for distribution..."
+	@./scripts/build-macos-release.sh
 
 install: build
 	@echo ""
