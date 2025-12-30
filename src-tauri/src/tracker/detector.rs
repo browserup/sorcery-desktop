@@ -204,51 +204,76 @@ fn map_window_title_to_editor(title: &str) -> Option<String> {
 
 #[cfg(target_os = "linux")]
 async fn detect_active_editor_linux() -> Option<String> {
-    if let Some(title) = try_xdotool().await {
-        return map_window_title_to_editor(&title);
+    if let Some(title) = get_active_window_title_x11() {
+        return map_window_title_to_editor(&title.to_lowercase());
     }
-
-    if let Some(title) = try_wmctrl().await {
-        return map_window_title_to_editor(&title);
-    }
-
     None
 }
 
 #[cfg(target_os = "linux")]
-async fn try_xdotool() -> Option<String> {
-    let output = Command::new("xdotool")
-        .args(["getactivewindow", "getwindowname"])
-        .output()
+fn get_active_window_title_x11() -> Option<String> {
+    use x11rb::connection::Connection;
+    use x11rb::protocol::xproto::{AtomEnum, ConnectionExt};
+
+    let (conn, screen_num) = x11rb::connect(None).ok()?;
+    let root = conn.setup().roots[screen_num].root;
+
+    let net_active = conn
+        .intern_atom(false, b"_NET_ACTIVE_WINDOW")
+        .ok()?
+        .reply()
+        .ok()?
+        .atom;
+    let prop = conn
+        .get_property(false, root, net_active, AtomEnum::WINDOW, 0, 1)
+        .ok()?
+        .reply()
         .ok()?;
 
-    if !output.status.success() {
+    if prop.format != 32 || prop.value.len() < 4 {
+        return None;
+    }
+    let window_id = u32::from_ne_bytes(prop.value[0..4].try_into().ok()?);
+    if window_id == 0 {
         return None;
     }
 
-    Some(
-        String::from_utf8_lossy(&output.stdout)
-            .trim()
-            .to_lowercase(),
-    )
-}
+    let net_wm_name = conn
+        .intern_atom(false, b"_NET_WM_NAME")
+        .ok()?
+        .reply()
+        .ok()?
+        .atom;
+    let utf8_string = conn
+        .intern_atom(false, b"UTF8_STRING")
+        .ok()?
+        .reply()
+        .ok()?
+        .atom;
 
-#[cfg(target_os = "linux")]
-async fn try_wmctrl() -> Option<String> {
-    let output = Command::new("wmctrl")
-        .args(["-a", ":ACTIVE:"])
-        .output()
+    let title_prop = conn
+        .get_property(false, window_id, net_wm_name, utf8_string, 0, 1024)
+        .ok()?
+        .reply()
         .ok()?;
 
-    if !output.status.success() {
-        return None;
+    if !title_prop.value.is_empty() {
+        return String::from_utf8(title_prop.value).ok();
     }
 
-    Some(
-        String::from_utf8_lossy(&output.stdout)
-            .trim()
-            .to_lowercase(),
-    )
+    let wm_name = conn
+        .intern_atom(false, b"WM_NAME")
+        .ok()?
+        .reply()
+        .ok()?
+        .atom;
+    let title_prop = conn
+        .get_property(false, window_id, wm_name, AtomEnum::STRING, 0, 1024)
+        .ok()?
+        .reply()
+        .ok()?;
+
+    Some(String::from_utf8_lossy(&title_prop.value).to_string())
 }
 
 #[cfg(target_os = "linux")]
