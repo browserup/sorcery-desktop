@@ -1,8 +1,15 @@
 use super::traits::{EditorError, EditorInstance, EditorManager, EditorResult, OpenOptions};
 use async_trait::async_trait;
+use parking_lot::RwLock;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::{Duration, SystemTime};
 use tracing::{debug, warn};
+
+struct BinaryCache {
+    path: Option<PathBuf>,
+    timestamp: SystemTime,
+}
 
 pub struct VSCodeManager {
     id: String,
@@ -11,6 +18,7 @@ pub struct VSCodeManager {
     macos_app_name: String,
     #[cfg(target_os = "windows")]
     windows_exe_name: String,
+    cache: RwLock<Option<BinaryCache>>,
 }
 
 impl VSCodeManager {
@@ -28,7 +36,30 @@ impl VSCodeManager {
             macos_app_name: macos_app_name.to_string(),
             #[cfg(target_os = "windows")]
             windows_exe_name: _windows_exe_name.to_string(),
+            cache: RwLock::new(None),
         }
+    }
+
+    fn cache_ttl() -> Duration {
+        Duration::from_secs(300)
+    }
+
+    fn get_cached_binary(&self) -> Option<PathBuf> {
+        let cache = self.cache.read();
+        if let Some(cached) = cache.as_ref() {
+            if cached.timestamp.elapsed().ok()? < Self::cache_ttl() {
+                return cached.path.clone();
+            }
+        }
+        None
+    }
+
+    fn cache_binary(&self, path: Option<PathBuf>) {
+        let mut cache = self.cache.write();
+        *cache = Some(BinaryCache {
+            path,
+            timestamp: SystemTime::now(),
+        });
     }
 
     #[cfg(target_os = "macos")]
@@ -151,14 +182,21 @@ impl EditorManager for VSCodeManager {
     }
 
     async fn find_binary(&self) -> Option<PathBuf> {
+        if let Some(cached) = self.get_cached_binary() {
+            return Some(cached);
+        }
+
         #[cfg(target_os = "macos")]
-        return self.find_binary_macos().await;
+        let result = self.find_binary_macos().await;
 
         #[cfg(target_os = "windows")]
-        return self.find_binary_windows().await;
+        let result = self.find_binary_windows().await;
 
         #[cfg(target_os = "linux")]
-        return self.find_binary_linux().await;
+        let result = self.find_binary_linux().await;
+
+        self.cache_binary(result.clone());
+        result
     }
 
     async fn open(&self, path: &Path, options: &OpenOptions) -> EditorResult<()> {

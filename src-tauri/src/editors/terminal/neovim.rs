@@ -193,18 +193,15 @@ impl EditorManager for NeovimManager {
     }
 
     async fn open(&self, path: &Path, options: &OpenOptions) -> EditorResult<()> {
-        tracing::info!("[NVIM-DEBUG] open() called for path: {:?}", path);
+        debug!("open() called for path: {:?}", path);
         let binary = self
             .find_binary()
             .await
             .ok_or(EditorError::BinaryNotFound)?;
-        tracing::info!("[NVIM-DEBUG] Found binary: {:?}", binary);
+        debug!("Found binary: {:?}", binary);
 
         if let Some(socket) = self.find_nvim_socket(path).await {
-            tracing::info!(
-                "[NVIM-DEBUG] Found nvim socket: {:?}, trying to reuse",
-                socket
-            );
+            debug!("Found nvim socket: {:?}, trying to reuse", socket);
 
             let path_str = path.display().to_string();
             let escaped_path = path_str.replace('\\', "\\\\").replace(' ', "\\ ");
@@ -223,7 +220,7 @@ impl EditorManager for NeovimManager {
                 }
             };
 
-            tracing::info!("[NVIM-DEBUG] Sending keys to socket: {}", keys);
+            debug!("Sending keys to socket: {}", keys);
             let result = Command::new(&binary)
                 .arg("--server")
                 .arg(&socket)
@@ -233,23 +230,23 @@ impl EditorManager for NeovimManager {
 
             match result {
                 Ok(output) if output.status.success() => {
-                    tracing::info!("[NVIM-DEBUG] Successfully sent file to existing nvim instance");
+                    debug!("Successfully sent file to existing nvim instance");
                     return Ok(());
                 }
                 Ok(output) => {
-                    tracing::info!(
-                        "[NVIM-DEBUG] Failed to send to nvim socket, status: {:?}, stderr: {:?}",
+                    debug!(
+                        "Failed to send to nvim socket, status: {:?}, stderr: {:?}",
                         output.status,
                         String::from_utf8_lossy(&output.stderr)
                     );
                 }
-                Err(e) => tracing::info!("[NVIM-DEBUG] Error sending to nvim socket: {}", e),
+                Err(e) => debug!("Error sending to nvim socket: {}", e),
             }
         } else {
-            tracing::info!("[NVIM-DEBUG] No nvim socket found");
+            debug!("No nvim socket found");
         }
 
-        tracing::info!("[NVIM-DEBUG] Spawning new nvim instance");
+        debug!("Spawning new nvim instance");
 
         let mut nvim_args: Vec<String> = vec![];
         match (options.line, options.column) {
@@ -268,20 +265,20 @@ impl EditorManager for NeovimManager {
 
         let terminal_pref = options.terminal_preference.as_deref();
         if let Some(terminal) = TerminalApp::detect_installed_with_preference(terminal_pref) {
-            tracing::info!("[NVIM-DEBUG] Using terminal: {:?}", terminal);
+            debug!("Using terminal: {:?}", terminal);
             terminal.launch_editor("nvim", &nvim_args).map_err(|e| {
-                tracing::error!("[NVIM-DEBUG] Terminal launch failed: {}", e);
+                debug!("Terminal launch failed: {}", e);
                 EditorError::LaunchFailed(e)
             })?;
-            tracing::info!("[NVIM-DEBUG] Terminal launch succeeded");
+            debug!("Terminal launch succeeded");
         } else {
-            tracing::error!("[NVIM-DEBUG] No terminal emulator found");
+            debug!("No terminal emulator found");
             return Err(EditorError::Other(
                 "No terminal emulator found. Please install iTerm2, Alacritty, or another terminal.".to_string()
             ));
         }
 
-        tracing::info!("[NVIM-DEBUG] open() completed successfully");
+        debug!("open() completed successfully");
         Ok(())
     }
 
