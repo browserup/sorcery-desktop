@@ -143,10 +143,12 @@ src-tauri/src/
 - Thread-safe with RwLock for concurrent access
 
 #### **PathValidator** (`path_validator/`)
-- Sanitizes and normalizes file paths
-- Validates path existence
-- Prevents path traversal attacks
-- Handles symlinks and relative paths
+- Sanitizes and normalizes file paths without ever invoking a shell
+- Expands a leading `~` (home-relative paths) while rejecting all other `~` usage
+- Blocks shell/HTML metacharacters (`;`, `&`, `|`, `` ` ``, `$`, `#`, quotes, braces, angle brackets, etc.) to prevent command or DOM injection
+- Permits common filesystem characters such as parentheses `()` and square brackets `[]` so macOS-style folders (e.g., `Project (1)`) work safely
+- Validates path existence and prevents traversal (`../`, symlink escapes)
+- Ensures only files or directories are opened
 
 #### **EditorRegistry** (`editors/`)
 - Central registry of all editor managers
