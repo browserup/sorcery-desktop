@@ -1,47 +1,18 @@
+use crate::dialog_state::DialogState;
+pub use crate::dialog_state::{CloneDialogData, RevisionDialogData, WorkspaceChooserData};
 use crate::dispatcher::EditorDispatcher;
 use crate::editors::EditorRegistry;
 use crate::git_command_log::{GitCommandLogEntry, GIT_COMMAND_LOG};
-use crate::protocol_handler::{GitHandler, GitRef, WorkingTreeStatus, WorkspaceMatch};
+use crate::protocol_handler::{GitHandler, WorkingTreeStatus};
 use crate::settings::{Settings, SettingsManager, WorkspaceSync};
 use crate::tracker::ActiveEditorTracker;
-use serde::{Deserialize, Serialize};
+#[cfg(target_os = "macos")]
+use crate::ui_utils::set_dark_titlebar;
+use serde::Serialize;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tauri::State;
-
-#[cfg(target_os = "macos")]
-fn set_dark_titlebar(window: &tauri::WebviewWindow) {
-    use cocoa::base::{id, nil};
-    use cocoa::foundation::NSString;
-    use objc::{class, msg_send, sel, sel_impl};
-    use tauri::Manager;
-
-    // Get window label and app handle to use inside the closure
-    let app_handle = window.app_handle().clone();
-    let label = window.label().to_string();
-
-    // Run on main thread since NSWindow APIs must be called from main thread
-    let _ = window.run_on_main_thread(move || {
-        if let Some(win) = app_handle.get_webview_window(&label) {
-            if let Ok(ns_window) = win.ns_window() {
-                unsafe {
-                    let ns_window = ns_window as id;
-
-                    // Get NSAppearance for dark mode
-                    let appearance_name = cocoa::foundation::NSString::alloc(nil)
-                        .init_str("NSAppearanceNameDarkAqua");
-                    let appearance: id = msg_send![class!(NSAppearance), appearanceNamed: appearance_name];
-                    let _: () = msg_send![ns_window, setAppearance: appearance];
-
-                    // Set background color to match our theme (#121212)
-                    let color: id = msg_send![class!(NSColor), colorWithRed:0.071 green:0.071 blue:0.071 alpha:1.0];
-                    let _: () = msg_send![ns_window, setBackgroundColor: color];
-                }
-            }
-        }
-    });
-}
 
 #[derive(Serialize)]
 pub struct EditorTestbedData {
@@ -268,8 +239,9 @@ pub async fn test_open_file(
     test_file_path: Option<String>,
 ) -> Result<String, String> {
     let file_path = test_file_path.unwrap_or_else(|| {
-        let manifest_dir = env!("CARGO_MANIFEST_DIR");
-        format!("{}/README.md", manifest_dir.trim_end_matches("/src-tauri"))
+        let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let repo_root = manifest_dir.parent().unwrap_or(manifest_dir);
+        repo_root.join("README.md").to_string_lossy().to_string()
     });
 
     dispatcher
@@ -402,21 +374,12 @@ fn count_git_repos(dir: &Path) -> Result<usize, std::io::Error> {
     Ok(count)
 }
 
-#[derive(Clone, Serialize)]
-pub struct WorkspaceChooserData {
-    pub matches: Vec<WorkspaceMatch>,
-    pub line: Option<usize>,
-    pub column: Option<usize>,
-}
-
-static WORKSPACE_CHOOSER_DATA: parking_lot::Mutex<Option<WorkspaceChooserData>> =
-    parking_lot::Mutex::new(None);
-
 #[tauri::command]
-pub fn get_workspace_chooser_data() -> Result<WorkspaceChooserData, String> {
-    WORKSPACE_CHOOSER_DATA
-        .lock()
-        .clone()
+pub fn get_workspace_chooser_data(
+    dialog_state: State<'_, Arc<DialogState>>,
+) -> Result<WorkspaceChooserData, String> {
+    dialog_state
+        .take_workspace_chooser()
         .ok_or_else(|| "No chooser data available".to_string())
 }
 
@@ -424,10 +387,10 @@ pub fn get_workspace_chooser_data() -> Result<WorkspaceChooserData, String> {
 pub async fn workspace_chosen(
     index: usize,
     dispatcher: State<'_, Arc<EditorDispatcher>>,
+    dialog_state: State<'_, Arc<DialogState>>,
 ) -> Result<(), String> {
-    let data = WORKSPACE_CHOOSER_DATA
-        .lock()
-        .clone()
+    let data = dialog_state
+        .take_workspace_chooser()
         .ok_or_else(|| "No chooser data available".to_string())?;
 
     if index >= data.matches.len() {
@@ -447,45 +410,22 @@ pub async fn workspace_chosen(
         .await
         .map_err(|e| e.to_string())?;
 
-    *WORKSPACE_CHOOSER_DATA.lock() = None;
-
     Ok(())
 }
 
 #[tauri::command]
-pub fn workspace_chooser_cancelled() -> Result<(), String> {
-    *WORKSPACE_CHOOSER_DATA.lock() = None;
+pub fn workspace_chooser_cancelled(
+    _dialog_state: State<'_, Arc<DialogState>>,
+) -> Result<(), String> {
     Ok(())
 }
 
-pub fn set_workspace_chooser_data(data: WorkspaceChooserData) {
-    *WORKSPACE_CHOOSER_DATA.lock() = Some(data);
-}
-
-#[derive(Clone, Serialize, Deserialize)]
-pub struct RevisionDialogData {
-    pub workspace: String,
-    pub workspace_path: String,
-    pub file_path: String,
-    pub full_file_path: String,
-    pub rev: String,
-    pub line: Option<usize>,
-    pub column: Option<usize>,
-    pub current_ref: String,
-    pub is_working_tree_clean: bool,
-    pub dirty_file_count: usize,
-    pub checkout_available: bool,
-    pub checkout_blocked_reason: Option<String>,
-}
-
-static REVISION_DIALOG_DATA: parking_lot::Mutex<Option<RevisionDialogData>> =
-    parking_lot::Mutex::new(None);
-
 #[tauri::command]
-pub fn get_revision_dialog_data() -> Result<RevisionDialogData, String> {
-    REVISION_DIALOG_DATA
-        .lock()
-        .clone()
+pub fn get_revision_dialog_data(
+    dialog_state: State<'_, Arc<DialogState>>,
+) -> Result<RevisionDialogData, String> {
+    dialog_state
+        .take_revision_dialog()
         .ok_or_else(|| "No revision dialog data available".to_string())
 }
 
@@ -543,19 +483,14 @@ pub async fn open_file_at_revision(
             .map_err(|e| e.to_string())?;
     }
 
-    *REVISION_DIALOG_DATA.lock() = None;
-
     Ok(())
 }
 
 #[tauri::command]
-pub fn revision_dialog_cancelled() -> Result<(), String> {
-    *REVISION_DIALOG_DATA.lock() = None;
+pub fn revision_dialog_cancelled(
+    _dialog_state: State<'_, Arc<DialogState>>,
+) -> Result<(), String> {
     Ok(())
-}
-
-pub fn set_revision_dialog_data(data: RevisionDialogData) {
-    *REVISION_DIALOG_DATA.lock() = Some(data);
 }
 
 #[tauri::command]
@@ -598,9 +533,6 @@ pub async fn create_worktree_and_open(
         .await
         .map_err(|e| e.to_string())?;
 
-    // Clear revision dialog data since we're done
-    *REVISION_DIALOG_DATA.lock() = None;
-
     Ok(())
 }
 
@@ -613,8 +545,10 @@ pub fn get_git_command_history() -> Result<Vec<GitCommandLogEntry>, String> {
 pub async fn test_protocol_url(
     url: String,
     protocol_handler: State<'_, Arc<crate::protocol_handler::ProtocolHandler>>,
+    dialog_state: State<'_, Arc<DialogState>>,
     app: tauri::AppHandle,
 ) -> Result<(), String> {
+    use crate::dialog_state::git_ref_display;
     use crate::protocol_handler::HandleResult;
     use std::time::Instant;
 
@@ -640,7 +574,7 @@ pub async fn test_protocol_url(
                 &format!("{} matching workspaces found", match_count),
                 duration,
             );
-            set_workspace_chooser_data(WorkspaceChooserData {
+            dialog_state.set_workspace_chooser(WorkspaceChooserData {
                 matches,
                 line,
                 column,
@@ -686,7 +620,7 @@ pub async fn test_protocol_url(
                 &format!("Revision {} requires checkout", rev),
                 duration,
             );
-            set_revision_dialog_data(RevisionDialogData {
+            dialog_state.set_revision_dialog(RevisionDialogData {
                 workspace,
                 workspace_path: workspace_path.to_string_lossy().to_string(),
                 file_path,
@@ -739,15 +673,15 @@ pub async fn test_protocol_url(
                 ),
                 duration,
             );
-            let git_ref_display = git_ref.as_ref().map(|r| git_ref_display(r));
-            set_clone_dialog_data(CloneDialogData {
+            let git_ref_str = git_ref.as_ref().map(|r| git_ref_display(r));
+            dialog_state.set_clone_dialog(CloneDialogData {
                 workspace_name,
                 clone_path,
                 remote_url,
                 file_path,
                 line,
                 column,
-                git_ref: git_ref_display,
+                git_ref: git_ref_str,
                 git_ref_kind: git_ref.clone(),
             });
 
@@ -791,39 +725,12 @@ pub async fn test_protocol_url(
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
-pub struct CloneDialogData {
-    pub workspace_name: String,
-    pub clone_path: String,
-    pub remote_url: String,
-    pub file_path: String,
-    pub line: Option<usize>,
-    pub column: Option<usize>,
-    pub git_ref: Option<String>,
-    #[serde(skip)]
-    pub git_ref_kind: Option<GitRef>,
-}
-
-static CLONE_DIALOG_DATA: parking_lot::Mutex<Option<CloneDialogData>> =
-    parking_lot::Mutex::new(None);
-
-pub fn set_clone_dialog_data(data: CloneDialogData) {
-    *CLONE_DIALOG_DATA.lock() = Some(data);
-}
-
-pub(crate) fn git_ref_display(git_ref: &GitRef) -> String {
-    match git_ref {
-        GitRef::Branch(value) => value.clone(),
-        GitRef::Tag(value) => format!("tag {}", value),
-        GitRef::Commit(value) => format!("commit {}", value),
-    }
-}
-
 #[tauri::command]
-pub fn get_clone_dialog_data() -> Result<CloneDialogData, String> {
-    CLONE_DIALOG_DATA
-        .lock()
-        .clone()
+pub fn get_clone_dialog_data(
+    dialog_state: State<'_, Arc<DialogState>>,
+) -> Result<CloneDialogData, String> {
+    dialog_state
+        .take_clone_dialog()
         .ok_or_else(|| "No clone dialog data available".to_string())
 }
 
@@ -831,10 +738,10 @@ pub fn get_clone_dialog_data() -> Result<CloneDialogData, String> {
 pub async fn clone_and_open(
     dispatcher: State<'_, Arc<EditorDispatcher>>,
     settings_manager: State<'_, Arc<SettingsManager>>,
+    dialog_state: State<'_, Arc<DialogState>>,
 ) -> Result<(), String> {
-    let data = CLONE_DIALOG_DATA
-        .lock()
-        .clone()
+    let data = dialog_state
+        .take_clone_dialog()
         .ok_or_else(|| "No clone dialog data available".to_string())?;
 
     let target_path = PathBuf::from(&data.clone_path);
@@ -869,16 +776,15 @@ pub async fn clone_and_open(
         .await
         .map_err(|e| e.to_string())?;
 
-    *CLONE_DIALOG_DATA.lock() = None;
-
     Ok(())
 }
 
 #[tauri::command]
-pub fn update_clone_path(new_path: String) -> Result<(), String> {
-    let mut data = CLONE_DIALOG_DATA.lock();
-    if let Some(ref mut clone_data) = *data {
-        clone_data.clone_path = new_path;
+pub fn update_clone_path(
+    new_path: String,
+    dialog_state: State<'_, Arc<DialogState>>,
+) -> Result<(), String> {
+    if dialog_state.update_clone_path(new_path) {
         Ok(())
     } else {
         Err("No clone dialog data available".to_string())
@@ -886,8 +792,9 @@ pub fn update_clone_path(new_path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn clone_cancelled() -> Result<(), String> {
-    *CLONE_DIALOG_DATA.lock() = None;
+pub fn clone_cancelled(
+    _dialog_state: State<'_, Arc<DialogState>>,
+) -> Result<(), String> {
     Ok(())
 }
 

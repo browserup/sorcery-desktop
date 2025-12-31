@@ -2,6 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod commands;
+mod dialog_state;
 mod dispatcher;
 mod editors;
 mod git_command_log;
@@ -10,6 +11,7 @@ mod protocol_handler;
 mod protocol_registration;
 mod settings;
 mod tracker;
+mod ui_utils;
 mod workspace_mru;
 
 use std::sync::Arc;
@@ -35,37 +37,9 @@ fn hide_app() {
     }
 }
 
+use dialog_state::DialogState;
 #[cfg(target_os = "macos")]
-fn set_dark_titlebar(window: &tauri::WebviewWindow) {
-    use cocoa::base::{id, nil};
-    use cocoa::foundation::NSString;
-    use objc::{class, msg_send, sel, sel_impl};
-
-    // Get window label and app handle to use inside the closure
-    let app_handle = window.app_handle().clone();
-    let label = window.label().to_string();
-
-    // Run on main thread since NSWindow APIs must be called from main thread
-    let _ = window.run_on_main_thread(move || {
-        if let Some(win) = app_handle.get_webview_window(&label) {
-            if let Ok(ns_window) = win.ns_window() {
-                unsafe {
-                    let ns_window = ns_window as id;
-
-                    // Get NSAppearance for dark mode
-                    let appearance_name = cocoa::foundation::NSString::alloc(nil)
-                        .init_str("NSAppearanceNameDarkAqua");
-                    let appearance: id = msg_send![class!(NSAppearance), appearanceNamed: appearance_name];
-                    let _: () = msg_send![ns_window, setAppearance: appearance];
-
-                    // Set background color to match our theme (#121212)
-                    let color: id = msg_send![class!(NSColor), colorWithRed:0.071 green:0.071 blue:0.071 alpha:1.0];
-                    let _: () = msg_send![ns_window, setBackgroundColor: color];
-                }
-            }
-        }
-    });
-}
+use ui_utils::set_dark_titlebar;
 
 async fn handle_protocol_result(
     result: Result<protocol_handler::HandleResult, anyhow::Error>,
@@ -73,6 +47,8 @@ async fn handle_protocol_result(
     url: &str,
     duration: Duration,
 ) {
+    let dialog_state = app_handle.state::<Arc<DialogState>>();
+
     match result {
         Ok(protocol_handler::HandleResult::Opened) => {
             tracing::info!("Request: file opened successfully");
@@ -97,7 +73,7 @@ async fn handle_protocol_result(
                 &format!("{} matching workspaces found", match_count),
                 duration,
             );
-            commands::set_workspace_chooser_data(commands::WorkspaceChooserData {
+            dialog_state.set_workspace_chooser(dialog_state::WorkspaceChooserData {
                 matches,
                 line,
                 column,
@@ -144,7 +120,7 @@ async fn handle_protocol_result(
                 &format!("Revision {} requires checkout", rev),
                 duration,
             );
-            commands::set_revision_dialog_data(commands::RevisionDialogData {
+            dialog_state.set_revision_dialog(dialog_state::RevisionDialogData {
                 workspace,
                 workspace_path: workspace_path.to_string_lossy().to_string(),
                 file_path,
@@ -202,15 +178,15 @@ async fn handle_protocol_result(
                 ),
                 duration,
             );
-            let git_ref_display = git_ref.as_ref().map(|r| commands::git_ref_display(r));
-            commands::set_clone_dialog_data(commands::CloneDialogData {
+            let git_ref_str = git_ref.as_ref().map(|r| dialog_state::git_ref_display(r));
+            dialog_state.set_clone_dialog(dialog_state::CloneDialogData {
                 workspace_name,
                 clone_path,
                 remote_url,
                 file_path,
                 line,
                 column,
-                git_ref: git_ref_display,
+                git_ref: git_ref_str,
                 git_ref_kind: git_ref.clone(),
             });
             match tauri::WebviewWindowBuilder::new(
@@ -281,6 +257,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         dispatcher.clone(),
         workspace_tracker.clone(),
     ));
+    let dialog_state = Arc::new(DialogState::new());
 
     settings_manager.load().await?;
     tracing::info!("Settings loaded");
@@ -383,8 +360,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .duration_since(std::time::UNIX_EPOCH)
                     .map(|d| d.as_millis())
                     .unwrap_or(0);
-                tracing::info!(
-                    "[DEEP-LINK-DEBUG] Event received at {}ms - raw payload: {}",
+                tracing::debug!(
+                    "Deep link event received at {}ms - raw payload: {}",
                     event_time,
                     payload
                 );
@@ -392,21 +369,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let urls: Vec<String> = match serde_json::from_str(payload) {
                     Ok(urls) => urls,
                     Err(e) => {
-                        tracing::error!(
-                            "[DEEP-LINK-DEBUG] Failed to parse deep link payload: {}",
-                            e
-                        );
+                        tracing::error!("Failed to parse deep link payload: {}", e);
                         return;
                     }
                 };
 
                 if urls.is_empty() {
-                    tracing::warn!("[DEEP-LINK-DEBUG] Received empty URL list");
+                    tracing::warn!("Received empty deep-link URL list");
                     return;
                 }
 
                 let url = urls[0].clone();
-                tracing::info!("[DEEP-LINK-DEBUG] Processing URL: {}", url);
+                tracing::debug!("Processing deep-link URL: {}", url);
 
                 #[cfg(target_os = "macos")]
                 hide_app();
@@ -415,11 +389,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let ph = ph.clone();
 
                 tauri::async_runtime::spawn(async move {
-                    tracing::info!("[DEEP-LINK-DEBUG] Spawned async task for URL: {}", url);
+                    tracing::debug!("Spawned async task for URL: {}", url);
                     let start = std::time::Instant::now();
                     let result = ph.handle_url(&url).await;
-                    tracing::info!(
-                        "[DEEP-LINK-DEBUG] handle_url completed in {:?}, result: {:?}",
+                    tracing::debug!(
+                        "handle_url completed in {:?}, result: {:?}",
                         start.elapsed(),
                         result.is_ok()
                     );
@@ -525,30 +499,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .manage(dispatcher)
         .manage(protocol_handler)
         .manage(workspace_sync)
+        .manage(dialog_state)
         .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
-            let event_time = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_millis())
-                .unwrap_or(0);
-            tracing::info!(
-                "[SINGLE-INSTANCE-DEBUG] Callback triggered at {}ms, args: {:?}",
-                event_time,
-                args
-            );
+            tracing::debug!("Single-instance callback triggered, args: {:?}", args);
 
             // Second instance launched - forward any URL to existing instance
             if args.len() > 1 {
                 if let Some(url) = args.get(1) {
                     if url.starts_with("srcuri://") {
-                        tracing::info!("[SINGLE-INSTANCE-DEBUG] Forwarding URL: {}", url);
-                        match app.emit("deep-link://new-url", vec![url.clone()]) {
-                            Ok(_) => tracing::info!("[SINGLE-INSTANCE-DEBUG] Emit succeeded"),
-                            Err(e) => tracing::error!("[SINGLE-INSTANCE-DEBUG] Emit failed: {}", e),
+                        tracing::debug!("Forwarding URL to existing instance: {}", url);
+                        if let Err(e) = app.emit("deep-link://new-url", vec![url.clone()]) {
+                            tracing::error!("Failed to emit deep-link event: {}", e);
                         }
                     }
                 }
-            } else {
-                tracing::info!("[SINGLE-INSTANCE-DEBUG] No URL in args");
             }
             // Focus the existing app
             #[cfg(target_os = "macos")]
