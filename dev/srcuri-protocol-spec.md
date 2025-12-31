@@ -883,6 +883,25 @@ Normalized: srcuri:///etc/passwd:1
 → Path traversal detected, security dialog shown
 ```
 
+### Path Sanitization Rules
+
+Before normalization, Sorcery Desktop rejects paths that could escape browsers,
+URLs, or shells:
+
+- Control characters, `#`, quotes, angle brackets, braces, pipes, wildcards,
+  command separators (`;`, `&`), and shell substitution characters (`` ` ``, `$`)
+  are blocked.
+- Executable extensions remain disallowed (`.exe`, `.sh`, `.app`, etc.).
+- Parentheses `()` and square brackets `[]` are permitted—macOS frequently adds
+  them to folder names, and Sorcery launches editors via `std::process::Command`
+  without invoking a shell, so they cannot trigger globbing or command
+  substitution.
+- A leading `~` (e.g., `~/code/project/src/lib.rs`) is expanded to the user's
+  home directory; any other `~` within the path is rejected.
+
+These rules maintain the "no escape" guarantee while supporting the few special
+characters that appear in real-world repository names.
+
 ---
 
 ## Security Considerations

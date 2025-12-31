@@ -2,11 +2,16 @@ use crate::settings::SettingsManager;
 use anyhow::{bail, Context, Result};
 use once_cell::sync::Lazy;
 use regex::Regex;
+use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+// Blocks shell/HTML metacharacters that could enable command or DOM injection.
+// Parentheses and square brackets are intentionally omitted—they're common in
+// macOS-generated directory names and Git repo folders and are safe because we
+// never invoke a shell when launching editors.
 static SUSPICIOUS_PATTERNS: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r#"(\.\./|\.\.\\|~|//|[\x00-\x1f]|[<>|?*;'`$&(){}\[\]"])"#).unwrap());
+    Lazy::new(|| Regex::new(r#"(\.\./|\.\.\\|//|[\x00-\x1f]|[<>|?*;'`$&{}"]|#)"#).unwrap());
 
 static DANGEROUS_EXTENSIONS: &[&str] = &[
     ".exe", ".bat", ".cmd", ".sh", ".ps1", ".vbs", ".app", ".dmg",
@@ -46,11 +51,22 @@ impl PathValidator {
             bail!("Path too long (max 4096 characters)");
         }
 
-        if SUSPICIOUS_PATTERNS.is_match(path) {
+        if path.contains('~') && !path.starts_with('~') {
+            bail!("Path contains invalid '~' characters");
+        }
+
+        let expanded: Cow<'_, str> = if path.starts_with('~') {
+            Cow::Owned(shellexpand::tilde(path).into_owned())
+        } else {
+            Cow::Borrowed(path)
+        };
+        let input = expanded.as_ref();
+
+        if SUSPICIOUS_PATTERNS.is_match(input) {
             bail!("Path contains suspicious patterns");
         }
 
-        if path.contains("\\\\") {
+        if input.contains("\\\\") {
             #[cfg(target_os = "windows")]
             {
                 if !path.starts_with("\\\\") || path[2..].contains("\\\\") {
@@ -65,13 +81,13 @@ impl PathValidator {
 
         #[cfg(target_os = "windows")]
         {
-            let colon_count = path.chars().filter(|c| *c == ':').count();
+            let colon_count = input.chars().filter(|c| *c == ':').count();
             if colon_count > 1 {
                 bail!("Path contains invalid ':' characters");
             }
-            if let Some(idx) = path.find(':') {
-                let drive_char = path.chars().next().unwrap_or_default();
-                let next_char = path.chars().nth(idx + 1);
+            if let Some(idx) = input.find(':') {
+                let drive_char = input.chars().next().unwrap_or_default();
+                let next_char = input.chars().nth(idx + 1);
                 let is_drive = idx == 1
                     && drive_char.is_ascii_alphabetic()
                     && matches!(next_char, Some('\\') | Some('/'));
@@ -83,13 +99,13 @@ impl PathValidator {
 
         #[cfg(not(target_os = "windows"))]
         {
-            if path.contains(':') {
+            if input.contains(':') {
                 bail!("Path contains ':' characters");
             }
         }
 
         for ext in DANGEROUS_EXTENSIONS {
-            if path.to_lowercase().ends_with(ext) {
+            if input.to_lowercase().ends_with(ext) {
                 bail!("Opening executable files is not allowed");
             }
         }
@@ -139,13 +155,13 @@ impl PathValidator {
     // TODO: Implement workspace-based security checks per ai/4-path-validation.md
     #[allow(dead_code)]
     async fn check_workspace_membership(&self, path: &Path) -> Result<()> {
-        let settings = self.settings_manager.get().await;
+        let workspaces = self.settings_manager.get_workspaces().await;
 
-        if settings.workspaces.is_empty() {
+        if workspaces.is_empty() {
             return Ok(());
         }
 
-        for workspace in &settings.workspaces {
+        for workspace in &workspaces {
             if let Some(normalized) = &workspace.normalized_path {
                 if Self::is_under(path, normalized) {
                     return Ok(());
@@ -213,13 +229,27 @@ mod tests {
         assert!(PathValidator::sanitize("/tmp/file`whoami`.txt").is_err(), "backtick");
         assert!(PathValidator::sanitize("/tmp/$(curl x).txt").is_err(), "dollar sign");
         assert!(PathValidator::sanitize("/tmp/file&bg.txt").is_err(), "ampersand");
-        assert!(PathValidator::sanitize("/tmp/file(sub).txt").is_err(), "open paren");
-        assert!(PathValidator::sanitize("/tmp/file).txt").is_err(), "close paren");
         assert!(PathValidator::sanitize("/tmp/file{a,b}.txt").is_err(), "open brace");
         assert!(PathValidator::sanitize("/tmp/file}.txt").is_err(), "close brace");
-        assert!(PathValidator::sanitize("/tmp/file[0].txt").is_err(), "open bracket");
-        assert!(PathValidator::sanitize("/tmp/file].txt").is_err(), "close bracket");
         assert!(PathValidator::sanitize("/tmp/file\"quoted\".txt").is_err(), "double quote");
+        assert!(PathValidator::sanitize("/tmp/file#tag.txt").is_err(), "hash");
+    }
+
+    #[test]
+    fn allows_common_special_characters() {
+        assert!(PathValidator::sanitize("/tmp/file(sub).txt").is_ok(), "open paren ok");
+        assert!(PathValidator::sanitize("/tmp/file).txt").is_ok(), "close paren ok");
+        assert!(PathValidator::sanitize("/tmp/file[0].txt").is_ok(), "open bracket ok");
+        assert!(PathValidator::sanitize("/tmp/file].txt").is_ok(), "close bracket ok");
+    }
+
+    #[test]
+    fn leading_tilde_supported_mid_path_rejected() {
+        assert!(PathValidator::sanitize("~/code/file.txt").is_ok(), "leading tilde ok");
+        assert!(
+            PathValidator::sanitize("/tmp/foo~bar.txt").is_err(),
+            "mid-path tilde rejected"
+        );
     }
 
     #[test]
@@ -230,7 +260,6 @@ mod tests {
         assert!(PathValidator::sanitize("/tmp/file.with.dots.md").is_ok());
         assert!(PathValidator::sanitize("/tmp/file 123.txt").is_ok(), "spaces allowed");
         assert!(PathValidator::sanitize("/tmp/file@domain.txt").is_ok(), "at sign allowed");
-        assert!(PathValidator::sanitize("/tmp/file#tag.txt").is_ok(), "hash allowed");
         assert!(PathValidator::sanitize("/tmp/file%20encoded.txt").is_ok(), "percent allowed");
         assert!(PathValidator::sanitize("/tmp/file+plus.txt").is_ok(), "plus allowed");
         assert!(PathValidator::sanitize("/tmp/file=equals.txt").is_ok(), "equals allowed");
