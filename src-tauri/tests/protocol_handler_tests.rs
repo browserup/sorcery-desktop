@@ -121,8 +121,8 @@ async fn setup() -> (
 
     let mut settings = settings_manager.get().await;
     settings.defaults.allow_non_workspace_files = true;
-    // Use VSCodium as default - works better than VSCode when running as root in Docker
-    settings.defaults.editor = "vscodium".to_string();
+    // Use NullEditor for tests - doesn't launch any actual editor process
+    settings.defaults.editor = "null".to_string();
     settings_manager
         .save(settings)
         .await
@@ -133,6 +133,8 @@ async fn setup() -> (
     ));
 
     let editor_registry = Arc::new(sorcery_desktop::editors::EditorRegistry::new());
+    // Register NullEditor for tests - it's not in the default registry to avoid polluting the UI
+    editor_registry.register(Arc::new(sorcery_desktop::editors::NullEditor::new()));
 
     let tracker = Arc::new(sorcery_desktop::tracker::ActiveEditorTracker::new(
         editor_registry.clone(),
@@ -174,7 +176,7 @@ async fn configure_workspace(
         .push(sorcery_desktop::settings::WorkspaceConfig {
             path: workspace_path.to_string(),
             name: Some(workspace_name),
-            editor: "vscodium".to_string(),
+            editor: "null".to_string(),
             auto_discovered: false,
             normalized_path: None,
         });
