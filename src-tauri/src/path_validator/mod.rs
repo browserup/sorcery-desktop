@@ -13,9 +13,10 @@ use std::sync::Arc;
 static SUSPICIOUS_PATTERNS: Lazy<Regex> =
     Lazy::new(|| Regex::new(r#"(\.\./|\.\.\\|//|[\x00-\x1f]|[<>|?*;'`$&{}"]|#)"#).unwrap());
 
-static DANGEROUS_EXTENSIONS: &[&str] = &[
-    ".exe", ".bat", ".cmd", ".sh", ".ps1", ".vbs", ".app", ".dmg",
-];
+// Binary formats that can't be meaningfully edited as text.
+// Script files (.sh, .bat, .ps1, etc.) are intentionally NOT blocked -
+// they're source code and opening them in an editor doesn't execute them.
+static DANGEROUS_EXTENSIONS: &[&str] = &[".exe", ".app", ".dmg"];
 
 pub struct PathValidator {
     settings_manager: Arc<SettingsManager>,
