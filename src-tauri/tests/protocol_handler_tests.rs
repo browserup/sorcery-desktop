@@ -113,8 +113,10 @@ async fn setup() -> (
     fs::write(&test_file, "fn main() {\n    println!(\"Test\");\n}\n")
         .expect("Failed to create test file");
 
+    // Use temp path for settings to avoid polluting user's real settings
+    let test_settings_path = temp_dir.path().join("settings.yaml");
     let settings_manager = Arc::new(
-        sorcery_desktop::settings::SettingsManager::new()
+        sorcery_desktop::settings::SettingsManager::new_with_path(test_settings_path)
             .await
             .expect("Failed to create settings manager"),
     );

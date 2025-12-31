@@ -173,7 +173,12 @@ impl SrcuriParser {
             }
         }
 
-        let (file_path, line, column) = Self::parse_path_with_location(path_part)?;
+        let (file_path, mut line, column) = Self::parse_path_with_location(path_part)?;
+
+        // If no line from colon syntax, try fragment as line number (e.g., #42)
+        if line.is_none() {
+            line = Self::parse_fragment_line(fragment);
+        }
 
         if Self::is_absolute_path(&file_path) {
             if git_ref.is_some() {
@@ -255,6 +260,17 @@ impl SrcuriParser {
             workspace_override,
             fragment: fragment.map(|f| f.to_string()),
         })
+    }
+
+    /// Parse fragment as simple line number (e.g., #42)
+    /// Used as fallback when colon syntax doesn't provide a line number
+    fn parse_fragment_line(fragment: Option<&str>) -> Option<usize> {
+        let fragment = fragment?;
+        if fragment.is_empty() {
+            return None;
+        }
+        // Simple numeric fragment: #42
+        fragment.parse::<usize>().ok()
     }
 
     fn parse_provider_fragment(fragment: Option<&str>) -> (Option<usize>, Option<usize>) {
@@ -1434,4 +1450,175 @@ mod tests {
             SrcuriParser::parse("srcuri://myrepo/file.rs?remote=git@github.com:owner/repo");
         assert!(result.is_ok());
     }
+
+    // Trailing colon tests (for iTerm Semantic History compatibility)
+    // When line number is not available, the URL may have a trailing colon
+
+    #[test]
+    fn test_trailing_colon_absolute_path() {
+        let request = SrcuriParser::parse("srcuri:///Users/ebeland/file.txt:").unwrap();
+        assert_eq!(
+            request,
+            SrcuriRequest::FullPath {
+                full_path: "/Users/ebeland/file.txt".to_string(),
+                line: None,
+                column: None,
+            }
+        );
+    }
+
+    #[test]
+    fn test_trailing_colon_workspace_path() {
+        let request = SrcuriParser::parse("srcuri://myproject/src/main.rs:").unwrap();
+        assert_eq!(
+            request,
+            SrcuriRequest::WorkspacePath {
+                workspace: "myproject".to_string(),
+                path: "src/main.rs".to_string(),
+                line: None,
+                column: None,
+                remote: None,
+            }
+        );
+    }
+
+    #[test]
+    fn test_trailing_colon_partial_path() {
+        let request = SrcuriParser::parse("srcuri://README.md:").unwrap();
+        assert_eq!(
+            request,
+            SrcuriRequest::PartialPath {
+                path: "README.md".to_string(),
+                line: None,
+                column: None,
+            }
+        );
+    }
+
+    #[test]
+    fn test_trailing_double_colon() {
+        let request = SrcuriParser::parse("srcuri:///Users/ebeland/file.txt::").unwrap();
+        assert_eq!(
+            request,
+            SrcuriRequest::FullPath {
+                full_path: "/Users/ebeland/file.txt".to_string(),
+                line: None,
+                column: None,
+            }
+        );
+    }
+
+    #[test]
+    fn test_trailing_colon_with_line() {
+        // Line number present, but trailing colon where column would be
+        let request = SrcuriParser::parse("srcuri:///Users/ebeland/file.txt:42:").unwrap();
+        assert_eq!(
+            request,
+            SrcuriRequest::FullPath {
+                full_path: "/Users/ebeland/file.txt".to_string(),
+                line: Some(42),
+                column: None,
+            }
+        );
+    }
+
+    #[test]
+    fn test_trailing_hash_absolute_path() {
+        // Trailing fragment is stripped before path parsing
+        let request = SrcuriParser::parse("srcuri:///Users/ebeland/file.txt#").unwrap();
+        assert_eq!(
+            request,
+            SrcuriRequest::FullPath {
+                full_path: "/Users/ebeland/file.txt".to_string(),
+                line: None,
+                column: None,
+            }
+        );
+    }
+
+    #[test]
+    fn test_trailing_hash_with_line() {
+        let request = SrcuriParser::parse("srcuri:///Users/ebeland/file.txt:42#").unwrap();
+        assert_eq!(
+            request,
+            SrcuriRequest::FullPath {
+                full_path: "/Users/ebeland/file.txt".to_string(),
+                line: Some(42),
+                column: None,
+            }
+        );
+    }
+
+    // Hash-based line number tests (alternative to colon syntax)
+    // Supports #N format for line numbers (like some terminal emulators)
+
+    #[test]
+    fn test_hash_line_absolute_path() {
+        let request = SrcuriParser::parse("srcuri:///Users/ebeland/file.txt#42").unwrap();
+        assert_eq!(
+            request,
+            SrcuriRequest::FullPath {
+                full_path: "/Users/ebeland/file.txt".to_string(),
+                line: Some(42),
+                column: None,
+            }
+        );
+    }
+
+    #[test]
+    fn test_hash_line_workspace_path() {
+        let request = SrcuriParser::parse("srcuri://myproject/src/main.rs#100").unwrap();
+        assert_eq!(
+            request,
+            SrcuriRequest::WorkspacePath {
+                workspace: "myproject".to_string(),
+                path: "src/main.rs".to_string(),
+                line: Some(100),
+                column: None,
+                remote: None,
+            }
+        );
+    }
+
+    #[test]
+    fn test_hash_line_partial_path() {
+        let request = SrcuriParser::parse("srcuri://README.md#25").unwrap();
+        assert_eq!(
+            request,
+            SrcuriRequest::PartialPath {
+                path: "README.md".to_string(),
+                line: Some(25),
+                column: None,
+            }
+        );
+    }
+
+    #[test]
+    fn test_colon_takes_precedence_over_hash() {
+        // When both colon and hash specify lines, colon wins
+        let request = SrcuriParser::parse("srcuri:///Users/ebeland/file.txt:42#99").unwrap();
+        assert_eq!(
+            request,
+            SrcuriRequest::FullPath {
+                full_path: "/Users/ebeland/file.txt".to_string(),
+                line: Some(42),
+                column: None,
+            }
+        );
+    }
+
+    #[test]
+    fn test_hash_non_numeric_ignored() {
+        // Non-numeric fragment is ignored (doesn't cause error)
+        let request = SrcuriParser::parse("srcuri:///Users/ebeland/file.txt#section").unwrap();
+        assert_eq!(
+            request,
+            SrcuriRequest::FullPath {
+                full_path: "/Users/ebeland/file.txt".to_string(),
+                line: None,
+                column: None,
+            }
+        );
+    }
+
 }
