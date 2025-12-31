@@ -28,6 +28,21 @@ impl SettingsManager {
         })
     }
 
+    /// Create a SettingsManager with a custom config path.
+    /// Use this in integration tests to avoid polluting the user's real settings.
+    #[allow(dead_code)] // Used by integration tests, not main binary
+    pub async fn new_with_path(config_path: PathBuf) -> Result<Self> {
+        if let Some(parent) = config_path.parent() {
+            std::fs::create_dir_all(parent)
+                .context("Failed to create config directory for tests")?;
+        }
+
+        Ok(Self {
+            config_path,
+            settings: Arc::new(RwLock::new(Settings::default())),
+        })
+    }
+
     fn get_config_path() -> Result<PathBuf> {
         let config_dir = dirs::config_dir().context("Could not find config directory")?;
 
