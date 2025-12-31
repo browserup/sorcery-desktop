@@ -16,7 +16,7 @@ impl SettingsManager {
 
         // Only scan for repo directories on first run (no settings file).
         // When settings exist, load() will replace this with file contents anyway.
-        let initial = if config_path.exists() {
+        let initial = if tokio::fs::try_exists(&config_path).await.unwrap_or(false) {
             Settings::default()
         } else {
             Settings::with_detected_workspaces_folder()
@@ -43,7 +43,7 @@ impl SettingsManager {
     }
 
     pub async fn load(&self) -> Result<()> {
-        if !self.config_path.exists() {
+        if !tokio::fs::try_exists(&self.config_path).await.unwrap_or(false) {
             info!("No existing settings file found, using defaults");
             return Ok(());
         }
@@ -113,6 +113,14 @@ impl SettingsManager {
     pub async fn get_preferred_terminal(&self) -> String {
         let settings = self.settings.read().await;
         settings.defaults.preferred_terminal.clone()
+    }
+
+    pub async fn get_workspaces(&self) -> Vec<WorkspaceConfig> {
+        self.settings.read().await.workspaces.clone()
+    }
+
+    pub async fn get_default_workspaces_folder(&self) -> String {
+        self.settings.read().await.defaults.default_workspaces_folder.clone()
     }
 
     async fn normalize_workspace_paths(&self, settings: &mut Settings) -> Result<()> {

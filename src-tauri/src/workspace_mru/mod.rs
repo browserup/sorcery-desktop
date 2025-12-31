@@ -47,7 +47,7 @@ impl ActiveWorkspaceTracker {
     }
 
     pub async fn load(&self) -> Result<()> {
-        if !self.mru_path.exists() {
+        if !tokio::fs::try_exists(&self.mru_path).await.unwrap_or(false) {
             info!("No existing workspace MRU data found, starting fresh");
             return Ok(());
         }
@@ -92,7 +92,7 @@ impl ActiveWorkspaceTracker {
     }
 
     async fn update_workspace_activity(&self) {
-        let settings = self.settings_manager.get().await;
+        let workspaces = self.settings_manager.get_workspaces().await;
 
         {
             let mut sys = self.system.write().await;
@@ -101,7 +101,7 @@ impl ActiveWorkspaceTracker {
 
         let sys = self.system.read().await;
 
-        for workspace_config in &settings.workspaces {
+        for workspace_config in &workspaces {
             if let Some(workspace_path) = &workspace_config.normalized_path {
                 let probe_result = probe::probe_workspace(workspace_path, &sys);
 

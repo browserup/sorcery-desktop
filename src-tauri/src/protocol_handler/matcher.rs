@@ -1,10 +1,11 @@
 use crate::settings::SettingsManager;
 use crate::workspace_mru::ActiveWorkspaceTracker;
-use anyhow::{bail, Result};
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::SystemTime;
+use thiserror::Error;
 use tracing::{debug, info};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -22,6 +23,14 @@ pub struct PathMatcher {
     workspace_tracker: Arc<ActiveWorkspaceTracker>,
 }
 
+#[derive(Debug, Error)]
+pub enum WorkspaceLookupError {
+    #[error("Workspace '{0}' not found in configuration")]
+    WorkspaceNotFound(String),
+    #[error("Path '{1}' not found in workspace '{0}'")]
+    PathNotFound(String, String),
+}
+
 impl PathMatcher {
     pub fn new(
         settings_manager: Arc<SettingsManager>,
@@ -33,15 +42,22 @@ impl PathMatcher {
         }
     }
 
+    async fn path_exists_and_valid(path: &PathBuf) -> bool {
+        match tokio::fs::metadata(path).await {
+            Ok(meta) => meta.is_file() || meta.is_dir(),
+            Err(_) => false,
+        }
+    }
+
     pub async fn find_partial_matches(&self, partial_path: &str) -> Result<Vec<WorkspaceMatch>> {
-        let settings = self.settings_manager.get().await;
+        let workspaces = self.settings_manager.get_workspaces().await;
         let mut matches = Vec::new();
 
-        for workspace in &settings.workspaces {
+        for workspace in &workspaces {
             if let Some(workspace_root) = &workspace.normalized_path {
                 let candidate = workspace_root.join(partial_path);
 
-                if candidate.exists() && (candidate.is_file() || candidate.is_dir()) {
+                if Self::path_exists_and_valid(&candidate).await {
                     matches.push(WorkspaceMatch {
                         workspace_name: workspace.name.clone().unwrap_or_else(|| {
                             workspace_root
@@ -71,10 +87,10 @@ impl PathMatcher {
         &self,
         workspace_name: &str,
         relative_path: &str,
-    ) -> Result<PathBuf> {
-        let settings = self.settings_manager.get().await;
+    ) -> Result<PathBuf, WorkspaceLookupError> {
+        let workspaces = self.settings_manager.get_workspaces().await;
 
-        for workspace in &settings.workspaces {
+        for workspace in &workspaces {
             let ws_name = workspace.name.as_deref().unwrap_or_else(|| {
                 workspace
                     .normalized_path
@@ -88,7 +104,7 @@ impl PathMatcher {
                 if let Some(workspace_root) = &workspace.normalized_path {
                     let full_path = workspace_root.join(relative_path);
 
-                    if full_path.exists() && (full_path.is_file() || full_path.is_dir()) {
+                    if Self::path_exists_and_valid(&full_path).await {
                         debug!(
                             "Found workspace match: {} -> {}",
                             workspace_name,
@@ -96,26 +112,27 @@ impl PathMatcher {
                         );
                         return Ok(full_path);
                     } else {
-                        bail!(
-                            "Path not found in workspace '{}': {}",
-                            workspace_name,
-                            relative_path
-                        );
+                        return Err(WorkspaceLookupError::PathNotFound(
+                            workspace_name.to_string(),
+                            relative_path.to_string(),
+                        ));
                     }
                 }
             }
         }
 
-        bail!("Workspace '{}' not found in configuration", workspace_name);
+        Err(WorkspaceLookupError::WorkspaceNotFound(
+            workspace_name.to_string(),
+        ))
     }
 
     pub async fn find_full_path_matches(&self, full_path: &str) -> Result<Vec<WorkspaceMatch>> {
         info!("Scanning full path for workspace fragments: {}", full_path);
 
-        let settings = self.settings_manager.get().await;
+        let workspaces = self.settings_manager.get_workspaces().await;
         let mut matches = Vec::new();
 
-        for workspace in &settings.workspaces {
+        for workspace in &workspaces {
             let ws_name = workspace.name.as_deref().unwrap_or_else(|| {
                 workspace
                     .normalized_path
@@ -136,7 +153,7 @@ impl PathMatcher {
                 if let Some(workspace_root) = &workspace.normalized_path {
                     let candidate = workspace_root.join(fragment);
 
-                    if candidate.exists() && (candidate.is_file() || candidate.is_dir()) {
+                    if Self::path_exists_and_valid(&candidate).await {
                         info!("Match found: {}", candidate.display());
                         matches.push(WorkspaceMatch {
                             workspace_name: ws_name.to_string(),
@@ -153,19 +170,21 @@ impl PathMatcher {
         if matches.is_empty() {
             debug!("No workspace fragments found in path, checking if path exists as-is");
             let path = PathBuf::from(full_path);
-            if path.exists() && (path.is_file() || path.is_dir()) {
-                matches.push(WorkspaceMatch {
-                    workspace_name: if path.is_dir() {
-                        "Non-workspace folder"
-                    } else {
-                        "Non-workspace file"
-                    }
-                    .to_string(),
-                    workspace_path: path.parent().unwrap_or(&path).to_path_buf(),
-                    full_file_path: path,
-                    last_seen: None,
-                    last_active: None,
-                });
+            if let Ok(meta) = tokio::fs::metadata(&path).await {
+                if meta.is_file() || meta.is_dir() {
+                    matches.push(WorkspaceMatch {
+                        workspace_name: if meta.is_dir() {
+                            "Non-workspace folder"
+                        } else {
+                            "Non-workspace file"
+                        }
+                        .to_string(),
+                        workspace_path: path.parent().unwrap_or(&path).to_path_buf(),
+                        full_file_path: path,
+                        last_seen: None,
+                        last_active: None,
+                    });
+                }
             }
         }
 

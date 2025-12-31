@@ -39,7 +39,7 @@ impl ActiveEditorTracker {
     }
 
     pub async fn load(&self) -> Result<()> {
-        if !self.last_seen_path.exists() {
+        if !tokio::fs::try_exists(&self.last_seen_path).await.unwrap_or(false) {
             info!("No existing last_seen data found, starting fresh");
             return Ok(());
         }

@@ -3,7 +3,7 @@ mod matcher;
 mod parser;
 
 pub use git::{GitHandler, WorkingTreeStatus};
-pub use matcher::{PathMatcher, WorkspaceMatch};
+pub use matcher::{PathMatcher, WorkspaceLookupError, WorkspaceMatch};
 pub use parser::{GitRef, SrcuriParser, SrcuriRequest};
 
 use crate::dispatcher::EditorDispatcher;
@@ -165,10 +165,10 @@ impl ProtocolHandler {
                     .await?;
                 Ok(HandleResult::Opened)
             }
-            Err(_) if remote.is_some() => {
+            Err(WorkspaceLookupError::WorkspaceNotFound(_)) if remote.is_some() => {
                 let remote_url = remote.unwrap();
-                let settings = self.settings_manager.get().await;
-                let repo_base = shellexpand::tilde(&settings.defaults.default_workspaces_folder);
+                let default_folder = self.settings_manager.get_default_workspaces_folder().await;
+                let repo_base = shellexpand::tilde(&default_folder);
                 let clone_path = std::path::PathBuf::from(repo_base.as_ref()).join(workspace);
 
                 info!(
@@ -186,7 +186,7 @@ impl ProtocolHandler {
                     git_ref: None,
                 })
             }
-            Err(e) => Err(e),
+            Err(e) => Err(e.into()),
         }
     }
 
@@ -265,10 +265,10 @@ impl ProtocolHandler {
 
         let full_path = match self.matcher.find_workspace_path(workspace, path).await {
             Ok(p) => p,
-            Err(_) if remote.is_some() => {
+            Err(WorkspaceLookupError::WorkspaceNotFound(_)) if remote.is_some() => {
                 let remote_url = remote.unwrap();
-                let settings = self.settings_manager.get().await;
-                let repo_base = shellexpand::tilde(&settings.defaults.default_workspaces_folder);
+                let default_folder = self.settings_manager.get_default_workspaces_folder().await;
+                let repo_base = shellexpand::tilde(&default_folder);
                 let clone_path = std::path::PathBuf::from(repo_base.as_ref()).join(workspace);
 
                 info!(
@@ -286,7 +286,7 @@ impl ProtocolHandler {
                     git_ref: Some(git_ref.clone()),
                 });
             }
-            Err(e) => return Err(e),
+            Err(e) => return Err(e.into()),
         };
 
         let workspace_path = full_path
@@ -350,7 +350,11 @@ impl ProtocolHandler {
         );
 
         // Try to find a workspace matching the workspace name
-        match self.matcher.find_workspace_path(workspace_name, path).await {
+        match self
+            .matcher
+            .find_workspace_path(workspace_name, path)
+            .await
+        {
             Ok(full_path) => {
                 info!(
                     "Found matching workspace '{}', opening locally",
