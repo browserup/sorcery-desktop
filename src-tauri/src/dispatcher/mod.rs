@@ -1,7 +1,7 @@
 use crate::editors::{EditorRegistry, OpenOptions};
 use crate::git_command_log::GIT_COMMAND_LOG;
 use crate::path_validator::PathValidator;
-use crate::settings::SettingsManager;
+use crate::settings::{SettingsManager, WorkspaceConfig};
 use crate::tracker::ActiveEditorTracker;
 use anyhow::{Context, Result};
 use std::path::Path;
@@ -58,7 +58,17 @@ impl EditorDispatcher {
             is_directory
         );
 
-        let editor_id = self.determine_editor(&validated_path, editor_hint).await?;
+        let workspace = self
+            .settings_manager
+            .get_workspace_for_path(&validated_path)
+            .await;
+        let workspace_root = workspace
+            .as_ref()
+            .and_then(|w| w.normalized_path.clone());
+
+        let editor_id = self
+            .determine_editor(&validated_path, editor_hint, workspace.as_ref())
+            .await?;
         info!("Determined editor: {}", editor_id);
 
         let manager = self
@@ -108,6 +118,7 @@ impl EditorDispatcher {
             column: if is_directory { None } else { column },
             new_window,
             terminal_preference: Some(terminal_preference),
+            workspace_root,
         };
 
         info!("Calling manager.open() for {}", editor_id);
@@ -139,7 +150,12 @@ impl EditorDispatcher {
         result.map_err(|e| anyhow::anyhow!("Failed to open in {}: {}", editor_id, e))
     }
 
-    async fn determine_editor(&self, path: &Path, editor_hint: Option<String>) -> Result<String> {
+    async fn determine_editor(
+        &self,
+        path: &Path,
+        editor_hint: Option<String>,
+        workspace: Option<&WorkspaceConfig>,
+    ) -> Result<String> {
         if let Some(hint) = editor_hint {
             if hint == "most-recent" {
                 if let Some(recent) = self.tracker.get_most_recent_editor().await {
@@ -152,20 +168,19 @@ impl EditorDispatcher {
             }
         }
 
-        let in_workspace =
-            if let Some(workspace) = self.settings_manager.get_workspace_for_path(path).await {
-                if !workspace.editor.is_empty() {
-                    debug!(
-                        "Using workspace editor: {} for path {:?}",
-                        workspace.editor, path
-                    );
-                    return Ok(workspace.editor);
-                }
-                debug!("Workspace editor is empty, falling back to default");
-                true
-            } else {
-                false
-            };
+        let in_workspace = if let Some(ws) = workspace {
+            if !ws.editor.is_empty() {
+                debug!(
+                    "Using workspace editor: {} for path {:?}",
+                    ws.editor, path
+                );
+                return Ok(ws.editor.clone());
+            }
+            debug!("Workspace editor is empty, falling back to default");
+            true
+        } else {
+            false
+        };
 
         if !in_workspace && !self.settings_manager.allows_non_workspace_files().await {
             return Err(anyhow::anyhow!(

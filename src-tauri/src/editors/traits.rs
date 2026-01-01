@@ -26,6 +26,7 @@ pub struct OpenOptions {
     pub column: Option<usize>,
     pub new_window: bool,
     pub terminal_preference: Option<String>,
+    pub workspace_root: Option<PathBuf>,
 }
 
 impl Default for OpenOptions {
@@ -35,6 +36,7 @@ impl Default for OpenOptions {
             column: None,
             new_window: false,
             terminal_preference: None,
+            workspace_root: None,
         }
     }
 }

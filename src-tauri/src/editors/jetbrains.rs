@@ -554,6 +554,11 @@ impl EditorManager for JetBrainsManager {
 
         let mut args = vec![];
 
+        // Pass workspace/project directory first so IntelliJ opens the correct project window
+        if let Some(ref workspace_root) = options.workspace_root {
+            args.push(workspace_root.display().to_string());
+        }
+
         if let Some(line) = options.line {
             args.push("--line".to_string());
             args.push(line.to_string());
