@@ -680,6 +680,24 @@
               <option value="konsole">Konsole</option>
               <option value="xterm">Xterm</option>
             </select>
+            <div style="margin-top: 0.5rem;">
+              <button class="button" onclick="toggleItermSetup()" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" id="iterm-setup-btn">iTerm2 Setup...</button>
+            </div>
+            <div id="iterm-setup-panel" style="display: none; margin-top: 0.75rem; padding: 0.75rem; background: var(--bg-elevated); border-radius: 6px; border: 1px solid var(--border);">
+              <div style="font-size: 0.8125rem; color: var(--text-secondary); margin-bottom: 0.25rem;">
+                Profiles → Default → Advanced → Semantic History → Run command:
+              </div>
+              <div style="background: var(--bg-primary); border: 1px solid var(--border); border-radius: 6px; padding: 0.5rem 0.75rem; display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;">
+                <code style="color: var(--success-light); font-family: 'SF Mono', Monaco, monospace; font-size: 0.875rem;">open "srcuri://\1:\2"</code>
+                <button class="button" onclick="copyItermCommand(this)" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">Copy</button>
+              </div>
+              <div style="margin-top: 0.5rem;">
+                <a href="#" onclick="toggleItermScreenshot(); return false;" style="color: var(--text-secondary); font-size: 0.75rem;" id="iterm-screenshot-toggle">Show screenshot</a>
+              </div>
+              <div id="iterm-screenshot" style="display: none; margin-top: 0.5rem;">
+                <img src="assets/setup/iterm-semantic-history-setting.png" alt="iTerm2 Semantic History setting" style="max-width: 100%; border-radius: 4px; border: 1px solid var(--border);">
+              </div>
+            </div>
           </div>
           <div class="form-group">
             <label for="default-workspaces-folder">Default Workspaces Folder</label>
@@ -1506,6 +1524,43 @@
         }, 2000);
       } catch (e) {
         console.error('Failed to copy:', e);
+      }
+    }
+
+    // iTerm2 Setup
+    function toggleItermSetup() {
+      const panel = document.getElementById('iterm-setup-panel');
+      const btn = document.getElementById('iterm-setup-btn');
+      if (panel.style.display === 'none') {
+        panel.style.display = 'block';
+        btn.textContent = 'Hide iTerm2 Setup';
+      } else {
+        panel.style.display = 'none';
+        btn.textContent = 'iTerm2 Setup...';
+      }
+    }
+
+    async function copyItermCommand(btn) {
+      const command = 'open "srcuri://\\1:\\2"';
+      try {
+        await navigator.clipboard.writeText(command);
+        const original = btn.textContent;
+        btn.textContent = 'Copied!';
+        setTimeout(() => { btn.textContent = original; }, 2000);
+      } catch (e) {
+        console.error('Failed to copy:', e);
+      }
+    }
+
+    function toggleItermScreenshot() {
+      const el = document.getElementById('iterm-screenshot');
+      const toggle = document.getElementById('iterm-screenshot-toggle');
+      if (el.style.display === 'none') {
+        el.style.display = 'block';
+        toggle.textContent = 'Hide screenshot';
+      } else {
+        el.style.display = 'none';
+        toggle.textContent = 'Show screenshot';
       }
     }
 
