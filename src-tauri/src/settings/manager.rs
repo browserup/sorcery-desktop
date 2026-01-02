@@ -58,7 +58,10 @@ impl SettingsManager {
     }
 
     pub async fn load(&self) -> Result<()> {
-        if !tokio::fs::try_exists(&self.config_path).await.unwrap_or(false) {
+        if !tokio::fs::try_exists(&self.config_path)
+            .await
+            .unwrap_or(false)
+        {
             info!("No existing settings file found, using defaults");
             return Ok(());
         }
@@ -80,21 +83,32 @@ impl SettingsManager {
     }
 
     pub async fn save(&self, mut settings: Settings) -> Result<()> {
-        let yaml_string =
-            serde_yaml::to_string(&settings).context("Failed to serialize settings to YAML")?;
-
-        tokio::fs::write(&self.config_path, yaml_string)
-            .await
-            .context("Failed to write settings file")?;
-
-        // Normalize paths before storing in memory
+        // Normalize paths before persisting or caching in memory
         self.normalize_workspace_paths(&mut settings).await?;
+
+        self.persist_to_disk(&settings).await?;
 
         let mut current = self.settings.write().await;
         *current = settings;
 
         info!("Settings saved to {:?}", self.config_path);
         Ok(())
+    }
+
+    pub async fn modify<F, R>(&self, f: F) -> Result<R>
+    where
+        F: FnOnce(&mut Settings) -> Result<(R, bool)>,
+    {
+        let mut settings = self.settings.write().await;
+        let (result, dirty) = f(&mut settings)?;
+
+        if dirty {
+            self.normalize_workspace_paths(&mut settings).await?;
+            self.persist_to_disk(&settings).await?;
+            info!("Settings saved to {:?}", self.config_path);
+        }
+
+        Ok(result)
     }
 
     pub async fn get(&self) -> Settings {
@@ -135,7 +149,12 @@ impl SettingsManager {
     }
 
     pub async fn get_default_workspaces_folder(&self) -> String {
-        self.settings.read().await.defaults.default_workspaces_folder.clone()
+        self.settings
+            .read()
+            .await
+            .defaults
+            .default_workspaces_folder
+            .clone()
     }
 
     async fn normalize_workspace_paths(&self, settings: &mut Settings) -> Result<()> {
@@ -197,5 +216,16 @@ impl SettingsManager {
                 .canonicalize()
                 .context("Failed to canonicalize path")
         }
+    }
+
+    async fn persist_to_disk(&self, settings: &Settings) -> Result<()> {
+        let yaml_string =
+            serde_yaml::to_string(settings).context("Failed to serialize settings to YAML")?;
+
+        tokio::fs::write(&self.config_path, yaml_string)
+            .await
+            .context("Failed to write settings file")?;
+
+        Ok(())
     }
 }
