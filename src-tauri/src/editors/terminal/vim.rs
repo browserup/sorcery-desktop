@@ -90,6 +90,10 @@ impl EditorManager for VimManager {
             }
             _ => {}
         }
+        // Defense in depth: '--' terminates options so paths can't be interpreted as flags.
+        // Primary protection is the absolute path requirement in path_validator which ensures
+        // paths start with '/' or a drive letter, never '-'.
+        vim_args.push("--".to_string());
         vim_args.push(path.display().to_string());
 
         debug!("Opening vim with args: {:?}", vim_args);

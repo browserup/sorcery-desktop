@@ -259,6 +259,10 @@ impl EditorManager for NeovimManager {
             }
             _ => {}
         }
+        // Defense in depth: '--' terminates options so paths can't be interpreted as flags.
+        // Primary protection is the absolute path requirement in path_validator which ensures
+        // paths start with '/' or a drive letter, never '-'.
+        nvim_args.push("--".to_string());
         nvim_args.push(path.display().to_string());
 
         debug!("Spawning nvim with args: {:?}", nvim_args);
