@@ -72,9 +72,12 @@ impl PathValidator {
         if input.contains("\\\\") {
             #[cfg(target_os = "windows")]
             {
-                if !path.starts_with("\\\\") || path[2..].contains("\\\\") {
-                    bail!("Path contains invalid backslash sequences");
+                // Block UNC paths (\\server\share\...) - they trigger automatic SMB
+                // authentication which could leak NTLM credentials to attacker servers
+                if input.starts_with("\\\\") {
+                    bail!("Network paths (UNC) are not supported for security reasons");
                 }
+                bail!("Path contains invalid backslash sequences");
             }
             #[cfg(not(target_os = "windows"))]
             {
@@ -226,29 +229,86 @@ mod tests {
     }
 
     #[test]
+    fn rejects_unc_paths_on_windows() {
+        // UNC paths could leak NTLM credentials via automatic SMB authentication
+        if cfg!(target_os = "windows") {
+            assert!(
+                PathValidator::sanitize(r"\\server\share\file.txt").is_err(),
+                "UNC path should be rejected"
+            );
+            assert!(
+                PathValidator::sanitize(r"\\attacker.com\share\secrets").is_err(),
+                "Attacker UNC path should be rejected"
+            );
+        }
+    }
+
+    #[test]
     fn rejects_shell_metacharacters() {
-        assert!(PathValidator::sanitize("/tmp/file;rm -rf /").is_err(), "semicolon");
-        assert!(PathValidator::sanitize("/tmp/file'test.txt").is_err(), "single quote");
-        assert!(PathValidator::sanitize("/tmp/file`whoami`.txt").is_err(), "backtick");
-        assert!(PathValidator::sanitize("/tmp/$(curl x).txt").is_err(), "dollar sign");
-        assert!(PathValidator::sanitize("/tmp/file&bg.txt").is_err(), "ampersand");
-        assert!(PathValidator::sanitize("/tmp/file{a,b}.txt").is_err(), "open brace");
-        assert!(PathValidator::sanitize("/tmp/file}.txt").is_err(), "close brace");
-        assert!(PathValidator::sanitize("/tmp/file\"quoted\".txt").is_err(), "double quote");
-        assert!(PathValidator::sanitize("/tmp/file#tag.txt").is_err(), "hash");
+        assert!(
+            PathValidator::sanitize("/tmp/file;rm -rf /").is_err(),
+            "semicolon"
+        );
+        assert!(
+            PathValidator::sanitize("/tmp/file'test.txt").is_err(),
+            "single quote"
+        );
+        assert!(
+            PathValidator::sanitize("/tmp/file`whoami`.txt").is_err(),
+            "backtick"
+        );
+        assert!(
+            PathValidator::sanitize("/tmp/$(curl x).txt").is_err(),
+            "dollar sign"
+        );
+        assert!(
+            PathValidator::sanitize("/tmp/file&bg.txt").is_err(),
+            "ampersand"
+        );
+        assert!(
+            PathValidator::sanitize("/tmp/file{a,b}.txt").is_err(),
+            "open brace"
+        );
+        assert!(
+            PathValidator::sanitize("/tmp/file}.txt").is_err(),
+            "close brace"
+        );
+        assert!(
+            PathValidator::sanitize("/tmp/file\"quoted\".txt").is_err(),
+            "double quote"
+        );
+        assert!(
+            PathValidator::sanitize("/tmp/file#tag.txt").is_err(),
+            "hash"
+        );
     }
 
     #[test]
     fn allows_common_special_characters() {
-        assert!(PathValidator::sanitize("/tmp/file(sub).txt").is_ok(), "open paren ok");
-        assert!(PathValidator::sanitize("/tmp/file).txt").is_ok(), "close paren ok");
-        assert!(PathValidator::sanitize("/tmp/file[0].txt").is_ok(), "open bracket ok");
-        assert!(PathValidator::sanitize("/tmp/file].txt").is_ok(), "close bracket ok");
+        assert!(
+            PathValidator::sanitize("/tmp/file(sub).txt").is_ok(),
+            "open paren ok"
+        );
+        assert!(
+            PathValidator::sanitize("/tmp/file).txt").is_ok(),
+            "close paren ok"
+        );
+        assert!(
+            PathValidator::sanitize("/tmp/file[0].txt").is_ok(),
+            "open bracket ok"
+        );
+        assert!(
+            PathValidator::sanitize("/tmp/file].txt").is_ok(),
+            "close bracket ok"
+        );
     }
 
     #[test]
     fn leading_tilde_supported_mid_path_rejected() {
-        assert!(PathValidator::sanitize("~/code/file.txt").is_ok(), "leading tilde ok");
+        assert!(
+            PathValidator::sanitize("~/code/file.txt").is_ok(),
+            "leading tilde ok"
+        );
         assert!(
             PathValidator::sanitize("/tmp/foo~bar.txt").is_err(),
             "mid-path tilde rejected"
@@ -261,10 +321,25 @@ mod tests {
         assert!(PathValidator::sanitize("/tmp/my-file_name.rs").is_ok());
         assert!(PathValidator::sanitize("/tmp/CamelCase.java").is_ok());
         assert!(PathValidator::sanitize("/tmp/file.with.dots.md").is_ok());
-        assert!(PathValidator::sanitize("/tmp/file 123.txt").is_ok(), "spaces allowed");
-        assert!(PathValidator::sanitize("/tmp/file@domain.txt").is_ok(), "at sign allowed");
-        assert!(PathValidator::sanitize("/tmp/file%20encoded.txt").is_ok(), "percent allowed");
-        assert!(PathValidator::sanitize("/tmp/file+plus.txt").is_ok(), "plus allowed");
-        assert!(PathValidator::sanitize("/tmp/file=equals.txt").is_ok(), "equals allowed");
+        assert!(
+            PathValidator::sanitize("/tmp/file 123.txt").is_ok(),
+            "spaces allowed"
+        );
+        assert!(
+            PathValidator::sanitize("/tmp/file@domain.txt").is_ok(),
+            "at sign allowed"
+        );
+        assert!(
+            PathValidator::sanitize("/tmp/file%20encoded.txt").is_ok(),
+            "percent allowed"
+        );
+        assert!(
+            PathValidator::sanitize("/tmp/file+plus.txt").is_ok(),
+            "plus allowed"
+        );
+        assert!(
+            PathValidator::sanitize("/tmp/file=equals.txt").is_ok(),
+            "equals allowed"
+        );
     }
 }
