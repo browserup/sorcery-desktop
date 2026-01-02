@@ -784,7 +784,7 @@ pub fn update_clone_path(
     new_path: String,
     dialog_state: State<'_, Arc<DialogState>>,
 ) -> Result<(), String> {
-    if dialog_state.update_clone_path(new_path) {
+    if dialog_state.update_clone_path(&new_path) {
         Ok(())
     } else {
         Err("No clone dialog data available".to_string())

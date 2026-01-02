@@ -85,10 +85,10 @@ impl DialogState {
         self.clone_dialog.lock().take()
     }
 
-    pub fn update_clone_path(&self, new_path: String) -> bool {
+    pub fn update_clone_path(&self, new_path: &str) -> bool {
         let mut guard = self.clone_dialog.lock();
         if let Some(ref mut data) = *guard {
-            data.clone_path = new_path;
+            data.clone_path = new_path.to_string();
             true
         } else {
             false
