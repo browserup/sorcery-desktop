@@ -131,15 +131,13 @@ pub async fn promote_workspace(
         }
     }
 
-    settings
-        .workspaces
-        .push(crate::settings::WorkspaceConfig {
-            path,
-            name: Some(name),
-            editor: String::new(),
-            auto_discovered: false,
-            normalized_path: Some(target_path),
-        });
+    settings.workspaces.push(crate::settings::WorkspaceConfig {
+        path,
+        name: Some(name),
+        editor: String::new(),
+        auto_discovered: false,
+        normalized_path: Some(target_path),
+    });
 
     settings_manager
         .save(settings)
@@ -487,9 +485,7 @@ pub async fn open_file_at_revision(
 }
 
 #[tauri::command]
-pub fn revision_dialog_cancelled(
-    _dialog_state: State<'_, Arc<DialogState>>,
-) -> Result<(), String> {
+pub fn revision_dialog_cancelled(_dialog_state: State<'_, Arc<DialogState>>) -> Result<(), String> {
     Ok(())
 }
 
@@ -792,9 +788,7 @@ pub fn update_clone_path(
 }
 
 #[tauri::command]
-pub fn clone_cancelled(
-    _dialog_state: State<'_, Arc<DialogState>>,
-) -> Result<(), String> {
+pub fn clone_cancelled(_dialog_state: State<'_, Arc<DialogState>>) -> Result<(), String> {
     Ok(())
 }
 

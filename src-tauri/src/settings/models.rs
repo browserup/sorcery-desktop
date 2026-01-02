@@ -172,8 +172,7 @@ mod tests {
 
         let worktree_repo = root.path().join("worktree");
         std::fs::create_dir_all(&worktree_repo).expect("worktree repo");
-        std::fs::write(worktree_repo.join(".git"), "gitdir: /tmp/foo")
-            .expect("worktree git file");
+        std::fs::write(worktree_repo.join(".git"), "gitdir: /tmp/foo").expect("worktree git file");
 
         let _non_repo = root.path().join("not_a_repo");
         std::fs::create_dir(&_non_repo).expect("non repo dir");

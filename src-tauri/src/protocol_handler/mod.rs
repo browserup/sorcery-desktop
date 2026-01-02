@@ -350,11 +350,7 @@ impl ProtocolHandler {
         );
 
         // Try to find a workspace matching the workspace name
-        match self
-            .matcher
-            .find_workspace_path(workspace_name, path)
-            .await
-        {
+        match self.matcher.find_workspace_path(workspace_name, path).await {
             Ok(full_path) => {
                 info!(
                     "Found matching workspace '{}', opening locally",

@@ -62,9 +62,7 @@ impl EditorDispatcher {
             .settings_manager
             .get_workspace_for_path(&validated_path)
             .await;
-        let workspace_root = workspace
-            .as_ref()
-            .and_then(|w| w.normalized_path.clone());
+        let workspace_root = workspace.as_ref().and_then(|w| w.normalized_path.clone());
 
         let editor_id = self
             .determine_editor(&validated_path, editor_hint, workspace.as_ref())
@@ -170,10 +168,7 @@ impl EditorDispatcher {
 
         let in_workspace = if let Some(ws) = workspace {
             if !ws.editor.is_empty() {
-                debug!(
-                    "Using workspace editor: {} for path {:?}",
-                    ws.editor, path
-                );
+                debug!("Using workspace editor: {} for path {:?}", ws.editor, path);
                 return Ok(ws.editor.clone());
             }
             debug!("Workspace editor is empty, falling back to default");

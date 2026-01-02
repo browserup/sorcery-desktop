@@ -98,7 +98,9 @@ mod manager_tests {
         let _guard = ProcessGuard::new(&["codium"]);
 
         let registry = EditorRegistry::new();
-        let manager = registry.get("vscodium").expect("VSCodium manager not found");
+        let manager = registry
+            .get("vscodium")
+            .expect("VSCodium manager not found");
 
         let options = OpenOptions {
             line: Some(5),
@@ -107,8 +109,15 @@ mod manager_tests {
         };
 
         let result = manager.open(&test_file, &options).await;
-        assert!(result.is_ok(), "VSCodium manager failed to open file: {:?}", result.err());
-        assert!(wait_for_process("codium", 10), "VSCodium process did not start");
+        assert!(
+            result.is_ok(),
+            "VSCodium manager failed to open file: {:?}",
+            result.err()
+        );
+        assert!(
+            wait_for_process("codium", 10),
+            "VSCodium process did not start"
+        );
     }
 
     #[tokio::test]
@@ -125,8 +134,15 @@ mod manager_tests {
         };
 
         let result = manager.open(&test_file, &options).await;
-        assert!(result.is_ok(), "Sublime manager failed to open file: {:?}", result.err());
-        assert!(wait_for_process("sublime_text", 10), "Sublime Text process did not start");
+        assert!(
+            result.is_ok(),
+            "Sublime manager failed to open file: {:?}",
+            result.err()
+        );
+        assert!(
+            wait_for_process("sublime_text", 10),
+            "Sublime Text process did not start"
+        );
     }
 
     #[tokio::test]
@@ -145,7 +161,11 @@ mod manager_tests {
         };
 
         let result = manager.open(&test_file, &options).await;
-        assert!(result.is_ok(), "Vim manager failed to open file: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Vim manager failed to open file: {:?}",
+            result.err()
+        );
         assert!(wait_for_process("vim", 5), "Vim process did not start");
     }
 
@@ -165,7 +185,11 @@ mod manager_tests {
         };
 
         let result = manager.open(&test_file, &options).await;
-        assert!(result.is_ok(), "Neovim manager failed to open file: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Neovim manager failed to open file: {:?}",
+            result.err()
+        );
         assert!(wait_for_process("nvim", 5), "Neovim process did not start");
     }
 
@@ -185,7 +209,11 @@ mod manager_tests {
         };
 
         let result = manager.open(&test_file, &options).await;
-        assert!(result.is_ok(), "Emacs manager failed to open file: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Emacs manager failed to open file: {:?}",
+            result.err()
+        );
         assert!(wait_for_process("emacs", 5), "Emacs process did not start");
     }
 
@@ -205,7 +233,11 @@ mod manager_tests {
         };
 
         let result = manager.open(&test_file, &options).await;
-        assert!(result.is_ok(), "Nano manager failed to open file: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Nano manager failed to open file: {:?}",
+            result.err()
+        );
         assert!(wait_for_process("nano", 5), "Nano process did not start");
     }
 
@@ -225,7 +257,11 @@ mod manager_tests {
         };
 
         let result = manager.open(&test_file, &options).await;
-        assert!(result.is_ok(), "Micro manager failed to open file: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Micro manager failed to open file: {:?}",
+            result.err()
+        );
         assert!(wait_for_process("micro", 5), "Micro process did not start");
     }
 
@@ -244,7 +280,11 @@ mod manager_tests {
         };
 
         let result = manager.open(&test_file, &options).await;
-        assert!(result.is_ok(), "Kate manager failed to open file: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Kate manager failed to open file: {:?}",
+            result.err()
+        );
         assert!(wait_for_process("kate", 10), "Kate process did not start");
     }
 
@@ -254,7 +294,9 @@ mod manager_tests {
         let _guard = ProcessGuard::new(&["idea"]);
 
         let registry = EditorRegistry::new();
-        let manager = registry.get("idea").expect("IntelliJ IDEA manager not found");
+        let manager = registry
+            .get("idea")
+            .expect("IntelliJ IDEA manager not found");
 
         let options = OpenOptions {
             line: Some(5),
@@ -263,8 +305,15 @@ mod manager_tests {
         };
 
         let result = manager.open(&test_file, &options).await;
-        assert!(result.is_ok(), "IntelliJ manager failed to open file: {:?}", result.err());
-        assert!(wait_for_process("idea", 15), "IntelliJ IDEA process did not start");
+        assert!(
+            result.is_ok(),
+            "IntelliJ manager failed to open file: {:?}",
+            result.err()
+        );
+        assert!(
+            wait_for_process("idea", 15),
+            "IntelliJ IDEA process did not start"
+        );
     }
 
     #[tokio::test]
@@ -282,8 +331,15 @@ mod manager_tests {
         };
 
         let result = manager.open(&test_file, &options).await;
-        assert!(result.is_ok(), "PyCharm manager failed to open file: {:?}", result.err());
-        assert!(wait_for_process("pycharm", 15), "PyCharm process did not start");
+        assert!(
+            result.is_ok(),
+            "PyCharm manager failed to open file: {:?}",
+            result.err()
+        );
+        assert!(
+            wait_for_process("pycharm", 15),
+            "PyCharm process did not start"
+        );
     }
 
     #[tokio::test]
@@ -300,7 +356,11 @@ mod manager_tests {
         };
 
         let result = manager.open(&test_file, &options).await;
-        assert!(result.is_ok(), "Gedit manager failed to open file: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Gedit manager failed to open file: {:?}",
+            result.err()
+        );
         assert!(wait_for_process("gedit", 10), "Gedit process did not start");
     }
 
@@ -320,7 +380,11 @@ mod manager_tests {
         };
 
         let result = manager.open(&test_file, &options).await;
-        assert!(result.is_ok(), "Kakoune manager failed to open file: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "Kakoune manager failed to open file: {:?}",
+            result.err()
+        );
         assert!(wait_for_process("kak", 5), "Kakoune process did not start");
     }
 }
@@ -334,22 +398,14 @@ mod detection_tests {
         let registry = EditorRegistry::new();
 
         let expected_installed = vec![
-            "vscodium",
-            "sublime",
-            "vim",
-            "neovim",
-            "emacs",
-            "nano",
-            "micro",
-            "kate",
-            "idea",
-            "pycharm",
-            "gedit",
-            "kakoune",
+            "vscodium", "sublime", "vim", "neovim", "emacs", "nano", "micro", "kate", "idea",
+            "pycharm", "gedit", "kakoune",
         ];
 
         for editor_id in expected_installed {
-            let manager = registry.get(editor_id).expect(&format!("{} manager not found", editor_id));
+            let manager = registry
+                .get(editor_id)
+                .expect(&format!("{} manager not found", editor_id));
             assert!(
                 manager.is_installed().await,
                 "{} should be detected as installed",
@@ -371,11 +427,18 @@ mod detection_tests {
         ];
 
         for (editor_id, expected_name) in editors_to_check {
-            let manager = registry.get(editor_id).expect(&format!("{} manager not found", editor_id));
+            let manager = registry
+                .get(editor_id)
+                .expect(&format!("{} manager not found", editor_id));
             let binary = manager.find_binary().await;
             assert!(binary.is_some(), "{} binary should be found", editor_id);
             let path = binary.unwrap();
-            assert!(path.exists(), "{} binary path should exist: {:?}", editor_id, path);
+            assert!(
+                path.exists(),
+                "{} binary path should exist: {:?}",
+                editor_id,
+                path
+            );
             assert!(
                 path.to_string_lossy().contains(expected_name),
                 "{} binary path should contain '{}': {:?}",

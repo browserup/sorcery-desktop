@@ -401,7 +401,10 @@ impl JetBrainsManager {
             PathBuf::from(format!("/usr/local/bin/{}", self.toolbox_id)),
             PathBuf::from(format!("/usr/bin/{}", self.toolbox_id)),
             PathBuf::from(format!("/snap/bin/{}", self.toolbox_id)),
-            PathBuf::from(format!("/opt/{}/bin/{}.sh", self.toolbox_id, self.toolbox_id)),
+            PathBuf::from(format!(
+                "/opt/{}/bin/{}.sh",
+                self.toolbox_id, self.toolbox_id
+            )),
         ];
 
         for path in candidates {

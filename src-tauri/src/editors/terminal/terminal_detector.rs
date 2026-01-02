@@ -191,7 +191,12 @@ impl TerminalApp {
     }
 
     #[cfg(target_os = "macos")]
-    fn launch_via_script(&self, app_name: &str, editor: &str, args: &[String]) -> Result<(), String> {
+    fn launch_via_script(
+        &self,
+        app_name: &str,
+        editor: &str,
+        args: &[String],
+    ) -> Result<(), String> {
         use std::process::Stdio;
         use std::time::{SystemTime, UNIX_EPOCH};
 

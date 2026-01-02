@@ -261,12 +261,7 @@ fn get_active_window_title_x11() -> Option<String> {
         return String::from_utf8(title_prop.value).ok();
     }
 
-    let wm_name = conn
-        .intern_atom(false, b"WM_NAME")
-        .ok()?
-        .reply()
-        .ok()?
-        .atom;
+    let wm_name = conn.intern_atom(false, b"WM_NAME").ok()?.reply().ok()?.atom;
     let title_prop = conn
         .get_property(false, window_id, wm_name, AtomEnum::STRING, 0, 1024)
         .ok()?
