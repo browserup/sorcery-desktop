@@ -63,7 +63,10 @@ fn is_valid_branch_name(name: &str) -> bool {
         && name.len() <= 128
         && name.chars().all(|c| {
             c.is_ascii_alphanumeric()
-                || matches!(c, '-' | '_' | '.' | '/' | '@' | ',' | '(' | ')' | '+' | '#' | '=')
+                || matches!(
+                    c,
+                    '-' | '_' | '.' | '/' | '@' | ',' | '(' | ')' | '+' | '#' | '='
+                )
         })
         && !name.starts_with('/')
         && !name.ends_with('/')
@@ -74,9 +77,9 @@ fn is_valid_branch_name(name: &str) -> bool {
 fn is_valid_tag_name(name: &str) -> bool {
     !name.is_empty()
         && name.len() <= 128
-        && name.chars().all(|c| {
-            c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | '/' | '+')
-        })
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | '/' | '+'))
         && !name.starts_with('/')
         && !name.ends_with('/')
         && !name.contains("..")
@@ -97,9 +100,9 @@ fn is_valid_remote_url(url: &str) -> bool {
 
     !path.is_empty()
         && path.len() <= 256
-        && path.chars().all(|c| {
-            c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | '/' | ':' | '@')
-        })
+        && path
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | '/' | ':' | '@'))
         && !path.contains("..")
         && !path.contains("//")
         && !path.starts_with('/')
@@ -109,9 +112,9 @@ fn is_valid_remote_url(url: &str) -> bool {
 fn is_valid_workspace_name(name: &str) -> bool {
     !name.is_empty()
         && name.len() <= 128
-        && name.chars().all(|c| {
-            c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.')
-        })
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
 }
 
 impl SrcuriParser {
@@ -347,8 +350,8 @@ impl SrcuriParser {
                 // Examples: "inputprocessing%2Fc%2B%2B" → "inputprocessing/c++"
                 //           "%23pr470" → "#pr470"
                 // The server URL-encodes these because + means space and # is fragment delimiter.
-                let decoded = urlencoding::decode(value)
-                    .unwrap_or(std::borrow::Cow::Borrowed(value));
+                let decoded =
+                    urlencoding::decode(value).unwrap_or(std::borrow::Cow::Borrowed(value));
                 let decoded_str = decoded.into_owned();
 
                 match key {
@@ -390,7 +393,13 @@ impl SrcuriParser {
     fn safe_display(s: &str) -> String {
         s.chars()
             .take(100)
-            .map(|c| if c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | '/' | ' ') { c } else { '?' })
+            .map(|c| {
+                if c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | '/' | ' ') {
+                    c
+                } else {
+                    '?'
+                }
+            })
             .collect()
     }
 
@@ -438,47 +447,42 @@ impl SrcuriParser {
     }
 
     fn parse_path_with_location(path: &str) -> Result<(String, Option<usize>, Option<usize>)> {
-        let mut parts: Vec<&str> = path.rsplitn(3, ':').collect();
-        parts.reverse();
+        let mut end = path.len();
+        let mut line: Option<usize> = None;
+        let mut column: Option<usize> = None;
 
-        match parts.len() {
-            1 => {
-                // No colons in path
-                Ok((path.to_string(), None, None))
-            }
-            2 => {
-                // One colon: file.txt:LINE
-                if let Ok(line) = parts[1].parse::<usize>() {
-                    Ok((parts[0].to_string(), Some(line), None))
-                } else {
-                    // Malformed line number - use filename without colon suffix
-                    Ok((parts[0].to_string(), None, None))
-                }
-            }
-            3 => {
-                // Two colons: file.txt:LINE:COL
-                if let (Ok(line), Ok(column)) =
-                    (parts[1].parse::<usize>(), parts[2].parse::<usize>())
-                {
-                    if column <= 120 {
-                        Ok((parts[0].to_string(), Some(line), Some(column)))
-                    } else {
-                        // Column out of range - keep line, drop column
-                        Ok((parts[0].to_string(), Some(line), None))
+        let last_colon = Self::find_non_drive_colon(path, end);
+        let penultimate_colon = last_colon.and_then(|idx| Self::find_non_drive_colon(path, idx));
+
+        if let Some(last_idx) = last_colon {
+            if let Some(line_idx) = penultimate_colon {
+                let line_segment = &path[line_idx + 1..last_idx];
+                let column_segment = &path[last_idx + 1..end];
+
+                if let Ok(parsed_line) = line_segment.parse::<usize>() {
+                    line = Some(parsed_line);
+
+                    if let Ok(parsed_column) = column_segment.parse::<usize>() {
+                        if parsed_column <= 120 {
+                            column = Some(parsed_column);
+                        }
                     }
-                } else if let Ok(line) = parts[1].parse::<usize>() {
-                    // Valid line, malformed column - keep line, drop column
-                    Ok((parts[0].to_string(), Some(line), None))
-                } else {
-                    // Malformed line - use filename without colon suffix
-                    Ok((parts[0].to_string(), None, None))
                 }
-            }
-            _ => {
-                // More than 2 colons - use first part as filename, ignore rest
-                Ok((parts[0].to_string(), None, None))
+
+                // Drop :line(:column) suffix regardless of parse success to avoid leaking data
+                end = line_idx;
+            } else {
+                let line_segment = &path[last_idx + 1..end];
+                if let Ok(parsed_line) = line_segment.parse::<usize>() {
+                    line = Some(parsed_line);
+                }
+                end = last_idx;
             }
         }
+
+        let file_path = path[..end].to_string();
+
+        Ok((file_path, line, column))
     }
 
     fn is_absolute_path(path: &str) -> bool {
@@ -491,6 +495,47 @@ impl SrcuriParser {
             Some((parts[0].to_string(), parts[1].to_string()))
         } else {
             None
+        }
+    }
+
+    fn find_non_drive_colon(path: &str, before: usize) -> Option<usize> {
+        if before == 0 {
+            return None;
+        }
+
+        let mut slice_end = before;
+        while let Some(pos) = path[..slice_end].rfind(':') {
+            if Self::is_windows_drive_colon(path, pos) {
+                if pos == 0 {
+                    return None;
+                }
+                slice_end = pos;
+                continue;
+            }
+            return Some(pos);
+        }
+        None
+    }
+
+    fn is_windows_drive_colon(path: &str, colon_idx: usize) -> bool {
+        if colon_idx == 0 || colon_idx >= path.len() {
+            return false;
+        }
+
+        let bytes = path.as_bytes();
+        let drive_char = bytes[colon_idx - 1];
+        if !drive_char.is_ascii_alphabetic() {
+            return false;
+        }
+
+        if colon_idx == 1 {
+            return true;
+        }
+
+        match bytes.get(colon_idx + 1) {
+            Some(b'\\') | Some(b'/') => true,
+            None => true,
+            _ => false,
         }
     }
 }
@@ -607,6 +652,45 @@ mod tests {
             SrcuriRequest::FullPath {
                 full_path: "/Users/ebeland/apps/myproject/README.md".to_string(),
                 line: Some(10),
+                column: None,
+            }
+        );
+    }
+
+    #[test]
+    fn test_windows_absolute_path_with_line() {
+        let request = SrcuriParser::parse("srcuri://C:/Projects/app/src/main.rs:42").unwrap();
+        assert_eq!(
+            request,
+            SrcuriRequest::FullPath {
+                full_path: "C:/Projects/app/src/main.rs".to_string(),
+                line: Some(42),
+                column: None,
+            }
+        );
+    }
+
+    #[test]
+    fn test_windows_absolute_path_with_line_and_column() {
+        let request = SrcuriParser::parse("srcuri://D:/repos/tool/src/lib.rs:15:8").unwrap();
+        assert_eq!(
+            request,
+            SrcuriRequest::FullPath {
+                full_path: "D:/repos/tool/src/lib.rs".to_string(),
+                line: Some(15),
+                column: Some(8),
+            }
+        );
+    }
+
+    #[test]
+    fn test_windows_drive_with_non_numeric_suffix_preserved() {
+        let request = SrcuriParser::parse("srcuri://C:/logs/app:latest").unwrap();
+        assert_eq!(
+            request,
+            SrcuriRequest::FullPath {
+                full_path: "C:/logs/app".to_string(),
+                line: None,
                 column: None,
             }
         );
@@ -1350,7 +1434,10 @@ mod tests {
         // 6 chars is too short (minimum 7)
         let result = SrcuriParser::parse("srcuri://myrepo/file.rs?commit=abc123");
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Invalid commit SHA"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Invalid commit SHA"));
     }
 
     #[test]
@@ -1358,7 +1445,10 @@ mod tests {
         // Contains 'g' which is not hex
         let result = SrcuriParser::parse("srcuri://myrepo/file.rs?commit=abc123g");
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Invalid commit SHA"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Invalid commit SHA"));
     }
 
     #[test]
@@ -1371,8 +1461,9 @@ mod tests {
     #[test]
     fn test_commit_sha_valid_full() {
         // 40 hex chars (full SHA-1) is valid
-        let result =
-            SrcuriParser::parse("srcuri://myrepo/file.rs?commit=abc123def456789012345678901234567890abcd");
+        let result = SrcuriParser::parse(
+            "srcuri://myrepo/file.rs?commit=abc123def456789012345678901234567890abcd",
+        );
         assert!(result.is_ok());
     }
 
@@ -1381,7 +1472,10 @@ mod tests {
         // Semicolon is a shell metacharacter
         let result = SrcuriParser::parse("srcuri://myrepo/file.rs?branch=main;rm%20-rf");
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Invalid branch name"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Invalid branch name"));
     }
 
     #[test]
@@ -1412,7 +1506,10 @@ mod tests {
         let result =
             SrcuriParser::parse("srcuri://myrepo/file.rs?remote=github.com/owner/repo;whoami");
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Invalid remote URL"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Invalid remote URL"));
     }
 
     #[test]
@@ -1438,9 +1535,8 @@ mod tests {
 
     #[test]
     fn test_valid_remote_url_accepted() {
-        let result = SrcuriParser::parse(
-            "srcuri://myrepo/file.rs?remote=https://github.com/owner/repo",
-        );
+        let result =
+            SrcuriParser::parse("srcuri://myrepo/file.rs?remote=https://github.com/owner/repo");
         assert!(result.is_ok());
     }
 
@@ -1620,5 +1716,4 @@ mod tests {
             }
         );
     }
-
 }

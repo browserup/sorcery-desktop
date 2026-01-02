@@ -103,7 +103,7 @@ impl ActiveWorkspaceTracker {
 
         for workspace_config in &workspaces {
             if let Some(workspace_path) = &workspace_config.normalized_path {
-                let probe_result = probe::probe_workspace(workspace_path, &sys);
+                let probe_result = probe::probe_workspace(workspace_path, &sys).await;
 
                 if let Some(last_active) = probe_result.last_active {
                     let mut mru_data = self.mru_data.write().await;
