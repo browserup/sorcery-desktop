@@ -434,7 +434,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let _tray = TrayIconBuilder::new()
                 .menu(&menu)
                 .tooltip("Sorcery Desktop - Editor Link Handler")
-                .icon(app.default_window_icon().unwrap().clone())
+                .icon(
+                    app.default_window_icon()
+                        .expect("app icon must be configured in tauri.conf.json")
+                        .clone(),
+                )
                 .on_menu_event(|app, event| {
                     match event.id().as_ref() {
                         "settings" => {

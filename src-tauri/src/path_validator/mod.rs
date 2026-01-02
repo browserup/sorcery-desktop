@@ -10,8 +10,10 @@ use std::sync::Arc;
 // Parentheses and square brackets are intentionally omitted—they're common in
 // macOS-generated directory names and Git repo folders and are safe because we
 // never invoke a shell when launching editors.
-static SUSPICIOUS_PATTERNS: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r#"(\.\./|\.\.\\|//|[\x00-\x1f]|[<>|?*;'`$&{}"]|#)"#).unwrap());
+static SUSPICIOUS_PATTERNS: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r#"(\.\./|\.\.\\|//|[\x00-\x1f]|[<>|?*;'`$&{}"]|#)"#)
+        .expect("SUSPICIOUS_PATTERNS regex is valid")
+});
 
 // Binary formats that can't be meaningfully edited as text.
 // Script files (.sh, .bat, .ps1, etc.) are intentionally NOT blocked -

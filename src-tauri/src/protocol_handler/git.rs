@@ -488,8 +488,15 @@ impl GitHandler {
                 &["worktree", "remove", "--force", &path_str],
             );
 
-            if output.is_err() || !output.unwrap().status.success() {
-                // Fallback: remove directory and prune
+            let removed = match output {
+                Ok(out) => out.status.success(),
+                Err(e) => {
+                    tracing::debug!("git worktree remove failed: {}", e);
+                    false
+                }
+            };
+
+            if !removed {
                 if let Err(e) = std::fs::remove_dir_all(&path) {
                     tracing::warn!(
                         "Failed to remove worktree directory {}: {}",
