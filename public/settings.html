@@ -710,10 +710,18 @@
               <span>Allow opening files outside of configured workspaces</span>
             </label>
           </div>
-          <div class="form-group" style="margin-bottom: 0;">
+          <div class="form-group">
             <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
               <input type="checkbox" id="auto-switch-clean-branches" style="width: auto; cursor: pointer;" checked>
               <span>Auto-switch branches when working tree is clean</span>
+            </label>
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+              <input type="checkbox" id="strip-git-diff-prefixes" style="width: auto; cursor: pointer;" checked>
+              <span>Strip git diff prefixes</span>
+              <span style="color: var(--text-tertiary); cursor: help;"
+                    title="Automatically strip a/ and b/ prefixes from paths like a/README.md or b/src/main.rs. These prefixes are added by git diff output.">ⓘ</span>
             </label>
           </div>
         </div>
@@ -974,6 +982,7 @@
     let allowNonWorkspaceFiles = false;
     let preferredTerminal = 'auto';
     let autoSwitchCleanBranches = true;
+    let stripGitDiffPrefixes = true;
     let defaultWorkspacesFolder = '~/code';
     let installedEditors = [];
 
@@ -1012,6 +1021,7 @@
         allowNonWorkspaceFiles = settings.defaults?.allow_non_workspace_files ?? false;
         preferredTerminal = settings.defaults?.preferred_terminal || 'auto';
         autoSwitchCleanBranches = settings.defaults?.auto_switch_clean_branches ?? true;
+        stripGitDiffPrefixes = settings.defaults?.strip_git_diff_prefixes ?? true;
 
         // Auto-detect repo folder on first launch (when not yet saved in settings)
         if (!settings.defaults?.default_workspaces_folder) {
@@ -1025,6 +1035,7 @@
         document.getElementById('allow-non-workspace-files').checked = allowNonWorkspaceFiles;
         document.getElementById('preferred-terminal').value = preferredTerminal;
         document.getElementById('auto-switch-clean-branches').checked = autoSwitchCleanBranches;
+        document.getElementById('strip-git-diff-prefixes').checked = stripGitDiffPrefixes;
         document.getElementById('default-workspaces-folder').value = defaultWorkspacesFolder;
         renderWorkspaces();
         await loadDiscoveredWorkspaces();
@@ -1071,6 +1082,7 @@
           allow_non_workspace_files: allowNonWorkspaceFiles,
           preferred_terminal: preferredTerminal,
           auto_switch_clean_branches: autoSwitchCleanBranches,
+          strip_git_diff_prefixes: stripGitDiffPrefixes,
           default_workspaces_folder: defaultWorkspacesFolder
         }
       };
@@ -1300,6 +1312,11 @@
 
     document.getElementById('auto-switch-clean-branches').addEventListener('change', async (e) => {
       autoSwitchCleanBranches = e.target.checked;
+      await saveSettings();
+    });
+
+    document.getElementById('strip-git-diff-prefixes').addEventListener('change', async (e) => {
+      stripGitDiffPrefixes = e.target.checked;
       await saveSettings();
     });
 

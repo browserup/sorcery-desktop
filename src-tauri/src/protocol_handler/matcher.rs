@@ -31,6 +31,14 @@ pub enum WorkspaceLookupError {
     PathNotFound(String, String),
 }
 
+fn strip_git_diff_prefix(path: &str) -> Option<&str> {
+    if path.starts_with("a/") || path.starts_with("b/") {
+        Some(&path[2..])
+    } else {
+        None
+    }
+}
+
 impl PathMatcher {
     pub fn new(
         settings_manager: Arc<SettingsManager>,
@@ -50,6 +58,25 @@ impl PathMatcher {
     }
 
     pub async fn find_partial_matches(&self, partial_path: &str) -> Result<Vec<WorkspaceMatch>> {
+        let matches = self.find_partial_matches_inner(partial_path).await?;
+
+        if matches.is_empty() {
+            let settings = self.settings_manager.get().await;
+            if settings.defaults.strip_git_diff_prefixes {
+                if let Some(stripped) = strip_git_diff_prefix(partial_path) {
+                    debug!(
+                        "No matches for '{}', retrying with stripped git diff prefix: '{}'",
+                        partial_path, stripped
+                    );
+                    return self.find_partial_matches_inner(stripped).await;
+                }
+            }
+        }
+
+        Ok(matches)
+    }
+
+    async fn find_partial_matches_inner(&self, partial_path: &str) -> Result<Vec<WorkspaceMatch>> {
         let workspaces = self.settings_manager.get_workspaces().await;
         let mut matches = Vec::new();
 
@@ -84,6 +111,33 @@ impl PathMatcher {
     }
 
     pub async fn find_workspace_path(
+        &self,
+        workspace_name: &str,
+        relative_path: &str,
+    ) -> Result<PathBuf, WorkspaceLookupError> {
+        match self
+            .find_workspace_path_inner(workspace_name, relative_path)
+            .await
+        {
+            Ok(path) => Ok(path),
+            Err(WorkspaceLookupError::PathNotFound(ws, _)) => {
+                let settings = self.settings_manager.get().await;
+                if settings.defaults.strip_git_diff_prefixes {
+                    if let Some(stripped) = strip_git_diff_prefix(relative_path) {
+                        debug!(
+                            "Path not found in '{}', retrying with stripped git diff prefix: '{}'",
+                            workspace_name, stripped
+                        );
+                        return self.find_workspace_path_inner(workspace_name, stripped).await;
+                    }
+                }
+                Err(WorkspaceLookupError::PathNotFound(ws, relative_path.to_string()))
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    async fn find_workspace_path_inner(
         &self,
         workspace_name: &str,
         relative_path: &str,
@@ -324,5 +378,83 @@ mod tests {
         assert_eq!(matches.len(), 1);
         assert_eq!(matches[0].full_file_path, file_path);
         assert_eq!(matches[0].workspace_name, "my-workspace");
+    }
+
+    #[tokio::test]
+    async fn partial_match_strips_git_diff_a_prefix() {
+        let workspace_dir = TempDir::new().expect("workspace dir");
+        let file_path = workspace_dir.path().join("src").join("lib.rs");
+        std::fs::create_dir_all(file_path.parent().unwrap()).unwrap();
+        std::fs::write(&file_path, "fn test() {}").unwrap();
+
+        let matcher = build_matcher(&workspace_dir.path().to_path_buf(), "test-ws").await;
+
+        let matches = matcher
+            .find_partial_matches("a/src/lib.rs")
+            .await
+            .expect("matcher result");
+
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].full_file_path, file_path);
+    }
+
+    #[tokio::test]
+    async fn partial_match_strips_git_diff_b_prefix() {
+        let workspace_dir = TempDir::new().expect("workspace dir");
+        let file_path = workspace_dir.path().join("README.md");
+        std::fs::write(&file_path, "# Test").unwrap();
+
+        let matcher = build_matcher(&workspace_dir.path().to_path_buf(), "test-ws").await;
+
+        let matches = matcher
+            .find_partial_matches("b/README.md")
+            .await
+            .expect("matcher result");
+
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].full_file_path, file_path);
+    }
+
+    #[tokio::test]
+    async fn partial_match_preserves_real_a_directory() {
+        let workspace_dir = TempDir::new().expect("workspace dir");
+        let file_path = workspace_dir.path().join("a").join("file.rs");
+        std::fs::create_dir_all(file_path.parent().unwrap()).unwrap();
+        std::fs::write(&file_path, "fn a() {}").unwrap();
+
+        let matcher = build_matcher(&workspace_dir.path().to_path_buf(), "test-ws").await;
+
+        let matches = matcher
+            .find_partial_matches("a/file.rs")
+            .await
+            .expect("matcher result");
+
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].full_file_path, file_path);
+    }
+
+    #[tokio::test]
+    async fn workspace_path_strips_git_diff_prefix() {
+        let workspace_dir = TempDir::new().expect("workspace dir");
+        let file_path = workspace_dir.path().join("src").join("main.rs");
+        std::fs::create_dir_all(file_path.parent().unwrap()).unwrap();
+        std::fs::write(&file_path, "fn main() {}").unwrap();
+
+        let matcher = build_matcher(&workspace_dir.path().to_path_buf(), "myproject").await;
+
+        let result = matcher
+            .find_workspace_path("myproject", "a/src/main.rs")
+            .await
+            .expect("should find path after stripping prefix");
+
+        assert_eq!(result, file_path);
+    }
+
+    #[test]
+    fn strip_git_diff_prefix_works() {
+        assert_eq!(strip_git_diff_prefix("a/src/lib.rs"), Some("src/lib.rs"));
+        assert_eq!(strip_git_diff_prefix("b/README.md"), Some("README.md"));
+        assert_eq!(strip_git_diff_prefix("src/lib.rs"), None);
+        assert_eq!(strip_git_diff_prefix("ab/file.rs"), None);
     }
 }

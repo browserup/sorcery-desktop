@@ -50,6 +50,9 @@ pub struct DefaultEditorConfig {
 
     #[serde(default)]
     pub ignored_workspaces: Vec<String>,
+
+    #[serde(default = "default_strip_git_diff_prefixes")]
+    pub strip_git_diff_prefixes: bool,
 }
 
 fn default_editor() -> String {
@@ -113,6 +116,10 @@ fn default_auto_switch_clean_branches() -> bool {
     true
 }
 
+fn default_strip_git_diff_prefixes() -> bool {
+    true
+}
+
 impl Default for DefaultEditorConfig {
     fn default() -> Self {
         Self {
@@ -122,6 +129,7 @@ impl Default for DefaultEditorConfig {
             default_workspaces_folder: default_workspaces_folder(),
             auto_switch_clean_branches: default_auto_switch_clean_branches(),
             ignored_workspaces: Vec::new(),
+            strip_git_diff_prefixes: default_strip_git_diff_prefixes(),
         }
     }
 }
