@@ -69,7 +69,7 @@ fn count_git_repos(dir: &std::path::Path) -> usize {
         .map(|entries| {
             entries
                 .filter_map(|e| e.ok())
-                .filter(|e| e.path().join(".git").is_dir())
+                .filter(|e| e.path().join(".git").exists())
                 .count()
         })
         .unwrap_or(0)
@@ -156,4 +156,28 @@ pub struct WorkspaceConfig {
 pub struct LastSeenData {
     pub editors: HashMap<String, i64>,
     pub most_recent: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::count_git_repos;
+    use tempfile::TempDir;
+
+    #[test]
+    fn count_git_repos_counts_worktree_style_git_dirs() {
+        let root = TempDir::new().expect("temp dir");
+
+        let classic_repo = root.path().join("classic");
+        std::fs::create_dir_all(classic_repo.join(".git")).expect("classic repo");
+
+        let worktree_repo = root.path().join("worktree");
+        std::fs::create_dir_all(&worktree_repo).expect("worktree repo");
+        std::fs::write(worktree_repo.join(".git"), "gitdir: /tmp/foo")
+            .expect("worktree git file");
+
+        let _non_repo = root.path().join("not_a_repo");
+        std::fs::create_dir(&_non_repo).expect("non repo dir");
+
+        assert_eq!(count_git_repos(root.path()), 2);
+    }
 }
