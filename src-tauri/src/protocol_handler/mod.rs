@@ -38,43 +38,64 @@ impl ProtocolHandler {
         let request = SrcuriParser::parse(url).context("Failed to parse srcuri URL")?;
 
         match request {
-            SrcuriRequest::PartialPath { path, line, column } => {
-                self.handle_partial_path(&path, line, column).await
-            }
-            SrcuriRequest::WorkspacePath {
+            SrcuriRequest::ImplicitWorkspace {
                 workspace,
                 path,
                 line,
                 column,
+                git_ref,
                 remote,
             } => {
-                self.handle_workspace_path(&workspace, &path, line, column, remote.as_deref())
+                if let Some(ref git_ref) = git_ref {
+                    self.handle_revision_path(
+                        &workspace,
+                        &path,
+                        git_ref,
+                        line,
+                        column,
+                        remote.as_deref(),
+                    )
                     .await
+                } else {
+                    self.handle_workspace_path(&workspace, &path, line, column, remote.as_deref())
+                        .await
+                }
             }
-            SrcuriRequest::FullPath {
+            SrcuriRequest::ExplicitWorkspace {
+                workspace,
+                path,
+                line,
+                column,
+                git_ref,
+                remote,
+            } => {
+                if let Some(ref git_ref) = git_ref {
+                    self.handle_revision_path(
+                        &workspace,
+                        &path,
+                        git_ref,
+                        line,
+                        column,
+                        remote.as_deref(),
+                    )
+                    .await
+                } else {
+                    self.handle_workspace_path(&workspace, &path, line, column, remote.as_deref())
+                        .await
+                }
+            }
+            SrcuriRequest::MatchPath {
+                path,
+                line,
+                column,
+                workspace_hint,
+            } => self.handle_match_path(&path, line, column, workspace_hint.as_deref()).await,
+            SrcuriRequest::AbsolutePath {
                 full_path,
                 line,
                 column,
-            } => self.handle_full_path(&full_path, line, column).await,
-            SrcuriRequest::RevisionPath {
-                workspace,
-                path,
-                git_ref,
-                line,
-                column,
-                remote,
-            } => {
-                self.handle_revision_path(
-                    &workspace,
-                    &path,
-                    &git_ref,
-                    line,
-                    column,
-                    remote.as_deref(),
-                )
-                .await
-            }
-            SrcuriRequest::ProviderPassthrough {
+            } => self.handle_absolute_path(&full_path, line, column).await,
+            SrcuriRequest::ExternalUrl {
                 provider,
                 repo_name,
                 provider_path,
@@ -85,7 +106,7 @@ impl ProtocolHandler {
                 workspace_override,
                 fragment,
             } => {
-                self.handle_provider_passthrough(
+                self.handle_external_url(
                     &provider,
                     &repo_name,
                     &provider_path,
@@ -101,13 +122,17 @@ impl ProtocolHandler {
         }
     }
 
-    async fn handle_partial_path(
+    async fn handle_match_path(
         &self,
         path: &str,
         line: Option<usize>,
         column: Option<usize>,
+        workspace_hint: Option<&str>,
     ) -> Result<HandleResult> {
-        info!("Handling partial path: {}", path);
+        info!("Handling match path: {}", path);
+        if let Some(hint) = workspace_hint {
+            info!("  workspace hint: {}", hint);
+        }
 
         let mut matches = self.matcher.find_partial_matches(path).await?;
 
@@ -122,17 +147,14 @@ impl ProtocolHandler {
                 workspace_match.full_file_path.display()
             );
 
+            let file_path_str = workspace_match.full_file_path.to_string_lossy().to_string();
             self.dispatcher
-                .open(
-                    &workspace_match.full_file_path.to_string_lossy(),
-                    line,
-                    column,
-                    false,
-                    None,
-                )
+                .open(&file_path_str, line, column, false, None)
                 .await?;
 
-            return Ok(HandleResult::Opened);
+            return Ok(HandleResult::Opened {
+                file_path: file_path_str,
+            });
         }
 
         self.matcher.sort_by_recent_usage(&mut matches).await;
@@ -160,10 +182,13 @@ impl ProtocolHandler {
 
         match self.matcher.find_workspace_path(workspace, path).await {
             Ok(full_path) => {
+                let file_path_str = full_path.to_string_lossy().to_string();
                 self.dispatcher
-                    .open(&full_path.to_string_lossy(), line, column, false, None)
+                    .open(&file_path_str, line, column, false, None)
                     .await?;
-                Ok(HandleResult::Opened)
+                Ok(HandleResult::Opened {
+                    file_path: file_path_str,
+                })
             }
             Err(WorkspaceLookupError::WorkspaceNotFound(_)) if remote.is_some() => {
                 let remote_url = remote.unwrap();
@@ -190,13 +215,13 @@ impl ProtocolHandler {
         }
     }
 
-    async fn handle_full_path(
+    async fn handle_absolute_path(
         &self,
         full_path: &str,
         line: Option<usize>,
         column: Option<usize>,
     ) -> Result<HandleResult> {
-        info!("Handling full path: {}", full_path);
+        info!("Handling absolute path: {}", full_path);
 
         let mut matches = self.matcher.find_full_path_matches(full_path).await?;
 
@@ -206,7 +231,9 @@ impl ProtocolHandler {
                 self.dispatcher
                     .open(full_path, line, column, false, None)
                     .await?;
-                return Ok(HandleResult::Opened);
+                return Ok(HandleResult::Opened {
+                    file_path: full_path.to_string(),
+                });
             } else {
                 bail!(
                     "File '{}' not found in any workspace and non-workspace files are disabled",
@@ -222,17 +249,14 @@ impl ProtocolHandler {
                 workspace_match.full_file_path.display()
             );
 
+            let file_path_str = workspace_match.full_file_path.to_string_lossy().to_string();
             self.dispatcher
-                .open(
-                    &workspace_match.full_file_path.to_string_lossy(),
-                    line,
-                    column,
-                    false,
-                    None,
-                )
+                .open(&file_path_str, line, column, false, None)
                 .await?;
 
-            return Ok(HandleResult::Opened);
+            return Ok(HandleResult::Opened {
+                file_path: file_path_str,
+            });
         }
 
         self.matcher.sort_by_recent_usage(&mut matches).await;
@@ -304,10 +328,13 @@ impl ProtocolHandler {
 
         if GitHandler::should_skip_revision_dialog(&git_root, rev)? {
             info!("Already on target revision {}, opening directly", rev);
+            let file_path_str = full_path.to_string_lossy().to_string();
             self.dispatcher
-                .open(&full_path.to_string_lossy(), line, column, false, None)
+                .open(&file_path_str, line, column, false, None)
                 .await?;
-            return Ok(HandleResult::Opened);
+            return Ok(HandleResult::Opened {
+                file_path: file_path_str,
+            });
         }
 
         let current_ref = GitHandler::get_current_ref(&git_root)?;
@@ -330,7 +357,7 @@ impl ProtocolHandler {
         })
     }
 
-    async fn handle_provider_passthrough(
+    async fn handle_external_url(
         &self,
         provider: &str,
         repo_name: &str,
@@ -342,10 +369,9 @@ impl ProtocolHandler {
         workspace_override: Option<&str>,
         fragment: Option<&str>,
     ) -> Result<HandleResult> {
-        // Use explicit workspace override if provided, otherwise use repo name
         let workspace_name = workspace_override.unwrap_or(repo_name);
         info!(
-            "Handling provider-passthrough: {} (workspace: {})",
+            "Handling external URL: {} (workspace: {})",
             provider, workspace_name
         );
 
@@ -372,10 +398,13 @@ impl ProtocolHandler {
                         .await;
                 }
 
+                let file_path_str = full_path.to_string_lossy().to_string();
                 self.dispatcher
-                    .open(&full_path.to_string_lossy(), line, column, false, None)
+                    .open(&file_path_str, line, column, false, None)
                     .await?;
-                Ok(HandleResult::Opened)
+                Ok(HandleResult::Opened {
+                    file_path: file_path_str,
+                })
             }
             Err(_) => {
                 let mut url = String::from("https://srcuri.com/");
@@ -394,7 +423,7 @@ impl ProtocolHandler {
 
 #[derive(Debug)]
 pub enum HandleResult {
-    Opened,
+    Opened { file_path: String },
     ShowChooser {
         matches: Vec<WorkspaceMatch>,
         line: Option<usize>,

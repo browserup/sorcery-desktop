@@ -553,8 +553,8 @@ pub async fn test_protocol_url(
     let duration = start.elapsed();
 
     match result {
-        Ok(HandleResult::Opened) => {
-            GIT_COMMAND_LOG.log_request(&url, true, "opened", "File opened in editor", duration);
+        Ok(HandleResult::Opened { file_path }) => {
+            GIT_COMMAND_LOG.log_request(&url, true, "opened", &file_path, duration);
             Ok(())
         }
         Ok(HandleResult::ShowChooser {

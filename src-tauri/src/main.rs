@@ -50,9 +50,9 @@ async fn handle_protocol_result(
     let dialog_state = app_handle.state::<Arc<DialogState>>();
 
     match result {
-        Ok(protocol_handler::HandleResult::Opened) => {
-            tracing::info!("Request: file opened successfully");
-            GIT_COMMAND_LOG.log_request(url, true, "opened", "File opened in editor", duration);
+        Ok(protocol_handler::HandleResult::Opened { file_path }) => {
+            tracing::info!("Request: file opened successfully: {}", file_path);
+            GIT_COMMAND_LOG.log_request(url, true, "opened", &file_path, duration);
             #[cfg(target_os = "macos")]
             hide_app();
         }
@@ -316,8 +316,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         if url.starts_with("srcuri://") {
             tracing::info!("Processing command-line URL: {}", url);
             match protocol_handler.handle_url(url).await {
-                Ok(protocol_handler::HandleResult::Opened) => {
-                    tracing::info!("File opened successfully via command-line");
+                Ok(protocol_handler::HandleResult::Opened { file_path }) => {
+                    tracing::info!("File opened successfully via command-line: {}", file_path);
                     return Ok(());
                 }
                 Ok(_) => {
