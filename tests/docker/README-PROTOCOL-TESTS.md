@@ -66,8 +66,8 @@ test_protocol() {
 }
 
 # Test cases
-test_protocol "srcuri://srcuri/README.md:10:5" "code"
-test_protocol "srcuri://srcuri/src/main.rs:42" "idea"
+test_protocol "srcuri://@srcuri/README.md:10:5" "code"
+test_protocol "srcuri://@srcuri/src/main.rs:42" "idea"
 test_protocol "srcuri:///absolute/path/file.txt:100" "vim"
 ```
 

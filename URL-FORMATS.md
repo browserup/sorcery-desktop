@@ -9,36 +9,20 @@ Sorcery Desktop uses the `srcuri://` protocol (also known as the Sorcery protoco
 ## URL Format
 
 ```
-srcuri://<workspace>/<path>:<line>:<column>
+srcuri://<authority>/<path>:<line>:<column>
 ```
 
-## Three Types of URLs
+The **authority** determines how the link is interpreted:
+- A **workspace name** (most common) — opens file relative to that workspace
+- A **reserved token** (`workspace`, `match`, `abs`, `ext`) — explicit mode
 
-### 1. Absolute Path (Full File System Path)
+## Four Link Modes
 
-**Format:** `srcuri:///<absolute-path>:<line>:<column>`
-
-**Note the triple slash** `///` - this indicates an absolute file system path.
-
-**Examples:**
-```
-srcuri:///etc/hosts:1
-srcuri:///Users/ebeland/apps/sorcery/README.md:50
-srcuri:///Users/ebeland/apps/sorcery/src-tauri/src/main.rs:100:5
-srcuri:///tmp/test.txt:42:10
-```
-
-**When to use:**
-- You know the exact file system path
-- Sharing links within the same machine
-- Testing specific files
-- No workspace mapping needed
-
-### 2. Workspace Path (Portable, Recommended)
+### 1. Workspace Mode (Implicit) — Recommended
 
 **Format:** `srcuri://<workspace>/<path>:<line>:<column>`
 
-**Note the double slash** `//` - followed by workspace name.
+The authority IS the workspace name. This is the shortest and most common format.
 
 **Examples:**
 ```
@@ -58,6 +42,8 @@ srcuri://myproject/src/App.tsx:100:5
 2. Each developer maps `sorcery` to their local clone path
 3. URLs work for everyone regardless of where they cloned the repo
 
+**Strict behavior:** If the workspace is not configured, Sorcery shows an error. It does NOT search other workspaces or fall back to absolute paths. Use Match Mode for flexible cross-workspace search.
+
 **Example workspace mapping:**
 ```json
 {
@@ -68,15 +54,34 @@ srcuri://myproject/src/App.tsx:100:5
 }
 ```
 
-### 3. Partial Path (Searches All Workspaces)
+### 2. Workspace Mode (Explicit)
 
-**Format:** `srcuri://<filename>:<line>:<column>`
+**Format:** `srcuri://workspace/<workspace>/<path>:<line>:<column>`
+
+Uses the `workspace` reserved authority for explicit clarity.
 
 **Examples:**
 ```
-srcuri://README.md:1
-srcuri://main.rs:50
-srcuri://App.tsx:100
+srcuri://workspace/sorcery/README.md:1
+srcuri://workspace/myproject/src/App.tsx:100:5
+```
+
+**When to use:**
+- When you want maximum clarity about intent
+- Both implicit and explicit forms work identically
+
+### 3. Match Mode (Search All Workspaces)
+
+**Format:** `srcuri://match/<path>:<line>:<column>`
+
+Uses the `match` reserved authority to search all workspaces.
+
+**Examples:**
+```
+srcuri://match/README.md:1
+srcuri://match/main.rs:50
+srcuri://match/App.tsx:100
+srcuri://match/src/utils.py:10?workspaceHint=backend
 ```
 
 **When to use:**
@@ -85,19 +90,78 @@ srcuri://App.tsx:100
 - Don't remember the workspace name
 
 **How it works:**
-1. Searches all configured workspaces for matching files
-2. If one match found, opens it immediately
-3. If multiple matches found, shows chooser dialog
-4. If no matches found, shows error
+1. **Workspace name detection**: If the path contains a workspace name as a segment (case-insensitive), Sorcery extracts the relative path and resolves it in that workspace
+2. If `?workspaceHint=<name>` is provided, that workspace is prioritized
+3. Otherwise, searches all configured workspaces for matching files
+4. If one match found, opens it immediately
+5. If multiple matches found, shows chooser dialog (sorted by most recently used)
+6. If no matches found, shows error
+
+**Cross-platform path matching:**
+```
+# Path from Windows that contains workspace name
+srcuri://match/D:/Code/myproject/src/main.rs:42
+
+# Sorcery detects "myproject" in the path and extracts "src/main.rs"
+# Opens: ~/code/myproject/src/main.rs (your local path)
+```
+
+### 4. Absolute Path Mode
+
+**Format:** `srcuri://abs/<path>:<line>:<column>`
+
+Uses the `abs` reserved authority for absolute filesystem paths.
+
+**Examples:**
+```
+srcuri://abs/etc/hosts:1
+srcuri://abs/Users/ebeland/apps/sorcery/README.md:50
+srcuri://abs/Users/ebeland/apps/sorcery/src-tauri/src/main.rs:100:5
+srcuri://abs/tmp/test.txt:42:10
+```
+
+**Note:** For POSIX paths, the leading `/` is implied. `abs/etc/hosts` → `/etc/hosts`
+
+**Windows paths:**
+```
+srcuri://abs/C:/Users/user/file.txt:1
+srcuri://abs/UNC/server/share/file.txt:5
+```
+
+**When to use:**
+- You know the exact file system path
+- Sharing links within the same machine
+- Testing specific files
+- No workspace mapping needed
+
+### 5. External Mode (Provider URLs)
+
+**Format:** `srcuri://ext/<scheme>/<host>/<path>#<fragment>`
+
+Uses the `ext` reserved authority to embed provider URLs (GitHub, GitLab, etc.).
+
+**Examples:**
+```
+srcuri://ext/https/github.com/owner/repo/blob/main/src/lib.rs#L42
+srcuri://ext/https/gitlab.com/org/project/-/blob/main/README.md#L10
+```
+
+**When to use:**
+- Sharing links that work with or without Sorcery installed
+- Converting GitHub/GitLab URLs to open in your editor
+
+**How it works:**
+1. If you have a matching local workspace (by git remote), opens locally
+2. Otherwise, opens srcuri.com interstitial with fallback options
 
 ## Line and Column Numbers
 
 All formats support optional line and column numbers:
 
 ```
-srcuri://path                    # Just open the file
-srcuri://path:50                 # Open at line 50
-srcuri://path:50:10              # Open at line 50, column 10
+srcuri://myproject/path                    # Just open the file
+srcuri://myproject/path:50                 # Open at line 50
+srcuri://myproject/path:50:10              # Open at line 50, column 10
 ```
 
 **Note:** Column numbers are limited to 0-120. Higher values are ignored.
@@ -110,8 +174,8 @@ srcuri:// links can also open folders in editors that support it.
 
 **Absolute path to folder:**
 ```
-srcuri:///Users/alice/projects/myapp
-srcuri:///home/bob/code/backend/src
+srcuri://abs/Users/alice/projects/myapp
+srcuri://abs/home/bob/code/backend/src
 ```
 
 **Workspace-relative folder:**
@@ -178,7 +242,7 @@ srcuri://myproject/CHANGELOG.md:1?tag=release-2024
 - Clear error if tag doesn't exist locally
 
 **Requirements:**
-- Must use workspace path format (not absolute path)
+- Must use workspace mode (not absolute path)
 - Workspace must be a git repository
 - Shows dialog with options to:
   - View in temporary file
@@ -204,6 +268,14 @@ srcuri://myproject/README.md:1?branch=main&remote=github.com/user/myproject
 4. Developer B confirms → repo is cloned, workspace is added, file opens
 5. Future links to `srcuri://cool-lib/...` work directly
 
+### Workspace Hint (Match Mode)
+
+```
+srcuri://match/lib/utils.rs:10?workspaceHint=backend
+```
+
+- Used in match mode to prefer a specific workspace when multiple matches exist
+
 ## Usage Examples
 
 ### From Browser
@@ -211,7 +283,7 @@ srcuri://myproject/README.md:1?branch=main&remote=github.com/user/myproject
 Paste these in your Chrome/Safari/Firefox address bar:
 
 ```
-srcuri:///etc/hosts:1
+srcuri://abs/etc/hosts:1
 srcuri://sorcery/README.md:50
 ```
 
@@ -221,14 +293,14 @@ Browser will ask permission the first time, then remember your choice.
 
 ```html
 <a href="srcuri://sorcery/src/main.rs:100">View main.rs</a>
-<a href="srcuri:///tmp/test.txt:1">Open test file</a>
+<a href="srcuri://abs/tmp/test.txt:1">Open test file</a>
 ```
 
 ### From JavaScript
 
 ```javascript
 // Absolute path
-window.location.href = "srcuri:///Users/ebeland/file.txt:50";
+window.location.href = "srcuri://abs/Users/ebeland/file.txt:50";
 
 // Workspace path
 window.location.href = "srcuri://myproject/src/app.js:100";
@@ -238,15 +310,15 @@ window.location.href = "srcuri://myproject/src/app.js:100";
 
 ```bash
 # macOS
-open "srcuri:///etc/hosts:1"
+open "srcuri://abs/etc/hosts:1"
 open "srcuri://sorcery/README.md:50"
 
 # Linux
-xdg-open "srcuri:///etc/hosts:1"
+xdg-open "srcuri://abs/etc/hosts:1"
 xdg-open "srcuri://sorcery/README.md:50"
 
 # Windows
-start srcuri:///C:/Users/user/file.txt:1
+start srcuri://abs/C:/Users/user/file.txt:1
 start srcuri://myproject/src/app.js:100
 ```
 
@@ -262,7 +334,7 @@ This includes clickable examples of all URL formats.
 
 ## Common Mistakes
 
-### ❌ Using `file://` instead of `srcuri://`
+### Using `file://` instead of `srcuri://`
 
 **Wrong:**
 ```
@@ -271,28 +343,26 @@ file:///Users/ebeland/apps/sorcery/README.md
 
 **Correct:**
 ```
-srcuri:///Users/ebeland/apps/sorcery/README.md:1
+srcuri://abs/Users/ebeland/apps/sorcery/README.md:1
 ```
 
-### ❌ Wrong number of slashes
+### Confusing authorities
 
 **Wrong:**
 ```
-srcuri://etc/hosts:1           # This looks like workspace "etc"
-srcuri:////Users/ebeland/file  # Too many slashes
+srcuri://etc/hosts:1           # This is workspace "etc", not /etc/hosts
 ```
 
 **Correct:**
 ```
-srcuri:///etc/hosts:1                           # Absolute path (3 slashes)
-srcuri://sorcery/README.md:1                  # Workspace path (2 slashes)
+srcuri://abs/etc/hosts:1       # Absolute path mode
 ```
 
-### ❌ Using git references with absolute path
+### Using git references with absolute path
 
 **Wrong:**
 ```
-srcuri:///Users/ebeland/file.txt?commit=abc123
+srcuri://abs/Users/ebeland/file.txt?commit=abc123
 ```
 
 **Correct:**
@@ -304,23 +374,33 @@ srcuri://sorcery/file.txt?commit=abc123
 
 The parser (`src-tauri/src/protocol_handler/parser.rs`) follows these rules:
 
-1. **Starts with `/`** → Absolute path
+1. **Authority = "workspace"** → Explicit workspace mode
    ```
-   srcuri:///etc/hosts:1
-   ```
-
-2. **Contains `/` after first component** → Workspace path
-   ```
-   srcuri://workspace/file.rs:1
+   srcuri://workspace/myproject/file.rs:1
    ```
 
-3. **No `/` or only filename** → Partial path (search)
+2. **Authority = "match"** → Search mode
    ```
-   srcuri://README.md:1
+   srcuri://match/README.md:1
    ```
 
-4. **Line and column extraction:**
-   - Parse from right to left
+3. **Authority = "abs"** → Absolute path mode
+   ```
+   srcuri://abs/etc/hosts:1
+   ```
+
+4. **Authority = "ext"** → External URL mode
+   ```
+   srcuri://ext/https/github.com/user/repo/blob/main/file.rs#L42
+   ```
+
+5. **Authority = anything else** → Implicit workspace mode
+   ```
+   srcuri://myproject/file.rs:1
+   ```
+
+6. **Line and column extraction:**
+   - Parse from right to left on final path segment
    - Max 2 colons for line:column
    - Non-numeric values ignored
    - Column must be 0-120
@@ -329,41 +409,50 @@ The parser (`src-tauri/src/protocol_handler/parser.rs`) follows these rules:
 
 ### For Teams
 
-✅ **Use workspace paths:**
+**Use implicit workspace paths:**
 ```
 srcuri://myproject/src/app.js:100
 ```
 
 The Sorcery protocol with workspace paths works for everyone regardless of where they cloned the repo.
 
-❌ **Don't use absolute paths:**
+**Don't use absolute paths:**
 ```
-srcuri:///Users/ebeland/projects/myproject/src/app.js:100
+srcuri://abs/Users/ebeland/projects/myproject/src/app.js:100
 ```
 
 This only works on your machine.
 
 ### For Personal Use
 
-✅ **Either format works:**
+**Either format works:**
 ```
-srcuri:///Users/ebeland/file.txt:1              # Direct
-srcuri://myproject/file.txt:1                   # Workspace
+srcuri://abs/Users/ebeland/file.txt:1          # Direct
+srcuri://myproject/file.txt:1                  # Workspace
 ```
 
 Choose based on convenience.
 
 ### For Documentation
 
-✅ **Include line numbers:**
+**Include line numbers:**
 ```
 See the bug in srcuri://myproject/src/bug.js:42
 ```
 
-❌ **Don't omit line numbers:**
+**Don't omit line numbers:**
 ```
 See the bug in srcuri://myproject/src/bug.js
 ```
+
+## Reserved Authority Tokens
+
+These words cannot be used as workspace names:
+
+- `workspace` — explicit workspace mode
+- `match` — search mode
+- `abs` — absolute path mode
+- `ext` — external URL mode
 
 ## Platform Differences
 
@@ -388,5 +477,4 @@ Sorcery Desktop registers the `srcuri://` protocol handler on all platforms:
 
 - [DEVELOPMENT.md](DEVELOPMENT.md) - Development workflow
 - [README.md](README.md) - Project overview
-- [ai/protocol-handler-fix.md](dev/protocol-handler-fix.md) - Protocol handler architecture
-- [dev/protocol-handler.md](dev/done/protocol-handler.md) - Complete protocol handler guide (includes deep-link payload fix)
+- [dev/srcuri-protocol-spec-v1.md](dev/srcuri-protocol-spec-v1.md) - Complete protocol specification

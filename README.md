@@ -13,7 +13,7 @@ No Longer!
 
 Sorcery uses the srcuri:// protocol to link to lines of code in *your* editor. Now, your coworker shares:
 
-srcuri://reponame/path/to/file.js:53
+srcuri://@reponame/path/to/file.js:53
 
 With one click, you're on *that line* in **your** local editor and repo.
 
@@ -35,7 +35,7 @@ https://github.com/user/myrepo/blob/main/src/main.rs#L42
 
 Use:
 ```
-srcuri://myrepo/src/main.rs:42
+srcuri://@myrepo/src/main.rs:42
 ```
 
 When clicked, this opens `src/main.rs` at line 42 in **your** preferred editor - whether that's VS Code, IntelliJ IDEA, Neovim, Vim, Emacs, Sublime Text, or any other supported editor.
@@ -92,7 +92,7 @@ https://srcuri.com/open#src/main.rs:42?workspace=myrepo
 
 When clicked, the web page parses the URL fragment and redirects to:
 ```
-srcuri://myrepo/src/main.rs:42
+srcuri://@myrepo/src/main.rs:42
 ```
 
 Sorcery Desktop then opens your editor to that exact file and line.
@@ -217,7 +217,7 @@ Key features per editor type:
 ### Data Flow
 
 ```
-1. Deep link clicked: srcuri://project/file.rs:42
+1. Deep link clicked: srcuri://@project/file.rs:42
    ↓
 2. OS routes to sorcery application
    ↓
@@ -387,9 +387,9 @@ srcuri://<workspace>/<path>:<line>:<column>?editor=<editor-id>
 
 Examples:
 ```
-srcuri://myapp/src/main.rs:42
-srcuri://webapp/index.ts:10:5?editor=cursor
-srcuri://backend/api/handler.go:100?editor=goland
+srcuri://@myapp/src/main.rs:42
+srcuri://@webapp/index.ts:10:5?editor=cursor
+srcuri://@backend/api/handler.go:100?editor=goland
 ```
 
 ### Opening Folders
@@ -397,7 +397,7 @@ srcuri://backend/api/handler.go:100?editor=goland
 In addition to files, srcuri:// links can open folders in most editors:
 
 ```
-srcuri://myapp/src/controllers           # Open a folder within a workspace
+srcuri://@myapp/src/controllers          # Open a folder within a workspace
 srcuri:///Users/dev/projects/myapp       # Open an absolute folder path
 ```
 

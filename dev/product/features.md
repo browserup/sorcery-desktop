@@ -37,9 +37,11 @@ The srcuri:// protocol enables editor-independent code linking. Developers can s
 
 | Format | Example | Description |
 |--------|---------|-------------|
-| Partial Path | `srcuri://file.rs:42` | Searches all workspaces |
-| Workspace Path | `srcuri://myproject/src/main.rs:42` | Direct workspace reference |
-| Full Path | `srcuri:///absolute/path/file.rs:42` | Absolute filesystem path |
+| Implicit Workspace | `srcuri://myproject/src/main.rs:42` | Authority is workspace name (recommended) |
+| Explicit Workspace | `srcuri://workspace/myproject/src/main.rs:42` | Explicit workspace mode |
+| Match (Search) | `srcuri://match/file.rs:42` | Searches all workspaces |
+| Absolute Path | `srcuri://abs/etc/hosts:42` | Absolute filesystem path |
+| External URL | `srcuri://ext/https/github.com/user/repo/blob/main/file.rs#L42` | Git provider URL |
 | Revision Path | `srcuri://myproject/file.rs:42?commit=abc123` | Git-aware with revision |
 
 ### Location Specifiers
@@ -58,10 +60,22 @@ The srcuri:// protocol enables editor-independent code linking. Developers can s
 
 ### Path Matching
 
+Match mode (`srcuri://match/...`) uses intelligent path resolution:
+
+**Resolution Priority:**
+1. **Workspace-in-path** (highest): If the path contains a workspace name as a segment, extract the relative path and resolve in that workspace. Example: `match/a/b/myproject/src/main.rs` → opens `src/main.rs` in `myproject` workspace
+2. **workspaceHint**: If `?workspaceHint=name` is provided, prioritize that workspace
+3. **Suffix matching**: Search all workspaces for the file path
+4. **MRU sorting**: Multiple matches are sorted by most recently used
+
+**Matching Rules:**
 - Case-insensitive workspace name matching
-- Searches across all configured workspaces
-- MRU-sorted results when multiple matches exist
+- Segment-based matching (full path segment, not substring)
+- Cross-platform path normalization (Windows backslashes → forward slashes)
 - Security validation: blocks path traversal, dangerous extensions
+
+**Strict Workspace Mode:**
+Workspace paths (`srcuri://myproject/...`) resolve only within the named workspace. If the workspace is not configured, an error is shown—no fallback to match mode or other workspaces.
 
 ---
 

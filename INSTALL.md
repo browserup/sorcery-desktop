@@ -67,7 +67,7 @@ To verify registration:
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -dump | grep -i srcuri
 
 # Test a protocol link
-open "srcuri://myproject/README.md:10"
+open "srcuri://@myproject/README.md:10"
 ```
 
 ## Single Instance Behavior
