@@ -7,7 +7,7 @@ use tempfile::TempDir;
 async fn test_protocol_handler_full_path() {
     let (protocol_handler, _settings_manager, _temp_dir, test_file) = setup().await;
 
-    let url = format!("srcuri://{}:5:10", test_file.display());
+    let url = format!("srcuri://abs/{}:5:10", test_file.display());
     let result = protocol_handler.handle_url(&url).await;
 
     match result {
@@ -30,7 +30,7 @@ async fn test_protocol_handler_partial_path_single_match() {
 
     configure_workspace(&settings_manager, workspace_dir.to_str().unwrap()).await;
 
-    let url = "srcuri://main.rs:10:5";
+    let url = "srcuri://match/main.rs:10:5";
     let result = protocol_handler.handle_url(url).await;
 
     match result {
@@ -82,7 +82,7 @@ async fn test_protocol_handler_invalid_url() {
 async fn test_protocol_handler_missing_file() {
     let (protocol_handler, _settings_manager, _temp_dir, _test_file) = setup().await;
 
-    let url = "srcuri:///nonexistent/file.rs:1:1";
+    let url = "srcuri://abs/nonexistent/file.rs:1:1";
     let result = protocol_handler.handle_url(url).await;
 
     assert!(
@@ -197,7 +197,7 @@ async fn test_protocol_handler_directory_path() {
     let subdir = temp_dir.path().join("src");
     fs::create_dir(&subdir).unwrap();
 
-    let url = format!("srcuri://{}", subdir.display());
+    let url = format!("srcuri://abs/{}", subdir.display());
     let result = protocol_handler.handle_url(&url).await;
 
     match result {
@@ -217,7 +217,7 @@ async fn test_protocol_handler_directory_with_line_silently_ignored() {
     fs::create_dir(&subdir).unwrap();
 
     // Line numbers should be silently ignored for directories
-    let url = format!("srcuri://{}:42", subdir.display());
+    let url = format!("srcuri://abs/{}:42", subdir.display());
     let result = protocol_handler.handle_url(&url).await;
 
     match result {
@@ -251,4 +251,192 @@ async fn test_protocol_handler_workspace_directory() {
             e
         ),
     }
+}
+
+// Strict workspace mode tests
+
+#[tokio::test]
+async fn test_workspace_mode_rejects_unknown_workspace() {
+    let (protocol_handler, _settings_manager, _temp_dir, _test_file) = setup().await;
+
+    // Try to access a workspace that doesn't exist
+    let url = "srcuri://nonexistent-workspace/src/main.rs:1:1";
+    let result = protocol_handler.handle_url(url).await;
+
+    assert!(
+        result.is_err(),
+        "Protocol handler should reject unknown workspace names"
+    );
+}
+
+#[tokio::test]
+async fn test_workspace_mode_is_case_insensitive() {
+    let (protocol_handler, settings_manager, temp_dir, _test_file) = setup().await;
+
+    let workspace_dir = temp_dir.path().join("MyProject");
+    fs::create_dir(&workspace_dir).unwrap();
+    let test_file = workspace_dir.join("README.md");
+    fs::write(&test_file, "# Test").unwrap();
+
+    configure_workspace(&settings_manager, workspace_dir.to_str().unwrap()).await;
+
+    // Different case should still work
+    let url = "srcuri://myproject/README.md:1:1";
+    let result = protocol_handler.handle_url(url).await;
+
+    match result {
+        Ok(_) => {}
+        Err(e) => panic!(
+            "Workspace mode should be case-insensitive. Error: {}",
+            e
+        ),
+    }
+}
+
+// Match mode tests
+
+#[tokio::test]
+async fn test_match_mode_finds_workspace_in_path() {
+    let (protocol_handler, settings_manager, temp_dir, _test_file) = setup().await;
+
+    let workspace_dir = temp_dir.path().join("backend");
+    fs::create_dir(&workspace_dir).unwrap();
+    let src_dir = workspace_dir.join("src");
+    fs::create_dir(&src_dir).unwrap();
+    let test_file = src_dir.join("main.rs");
+    fs::write(&test_file, "fn main() {}").unwrap();
+
+    configure_workspace(&settings_manager, workspace_dir.to_str().unwrap()).await;
+
+    // Path contains workspace name in middle - should find it and use relative path
+    let url = "srcuri://match/some/prefix/backend/src/main.rs:1:1";
+    let result = protocol_handler.handle_url(url).await;
+
+    match result {
+        Ok(_) => {}
+        Err(e) => panic!(
+            "Match mode should find workspace name in path. Error: {}",
+            e
+        ),
+    }
+}
+
+#[tokio::test]
+async fn test_match_mode_with_workspace_hint() {
+    let (protocol_handler, settings_manager, temp_dir, _test_file) = setup().await;
+
+    // Create two workspaces with same file
+    let workspace1 = temp_dir.path().join("backend");
+    let workspace2 = temp_dir.path().join("frontend");
+    fs::create_dir(&workspace1).unwrap();
+    fs::create_dir(&workspace2).unwrap();
+
+    let file1 = workspace1.join("config.json");
+    let file2 = workspace2.join("config.json");
+    fs::write(&file1, r#"{"name": "backend"}"#).unwrap();
+    fs::write(&file2, r#"{"name": "frontend"}"#).unwrap();
+
+    configure_workspace(&settings_manager, workspace1.to_str().unwrap()).await;
+    configure_workspace(&settings_manager, workspace2.to_str().unwrap()).await;
+
+    // Use workspaceHint to specify which workspace
+    let url = "srcuri://match/config.json:1?workspaceHint=backend";
+    let result = protocol_handler.handle_url(url).await;
+
+    // Should succeed - workspaceHint helps disambiguation
+    match result {
+        Ok(_) => {}
+        Err(e) => panic!(
+            "Match mode with workspaceHint should resolve correctly. Error: {}",
+            e
+        ),
+    }
+}
+
+#[tokio::test]
+async fn test_match_mode_multiple_matches_shows_chooser() {
+    let (protocol_handler, settings_manager, temp_dir, _test_file) = setup().await;
+
+    // Create two workspaces with same file
+    let workspace1 = temp_dir.path().join("proj1");
+    let workspace2 = temp_dir.path().join("proj2");
+    fs::create_dir(&workspace1).unwrap();
+    fs::create_dir(&workspace2).unwrap();
+
+    let file1 = workspace1.join("README.md");
+    let file2 = workspace2.join("README.md");
+    fs::write(&file1, "# Project 1").unwrap();
+    fs::write(&file2, "# Project 2").unwrap();
+
+    configure_workspace(&settings_manager, workspace1.to_str().unwrap()).await;
+    configure_workspace(&settings_manager, workspace2.to_str().unwrap()).await;
+
+    let url = "srcuri://match/README.md:1";
+    let result = protocol_handler.handle_url(url).await;
+
+    // Should return ShowChooser result
+    match result {
+        Ok(sorcery_desktop::protocol_handler::HandleResult::ShowChooser { matches, .. }) => {
+            assert_eq!(matches.len(), 2, "Should have 2 matches for chooser");
+        }
+        Ok(other) => panic!(
+            "Expected ShowChooser for multiple matches, got {:?}",
+            other
+        ),
+        Err(e) => panic!("Unexpected error: {}", e),
+    }
+}
+
+#[tokio::test]
+async fn test_match_mode_single_match_opens_directly() {
+    let (protocol_handler, settings_manager, temp_dir, _test_file) = setup().await;
+
+    let workspace_dir = temp_dir.path().join("unique");
+    fs::create_dir(&workspace_dir).unwrap();
+    let test_file = workspace_dir.join("unique-file.rs");
+    fs::write(&test_file, "fn unique() {}").unwrap();
+
+    configure_workspace(&settings_manager, workspace_dir.to_str().unwrap()).await;
+
+    let url = "srcuri://match/unique-file.rs:1";
+    let result = protocol_handler.handle_url(url).await;
+
+    // Should return Opened result (not chooser)
+    match result {
+        Ok(sorcery_desktop::protocol_handler::HandleResult::Opened { file_path }) => {
+            assert!(
+                file_path.contains("unique-file.rs"),
+                "Should open the unique file"
+            );
+        }
+        Ok(other) => panic!(
+            "Expected Opened for single match, got {:?}",
+            other
+        ),
+        Err(e) => panic!("Unexpected error: {}", e),
+    }
+}
+
+// Abs mode tests
+
+#[tokio::test]
+async fn test_abs_mode_respects_non_workspace_setting() {
+    let (protocol_handler, settings_manager, temp_dir, _test_file) = setup().await;
+
+    // Create a file outside of any workspace
+    let non_workspace_file = temp_dir.path().join("outside.txt");
+    fs::write(&non_workspace_file, "outside workspace").unwrap();
+
+    // Disable non-workspace files
+    let mut settings = settings_manager.get().await;
+    settings.defaults.allow_non_workspace_files = false;
+    settings_manager.save(settings).await.unwrap();
+
+    let url = format!("srcuri://abs/{}:1", non_workspace_file.display());
+    let result = protocol_handler.handle_url(&url).await;
+
+    assert!(
+        result.is_err(),
+        "Should reject non-workspace files when setting is disabled"
+    );
 }
