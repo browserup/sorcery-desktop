@@ -1671,7 +1671,7 @@
                 ` : ''}
                 ${entry.stdout ? `
                   <div class="output-section">
-                    <div class="output-label">${commandType === 'request' ? 'Details' : 'Stdout'}</div>
+                    <div class="output-label">${commandType === 'request' ? (entry.args[0] === 'opened' ? 'Target File' : 'Details') : 'Stdout'}</div>
                     <div class="output-text">${entry.stdout}</div>
                   </div>
                 ` : ''}
