@@ -14,7 +14,7 @@ srcuri://<authority>/<path>:<line>:<column>
 
 The **authority** determines how the link is interpreted:
 - A **workspace name** (most common) — opens file relative to that workspace
-- A **reserved token** (`workspace`, `match`, `abs`, `ext`) — explicit mode
+- A **reserved token** (`wks`, `rel`, `abs`, `ext`) — explicit mode
 
 ## Four Link Modes
 
@@ -56,32 +56,32 @@ srcuri://myproject/src/App.tsx:100:5
 
 ### 2. Workspace Mode (Explicit)
 
-**Format:** `srcuri://workspace/<workspace>/<path>:<line>:<column>`
+**Format:** `srcuri://wks/<workspace>/<path>:<line>:<column>`
 
-Uses the `workspace` reserved authority for explicit clarity.
+Uses the `wks` reserved authority for explicit clarity.
 
 **Examples:**
 ```
-srcuri://workspace/sorcery/README.md:1
-srcuri://workspace/myproject/src/App.tsx:100:5
+srcuri://wks/sorcery/README.md:1
+srcuri://wks/myproject/src/App.tsx:100:5
 ```
 
 **When to use:**
 - When you want maximum clarity about intent
 - Both implicit and explicit forms work identically
 
-### 3. Match Mode (Search All Workspaces)
+### 3. Relative Mode (Search All Workspaces)
 
-**Format:** `srcuri://match/<path>:<line>:<column>`
+**Format:** `srcuri://rel/<path>:<line>:<column>`
 
-Uses the `match` reserved authority to search all workspaces.
+Uses the `rel` reserved authority to search all workspaces.
 
 **Examples:**
 ```
-srcuri://match/README.md:1
-srcuri://match/main.rs:50
-srcuri://match/App.tsx:100
-srcuri://match/src/utils.py:10?workspaceHint=backend
+srcuri://rel/README.md:1
+srcuri://rel/main.rs:50
+srcuri://rel/App.tsx:100
+srcuri://rel/src/utils.py:10?workspaceHint=backend
 ```
 
 **When to use:**
@@ -100,7 +100,7 @@ srcuri://match/src/utils.py:10?workspaceHint=backend
 **Cross-platform path matching:**
 ```
 # Path from Windows that contains workspace name
-srcuri://match/D:/Code/myproject/src/main.rs:42
+srcuri://rel/D:/Code/myproject/src/main.rs:42
 
 # Sorcery detects "myproject" in the path and extracts "src/main.rs"
 # Opens: ~/code/myproject/src/main.rs (your local path)
@@ -268,13 +268,13 @@ srcuri://myproject/README.md:1?branch=main&remote=github.com/user/myproject
 4. Developer B confirms → repo is cloned, workspace is added, file opens
 5. Future links to `srcuri://cool-lib/...` work directly
 
-### Workspace Hint (Match Mode)
+### Workspace Hint (Relative Mode)
 
 ```
-srcuri://match/lib/utils.rs:10?workspaceHint=backend
+srcuri://rel/lib/utils.rs:10?workspaceHint=backend
 ```
 
-- Used in match mode to prefer a specific workspace when multiple matches exist
+- Used in rel mode to prefer a specific workspace when multiple matches exist
 
 ## Usage Examples
 
@@ -374,14 +374,14 @@ srcuri://sorcery/file.txt?commit=abc123
 
 The parser (`src-tauri/src/protocol_handler/parser.rs`) follows these rules:
 
-1. **Authority = "workspace"** → Explicit workspace mode
+1. **Authority = "wks"** → Explicit workspace mode
    ```
-   srcuri://workspace/myproject/file.rs:1
+   srcuri://wks/myproject/file.rs:1
    ```
 
-2. **Authority = "match"** → Search mode
+2. **Authority = "rel"** → Relative/search mode
    ```
-   srcuri://match/README.md:1
+   srcuri://rel/README.md:1
    ```
 
 3. **Authority = "abs"** → Absolute path mode
@@ -449,8 +449,8 @@ See the bug in srcuri://myproject/src/bug.js
 
 These words cannot be used as workspace names:
 
-- `workspace` — explicit workspace mode
-- `match` — search mode
+- `wks` — explicit workspace mode
+- `rel` — relative/search mode
 - `abs` — absolute path mode
 - `ext` — external URL mode
 

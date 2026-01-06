@@ -84,12 +84,12 @@ impl ProtocolHandler {
                         .await
                 }
             }
-            SrcuriRequest::MatchPath {
+            SrcuriRequest::RelativePath {
                 path,
                 line,
                 column,
                 workspace_hint,
-            } => self.handle_match_path(&path, line, column, workspace_hint.as_deref()).await,
+            } => self.handle_rel_path(&path, line, column, workspace_hint.as_deref()).await,
             SrcuriRequest::AbsolutePath {
                 full_path,
                 line,
@@ -122,14 +122,14 @@ impl ProtocolHandler {
         }
     }
 
-    async fn handle_match_path(
+    async fn handle_rel_path(
         &self,
         path: &str,
         line: Option<usize>,
         column: Option<usize>,
         workspace_hint: Option<&str>,
     ) -> Result<HandleResult> {
-        info!("Handling match path: {}", path);
+        info!("Handling rel path: {}", path);
         if let Some(hint) = workspace_hint {
             info!("  workspace hint: {}", hint);
         }

@@ -20,8 +20,8 @@ pub enum SrcuriRequest {
         git_ref: Option<GitRef>,
         remote: Option<String>,
     },
-    /// Explicit workspace: authority is "workspace"
-    /// srcuri://workspace/myrepo/path:42
+    /// Explicit workspace: authority is "wks"
+    /// srcuri://wks/myrepo/path:42
     ExplicitWorkspace {
         workspace: String,
         path: String,
@@ -30,9 +30,9 @@ pub enum SrcuriRequest {
         git_ref: Option<GitRef>,
         remote: Option<String>,
     },
-    /// Match mode: authority is "match" - search for file
-    /// srcuri://match/path/file.rs:42
-    MatchPath {
+    /// Relative mode: authority is "rel" - search for file
+    /// srcuri://rel/path/file.rs:42
+    RelativePath {
         path: String,
         line: Option<usize>,
         column: Option<usize>,
@@ -162,13 +162,13 @@ impl SrcuriParser {
 
         // Mode detection by authority
         match authority.to_lowercase().as_str() {
-            "workspace" => Self::parse_explicit_workspace_mode(
+            "wks" => Self::parse_explicit_workspace_mode(
                 path_after_authority,
                 fragment,
                 git_ref,
                 remote,
             ),
-            "match" => Self::parse_match_mode(path_after_authority, fragment, workspace_hint),
+            "rel" => Self::parse_rel_mode(path_after_authority, fragment, workspace_hint),
             "abs" => Self::parse_abs_mode(path_after_authority, fragment),
             "ext" => Self::parse_ext_mode(path_after_authority, query_part, fragment, git_ref, workspace_hint),
             _ => Self::parse_implicit_workspace_mode(
@@ -262,9 +262,9 @@ impl SrcuriParser {
         })
     }
 
-    /// Parse match mode: srcuri://match/path/file.rs:42
+    /// Parse rel mode: srcuri://rel/path/file.rs:42
     /// Searches all workspaces for matching path
-    fn parse_match_mode(
+    fn parse_rel_mode(
         path_part: &str,
         fragment: Option<&str>,
         workspace_hint: Option<String>,
@@ -275,7 +275,7 @@ impl SrcuriParser {
             line = Self::parse_fragment_line(fragment);
         }
 
-        Ok(SrcuriRequest::MatchPath {
+        Ok(SrcuriRequest::RelativePath {
             path: file_path,
             line,
             column,
@@ -747,7 +747,7 @@ mod tests {
 
     #[test]
     fn test_explicit_workspace_simple() {
-        let request = SrcuriParser::parse("srcuri://workspace/myrepo/src/main.rs:42").unwrap();
+        let request = SrcuriParser::parse("srcuri://wks/myrepo/src/main.rs:42").unwrap();
         assert_eq!(
             request,
             SrcuriRequest::ExplicitWorkspace {
@@ -764,7 +764,7 @@ mod tests {
     #[test]
     fn test_explicit_workspace_with_git_ref() {
         let request =
-            SrcuriParser::parse("srcuri://workspace/myrepo/file.rs:10?branch=main").unwrap();
+            SrcuriParser::parse("srcuri://wks/myrepo/file.rs:10?branch=main").unwrap();
         assert_eq!(
             request,
             SrcuriRequest::ExplicitWorkspace {
@@ -778,14 +778,14 @@ mod tests {
         );
     }
 
-    // Match mode tests
+    // Rel mode tests
 
     #[test]
-    fn test_match_mode_simple() {
-        let request = SrcuriParser::parse("srcuri://match/README.md").unwrap();
+    fn test_rel_mode_simple() {
+        let request = SrcuriParser::parse("srcuri://rel/README.md").unwrap();
         assert_eq!(
             request,
-            SrcuriRequest::MatchPath {
+            SrcuriRequest::RelativePath {
                 path: "README.md".to_string(),
                 line: None,
                 column: None,
@@ -795,11 +795,11 @@ mod tests {
     }
 
     #[test]
-    fn test_match_mode_with_line() {
-        let request = SrcuriParser::parse("srcuri://match/README.md:25").unwrap();
+    fn test_rel_mode_with_line() {
+        let request = SrcuriParser::parse("srcuri://rel/README.md:25").unwrap();
         assert_eq!(
             request,
-            SrcuriRequest::MatchPath {
+            SrcuriRequest::RelativePath {
                 path: "README.md".to_string(),
                 line: Some(25),
                 column: None,
@@ -809,12 +809,12 @@ mod tests {
     }
 
     #[test]
-    fn test_match_mode_with_workspace_hint() {
+    fn test_rel_mode_with_workspace_hint() {
         let request =
-            SrcuriParser::parse("srcuri://match/src/utils.py:10?workspaceHint=backend").unwrap();
+            SrcuriParser::parse("srcuri://rel/src/utils.py:10?workspaceHint=backend").unwrap();
         assert_eq!(
             request,
-            SrcuriRequest::MatchPath {
+            SrcuriRequest::RelativePath {
                 path: "src/utils.py".to_string(),
                 line: Some(10),
                 column: None,
@@ -824,11 +824,11 @@ mod tests {
     }
 
     #[test]
-    fn test_match_mode_nested_path() {
-        let request = SrcuriParser::parse("srcuri://match/src/lib/utils.py:10").unwrap();
+    fn test_rel_mode_nested_path() {
+        let request = SrcuriParser::parse("srcuri://rel/src/lib/utils.py:10").unwrap();
         assert_eq!(
             request,
-            SrcuriRequest::MatchPath {
+            SrcuriRequest::RelativePath {
                 path: "src/lib/utils.py".to_string(),
                 line: Some(10),
                 column: None,
@@ -1339,11 +1339,11 @@ mod tests {
     }
 
     #[test]
-    fn test_trailing_colon_match_mode() {
-        let request = SrcuriParser::parse("srcuri://match/README.md:").unwrap();
+    fn test_trailing_colon_rel_mode() {
+        let request = SrcuriParser::parse("srcuri://rel/README.md:").unwrap();
         assert_eq!(
             request,
-            SrcuriRequest::MatchPath {
+            SrcuriRequest::RelativePath {
                 path: "README.md".to_string(),
                 line: None,
                 column: None,
@@ -1373,14 +1373,14 @@ mod tests {
     // Reserved authority as workspace rejected
 
     #[test]
-    fn test_workspace_named_match_invalid() {
-        // "match" is a reserved authority, can't be used as workspace name
-        let result = SrcuriParser::parse("srcuri://match");
-        // This should parse as match mode with empty path
+    fn test_workspace_named_rel_invalid() {
+        // "rel" is a reserved authority, can't be used as workspace name
+        let result = SrcuriParser::parse("srcuri://rel");
+        // This should parse as rel mode with empty path
         let request = result.unwrap();
         assert_eq!(
             request,
-            SrcuriRequest::MatchPath {
+            SrcuriRequest::RelativePath {
                 path: "".to_string(),
                 line: None,
                 column: None,
@@ -1392,13 +1392,13 @@ mod tests {
     #[test]
     fn test_reserved_authorities_not_workspaces() {
         // All reserved authorities should be parsed as their modes, not workspaces
-        // "workspace" is parsed as explicit workspace mode
-        let result = SrcuriParser::parse("srcuri://workspace/myrepo/file.rs").unwrap();
+        // "wks" is parsed as explicit workspace mode
+        let result = SrcuriParser::parse("srcuri://wks/myrepo/file.rs").unwrap();
         matches!(result, SrcuriRequest::ExplicitWorkspace { .. });
 
-        // "match" is parsed as match mode
-        let result = SrcuriParser::parse("srcuri://match/file.rs").unwrap();
-        matches!(result, SrcuriRequest::MatchPath { .. });
+        // "rel" is parsed as rel mode
+        let result = SrcuriParser::parse("srcuri://rel/file.rs").unwrap();
+        matches!(result, SrcuriRequest::RelativePath { .. });
 
         // "abs" is parsed as absolute path mode
         let result = SrcuriParser::parse("srcuri://abs/etc/hosts").unwrap();
@@ -1418,13 +1418,13 @@ mod tests {
     #[test]
     fn test_reserved_authorities_case_insensitive() {
         // Reserved authorities should be case-insensitive
-        let result = SrcuriParser::parse("srcuri://MATCH/file.rs:1").unwrap();
-        matches!(result, SrcuriRequest::MatchPath { .. });
+        let result = SrcuriParser::parse("srcuri://REL/file.rs:1").unwrap();
+        matches!(result, SrcuriRequest::RelativePath { .. });
 
         let result = SrcuriParser::parse("srcuri://ABS/etc/hosts").unwrap();
         matches!(result, SrcuriRequest::AbsolutePath { .. });
 
-        let result = SrcuriParser::parse("srcuri://WORKSPACE/repo/file.rs").unwrap();
+        let result = SrcuriParser::parse("srcuri://WKS/repo/file.rs").unwrap();
         matches!(result, SrcuriRequest::ExplicitWorkspace { .. });
     }
 }

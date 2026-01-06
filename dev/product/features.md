@@ -38,8 +38,8 @@ The srcuri:// protocol enables editor-independent code linking. Developers can s
 | Format | Example | Description |
 |--------|---------|-------------|
 | Implicit Workspace | `srcuri://myproject/src/main.rs:42` | Authority is workspace name (recommended) |
-| Explicit Workspace | `srcuri://workspace/myproject/src/main.rs:42` | Explicit workspace mode |
-| Match (Search) | `srcuri://match/file.rs:42` | Searches all workspaces |
+| Explicit Workspace | `srcuri://wks/myproject/src/main.rs:42` | Explicit workspace mode |
+| Relative (Search) | `srcuri://rel/file.rs:42` | Searches all workspaces |
 | Absolute Path | `srcuri://abs/etc/hosts:42` | Absolute filesystem path |
 | External URL | `srcuri://ext/https/github.com/user/repo/blob/main/file.rs#L42` | Git provider URL |
 | Revision Path | `srcuri://myproject/file.rs:42?commit=abc123` | Git-aware with revision |
@@ -60,10 +60,10 @@ The srcuri:// protocol enables editor-independent code linking. Developers can s
 
 ### Path Matching
 
-Match mode (`srcuri://match/...`) uses intelligent path resolution:
+Relative mode (`srcuri://rel/...`) uses intelligent path resolution:
 
 **Resolution Priority:**
-1. **Workspace-in-path** (highest): If the path contains a workspace name as a segment, extract the relative path and resolve in that workspace. Example: `match/a/b/myproject/src/main.rs` → opens `src/main.rs` in `myproject` workspace
+1. **Workspace-in-path** (highest): If the path contains a workspace name as a segment, extract the relative path and resolve in that workspace. Example: `rel/a/b/myproject/src/main.rs` → opens `src/main.rs` in `myproject` workspace
 2. **workspaceHint**: If `?workspaceHint=name` is provided, prioritize that workspace
 3. **Suffix matching**: Search all workspaces for the file path
 4. **MRU sorting**: Multiple matches are sorted by most recently used

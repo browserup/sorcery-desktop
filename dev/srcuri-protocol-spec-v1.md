@@ -85,7 +85,7 @@ srcuri://<authority>/<path>[:<line>[:<col>]][?<query>][#<fragment>]
 ```
 
 The **authority** field determines the link mode:
-- If authority is a **reserved token** (`workspace`, `match`, `abs`, `ext`) → explicit mode
+- If authority is a **reserved token** (`wks`, `rel`, `abs`, `ext`) → explicit mode
 - Otherwise → **implicit workspace mode** (authority is the workspace name)
 
 ### Why This Design?
@@ -104,20 +104,20 @@ The protocol supports four distinct link modes, determined by the authority comp
 
 ### Quick Reference
 
-| Mode | Authority | Format | Example |
-|------|-----------|--------|---------|
-| **Workspace (implicit)** | `<workspace>` | `srcuri://<workspace>/<path>:<line>` | `srcuri://myrepo/src/main.rs:42` |
-| **Workspace (explicit)** | `workspace` | `srcuri://workspace/<workspace>/<path>:<line>` | `srcuri://workspace/myrepo/src/main.rs:42` |
-| **Match (search)** | `match` | `srcuri://match/<path>:<line>` | `srcuri://match/main.rs:42` |
-| **Absolute** | `abs` | `srcuri://abs/<path>:<line>` | `srcuri://abs/etc/hosts:1` |
-| **External** | `ext` | `srcuri://ext/<scheme>/<host>/<path>` | `srcuri://ext/https/github.com/user/repo/...` |
+| Mode | Authority | Format                                         | Example |
+|------|-----------|------------------------------------------------|---------|
+| **Workspace (implicit)** | `<workspace>` | `srcuri://<workspace>/<path>:<line>`           | `srcuri://myrepo/src/main.rs:42` |
+| **Workspace (explicit)** | `wks` | `srcuri://wks/<workspace>/<path>:<line>` | `srcuri://wks/myrepo/src/main.rs:42` |
+| **Relative (search)** | `rel` | `srcuri://rel/<path>:<line>`                   | `srcuri://rel/main.rs:42` |
+| **Absolute** | `abs` | `srcuri://abs/<path>:<line>`                   | `srcuri://abs/etc/hosts:1` |
+| **External** | `ext` | `srcuri://ext/<scheme>/<host>/<path>`          | `srcuri://ext/https/github.com/user/repo/...` |
 
 ### Reserved Authority Tokens
 
 These authority values are **reserved** and indicate explicit modes:
 
-- `workspace` — explicit workspace mode
-- `match` — search/match mode
+- `wks` — explicit workspace mode (may be omitted; workspace name becomes authority)
+- `rel` — relative path search mode (searches all workspaces)
 - `abs` — absolute filesystem path mode
 - `ext` — external URL mode
 
@@ -133,10 +133,10 @@ Parse srcuri:// link:
 2. Extract authority (host component)
 
 3. Check if authority is a reserved token:
-   - "workspace" → Explicit Workspace Mode
-   - "match"     → Match Mode (search all workspaces)
-   - "abs"       → Absolute Path Mode
-   - "ext"       → External URL Mode
+   - "wks" → Explicit Workspace Mode
+   - "rel" → Relative Mode (search all workspaces)
+   - "abs" → Absolute Path Mode
+   - "ext" → External URL Mode
 
 4. If authority is NOT reserved → Implicit Workspace Mode
    (authority is treated as workspace name)
@@ -150,11 +150,11 @@ Parse srcuri:// link:
 ```
 srcuri://...
     │
-    ├─ Authority = "workspace"? ──YES──► Explicit Workspace Mode
+    ├─ Authority = "wks"? ──YES──► Explicit Workspace Mode
     │         │
     │        NO
     │         │
-    ├─ Authority = "match"? ──YES──► Match Mode (search)
+    ├─ Authority = "rel"? ──YES──► Relative Mode (search)
     │         │
     │        NO
     │         │
@@ -204,7 +204,7 @@ Workspace mode uses **strict resolution** - the specified workspace must exist i
 - If workspace exists but file doesn't → **Error** (file not found)
 - **No fallback** to searching other workspaces or treating as absolute path
 
-This strict behavior ensures predictable, intentional navigation. Use Match Mode when you want flexible cross-workspace search.
+This strict behavior ensures predictable, intentional navigation. Use Relative Mode when you want flexible cross-workspace search.
 
 **Use Cases:**
 - Team collaboration (same link works for everyone)
@@ -253,18 +253,18 @@ srcuri://myrepo/src/main.rs:42  →  https://srcuri.com/myrepo/src/main.rs:42
 
 **Syntax:**
 ```
-srcuri://workspace/<workspace>/<path>:<line>:<column>
+srcuri://wks/<workspace>/<path>:<line>:<column>
 ```
 
-**Description:** Same as implicit workspace mode, but with the explicit `workspace` authority. Useful when clarity is preferred over brevity.
+**Description:** Same as implicit workspace mode, but with the explicit `wks` authority. Useful when clarity is preferred over brevity.
 
 **Examples:**
 
 ```
-srcuri://workspace/myrepo/src/main.rs:42
+srcuri://wks/myrepo/src/main.rs:42
 Opens main.rs at line 42 in workspace 'myrepo'
 
-srcuri://workspace/backend/api/routes.py:100:5
+srcuri://wks/backend/api/routes.py:100:5
 Opens routes.py at line 100, column 5 in workspace 'backend'
 ```
 
@@ -275,11 +275,11 @@ Opens routes.py at line 100, column 5 in workspace 'backend'
 
 ---
 
-### 3. Match Mode
+### 3. Relative Mode
 
 **Syntax:**
 ```
-srcuri://match/<path>:<line>:<column>[?workspaceHint=<name>]
+srcuri://rel/<path>:<line>:<column>[?workspaceHint=<name>]
 ```
 
 **Description:** References a file by name or partial path, without specifying a workspace. The protocol handler searches all configured workspaces for matching files.
@@ -310,7 +310,7 @@ Configuration:
   myproject → /home/alice/code/myproject
 
 Input:
-  srcuri://match/D:/Code/myproject/src/main.rs:42
+  srcuri://rel/D:/Code/myproject/src/main.rs:42
 
 Detection:
   - Path segments: ["D:", "Code", "myproject", "src", "main.rs"]
@@ -336,44 +336,44 @@ This matching is:
 **Examples:**
 
 ```
-srcuri://match/README.md:1
+srcuri://rel/README.md:1
 Searches for README.md in all workspaces, opens at line 1
 
-srcuri://match/main.rs:50:5
+srcuri://rel/main.rs:50:5
 Finds main.rs (if unique), opens at line 50, column 5
 
-srcuri://match/src/utils.py:10
+srcuri://rel/src/utils.py:10
 Searches for src/utils.py path in all workspaces
 
-srcuri://match/AuthController.java:200?workspaceHint=backend
+srcuri://rel/AuthController.java:200?workspaceHint=backend
 Searches for AuthController.java, preferring the 'backend' workspace
 ```
 
 **srcuri.com Equivalent:**
 ```
-srcuri://match/README.md:1  →  https://srcuri.com/match/README.md:1
+srcuri://rel/README.md:1  →  https://srcuri.com/rel/README.md:1
 ```
 
 **Matching Behavior:**
 
 ```
 Single Match:
-srcuri://match/package.json:1
+srcuri://rel/package.json:1
 → Opens ~/code/myapp/package.json immediately
 
 Multiple Matches:
-srcuri://match/main.rs:10
+srcuri://rel/main.rs:10
 → Shows chooser with:
   - ~/code/backend/src/main.rs
   - ~/code/frontend/src/main.rs
   - ~/code/tools/cli/src/main.rs
 
 No Matches:
-srcuri://match/nonexistent.txt:1
+srcuri://rel/nonexistent.txt:1
 → Shows error: "File not found in any configured workspace"
 ```
 
-**Query Parameters (match mode):**
+**Query Parameters (rel mode):**
 - `workspaceHint` (string, optional): preferred workspace name to try first
 
 **Best Practices:**
@@ -764,10 +764,10 @@ srcuri://api/routes.py:100?branch=main&remote=github.com/team/api
 
 #### `workspaceHint=<name>`
 
-Used in match mode to prefer a specific workspace when multiple matches exist.
+Used in rel mode to prefer a specific workspace when multiple matches exist.
 
 ```
-srcuri://match/lib/utils.rs:10?workspaceHint=backend
+srcuri://rel/lib/utils.rs:10?workspaceHint=backend
 → Searches for "lib/utils.rs", preferring matches in "backend" workspace
 ```
 
@@ -805,8 +805,8 @@ Replace leading `srcuri://` with `https://srcuri.com/`. Preserve the remainder v
 srcuri://myrepo/src/main.rs:42
 → https://srcuri.com/myrepo/src/main.rs:42
 
-srcuri://match/README.md:1
-→ https://srcuri.com/match/README.md:1
+srcuri://rel/README.md:1
+→ https://srcuri.com/rel/README.md:1
 
 srcuri://abs/etc/hosts:1
 → https://srcuri.com/abs/etc/hosts:1
@@ -845,7 +845,7 @@ Implementations SHOULD normalize inputs into a canonical form before storage/log
 
 4. **Workspace explicitness**
    - Prefer emitting implicit workspace canonical form:
-     - `srcuri://myrepo/path` rather than `srcuri://workspace/myrepo/path`
+     - `srcuri://myrepo/path` rather than `srcuri://wks/myrepo/path`
    - Accept both on input
 
 5. **Path normalization**
@@ -897,13 +897,13 @@ srcuri://myproject/../../../etc/passwd:1
 → Error: "Invalid path (security violation)"
 ```
 
-### Match Mode Resolution
+### Relative Mode Resolution
 
-Match mode searches all configured workspaces for matching files.
+Relative mode searches all configured workspaces for matching files.
 
 **Matching Algorithm:**
 ```
-Input: srcuri://match/main.rs:10
+Input: srcuri://rel/main.rs:10
 
 1. If workspaceHint provided, search that workspace first
 
@@ -990,10 +990,10 @@ Symbolic links are resolved to their targets and validated against workspace bou
 
 Resolvers MUST produce structured errors for:
 - Unknown mode token
-- Missing required segments (e.g., `workspace` mode missing workspace name)
+- Missing required segments (e.g., `wks` mode missing workspace name)
 - Unknown/unmapped workspace (workspace mode)
-- No matches found (match mode)
-- Multiple matches without a deterministic policy (match mode)
+- No matches found (rel mode)
+- Multiple matches without a deterministic policy (rel mode)
 - Invalid absolute path encoding (abs mode)
 - Invalid upstream encoding (ext mode)
 
@@ -1021,7 +1021,7 @@ srcuri://sorcery-desktop/app-core/src/lib.rs:33
 ### Workspace (explicit)
 **Input:**
 ```
-srcuri://workspace/myrepo/path/file.rs:22
+srcuri://wks/myrepo/path/file.rs:22
 ```
 
 **Parsed:**
@@ -1030,23 +1030,23 @@ srcuri://workspace/myrepo/path/file.rs:22
 - relpath: `path/file.rs`
 - line: `22`
 
-### Match
+### Relative
 **Input:**
 ```
-srcuri://match/config/routes.rb
+srcuri://rel/config/routes.rb
 ```
 
 **Parsed:**
-- mode: `match`
+- mode: `rel`
 - path: `config/routes.rb`
 
 **Input:**
 ```
-srcuri://match/app-core/src/lib.rs:33?workspaceHint=sorcery-desktop
+srcuri://rel/app-core/src/lib.rs:33?workspaceHint=sorcery-desktop
 ```
 
 **Parsed:**
-- mode: `match`
+- mode: `rel`
 - path: `app-core/src/lib.rs`
 - line: `33`
 - workspaceHint: `sorcery-desktop`
@@ -1120,8 +1120,8 @@ srcuri://myproject/README.md:1
 With line and column:
 srcuri://myproject/src/main.rs:42:10
 
-Match mode (search):
-srcuri://match/package.json:15
+Relative mode (search):
+srcuri://rel/package.json:15
 
 Absolute path:
 srcuri://abs/tmp/debug.log:100
@@ -1206,11 +1206,11 @@ Works on all platforms with proper workspace configuration
 - [ ] Parse URI into scheme/authority/path/query/fragment
 - [ ] Validate scheme is `srcuri://` (reject `srcuri:` without `//`)
 - [ ] Determine mode:
-  - [ ] If authority in {workspace, match, abs, ext} → explicit mode
+  - [ ] If authority in {wks, rel, abs, ext} → explicit mode
   - [ ] Else → implicit workspace mode (authority is workspace name)
 - [ ] For each mode, extract required fields
 - [ ] Parse `:line[:col]` suffix from final path segment
-- [ ] Apply resolution semantics (workspace map, match search, abs open, ext open)
+- [ ] Apply resolution semantics (workspace map, rel search, abs open, ext open)
 - [ ] Support URL↔protocol conversion by prefix swap
 - [ ] Emit canonical form (implicit workspace) for output
 - [ ] Validate security constraints (path traversal, boundaries)

@@ -30,7 +30,7 @@ async fn test_protocol_handler_partial_path_single_match() {
 
     configure_workspace(&settings_manager, workspace_dir.to_str().unwrap()).await;
 
-    let url = "srcuri://match/main.rs:10:5";
+    let url = "srcuri://rel/main.rs:10:5";
     let result = protocol_handler.handle_url(url).await;
 
     match result {
@@ -293,10 +293,10 @@ async fn test_workspace_mode_is_case_insensitive() {
     }
 }
 
-// Match mode tests
+// Rel mode tests
 
 #[tokio::test]
-async fn test_match_mode_finds_workspace_in_path() {
+async fn test_rel_mode_finds_workspace_in_path() {
     let (protocol_handler, settings_manager, temp_dir, _test_file) = setup().await;
 
     let workspace_dir = temp_dir.path().join("backend");
@@ -309,20 +309,20 @@ async fn test_match_mode_finds_workspace_in_path() {
     configure_workspace(&settings_manager, workspace_dir.to_str().unwrap()).await;
 
     // Path contains workspace name in middle - should find it and use relative path
-    let url = "srcuri://match/some/prefix/backend/src/main.rs:1:1";
+    let url = "srcuri://rel/some/prefix/backend/src/main.rs:1:1";
     let result = protocol_handler.handle_url(url).await;
 
     match result {
         Ok(_) => {}
         Err(e) => panic!(
-            "Match mode should find workspace name in path. Error: {}",
+            "Rel mode should find workspace name in path. Error: {}",
             e
         ),
     }
 }
 
 #[tokio::test]
-async fn test_match_mode_with_workspace_hint() {
+async fn test_rel_mode_with_workspace_hint() {
     let (protocol_handler, settings_manager, temp_dir, _test_file) = setup().await;
 
     // Create two workspaces with same file
@@ -340,21 +340,21 @@ async fn test_match_mode_with_workspace_hint() {
     configure_workspace(&settings_manager, workspace2.to_str().unwrap()).await;
 
     // Use workspaceHint to specify which workspace
-    let url = "srcuri://match/config.json:1?workspaceHint=backend";
+    let url = "srcuri://rel/config.json:1?workspaceHint=backend";
     let result = protocol_handler.handle_url(url).await;
 
     // Should succeed - workspaceHint helps disambiguation
     match result {
         Ok(_) => {}
         Err(e) => panic!(
-            "Match mode with workspaceHint should resolve correctly. Error: {}",
+            "Rel mode with workspaceHint should resolve correctly. Error: {}",
             e
         ),
     }
 }
 
 #[tokio::test]
-async fn test_match_mode_multiple_matches_shows_chooser() {
+async fn test_rel_mode_multiple_matches_shows_chooser() {
     let (protocol_handler, settings_manager, temp_dir, _test_file) = setup().await;
 
     // Create two workspaces with same file
@@ -371,7 +371,7 @@ async fn test_match_mode_multiple_matches_shows_chooser() {
     configure_workspace(&settings_manager, workspace1.to_str().unwrap()).await;
     configure_workspace(&settings_manager, workspace2.to_str().unwrap()).await;
 
-    let url = "srcuri://match/README.md:1";
+    let url = "srcuri://rel/README.md:1";
     let result = protocol_handler.handle_url(url).await;
 
     // Should return ShowChooser result
@@ -388,7 +388,7 @@ async fn test_match_mode_multiple_matches_shows_chooser() {
 }
 
 #[tokio::test]
-async fn test_match_mode_single_match_opens_directly() {
+async fn test_rel_mode_single_match_opens_directly() {
     let (protocol_handler, settings_manager, temp_dir, _test_file) = setup().await;
 
     let workspace_dir = temp_dir.path().join("unique");
@@ -398,7 +398,7 @@ async fn test_match_mode_single_match_opens_directly() {
 
     configure_workspace(&settings_manager, workspace_dir.to_str().unwrap()).await;
 
-    let url = "srcuri://match/unique-file.rs:1";
+    let url = "srcuri://rel/unique-file.rs:1";
     let result = protocol_handler.handle_url(url).await;
 
     // Should return Opened result (not chooser)
