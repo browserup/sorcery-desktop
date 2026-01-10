@@ -412,6 +412,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     if let Some(url) = urls.first() {
                         let url_str = url.to_string();
                         tracing::info!("Processing cold-start URL: {}", url_str);
+                        hide_app();
                         let app_handle = app.handle().clone();
                         let ph = ph_cold_start.clone();
                         tauri::async_runtime::spawn(async move {
@@ -507,7 +508,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
             tracing::debug!("Single-instance callback triggered, args: {:?}", args);
 
-            // Second instance launched - forward any URL to existing instance
+            // Second instance launched - check if it's a URL or a direct app launch
+            let mut handled_url = false;
             if args.len() > 1 {
                 if let Some(url) = args.get(1) {
                     if url.starts_with("srcuri://") {
@@ -515,18 +517,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         if let Err(e) = app.emit("deep-link://new-url", vec![url.clone()]) {
                             tracing::error!("Failed to emit deep-link event: {}", e);
                         }
+                        handled_url = true;
                     }
                 }
             }
-            // Focus the existing app
-            #[cfg(target_os = "macos")]
-            {
-                use cocoa::appkit::NSApp;
-                use cocoa::base::YES;
-                use objc::{msg_send, sel, sel_impl};
-                unsafe {
-                    let ns_app = NSApp();
-                    let _: () = msg_send![ns_app, activateIgnoringOtherApps: YES];
+
+            // Only activate the app if user explicitly launched it (not via URL)
+            if !handled_url {
+                #[cfg(target_os = "macos")]
+                {
+                    use cocoa::appkit::NSApp;
+                    use cocoa::base::YES;
+                    use objc::{msg_send, sel, sel_impl};
+                    unsafe {
+                        let ns_app = NSApp();
+                        let _: () = msg_send![ns_app, activateIgnoringOtherApps: YES];
+                    }
                 }
             }
         }))
