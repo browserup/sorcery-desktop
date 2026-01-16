@@ -217,7 +217,7 @@ User clicks link in browser
 # Background process for subsequent links
 ```
 
-See `src-tauri/src/main.rs:58-78` for command-line handling and `main.rs:99-189` for event handling.
+See `src-tauri/src/main.rs:325-347` for command-line handling and `main.rs:369-414` for deep-link event handling.
 
 ## Running Tests
 

@@ -9,7 +9,7 @@
 | Feature | Description |
 |---------|-------------|
 | **Click-to-open links** | `srcuri://myproject/src/main.rs:42` opens line 42 in your editor |
-| **26 supported editors** | VS Code, JetBrains IDEs, Vim, Neovim, Emacs, Sublime, Zed, more |
+| **25+ supported editors** | VS Code, JetBrains IDEs, Vim, Neovim, Emacs, Sublime, Zed, more |
 | **Workspace mapping** | Map project names to local paths for portable links |
 | **Git-aware opening** | Open files at specific commits, branches, or tags |
 | **Auto-clone** | Clone repositories when clicking links to repos you don't have |
@@ -56,7 +56,7 @@ The srcuri:// protocol enables editor-independent code linking. Developers can s
 | `commit` | `?commit=abc1234` | Open at specific commit |
 | `branch` | `?branch=main` | Open at branch head |
 | `tag` | `?tag=v1.0.0` | Open at tag |
-| `remote` | `?remote=https://github.com/org/repo.git` | Clone URL if workspace not found |
+| `remote` | `?remote=github.com/org/repo` | Clone URL if workspace not found |
 
 ### Path Matching
 
@@ -81,7 +81,7 @@ Workspace paths (`srcuri://myproject/...`) resolve only within the named workspa
 
 ## Supported Editors
 
-Sorcery supports 26 editors across VS Code family, JetBrains IDEs, terminal editors, and others.
+Sorcery supports 25+ editors across VS Code family, JetBrains IDEs, terminal editors, and others.
 
 ### VS Code Family (5)
 
@@ -130,18 +130,19 @@ Sorcery supports 26 editors across VS Code family, JetBrains IDEs, terminal edit
 - Neovim: discovers running sessions via socket, matches workspace
 - Emacs: reuses existing daemon sessions
 
-### Other Editors (4)
+### Other Editors (5)
 
 | Editor | ID | Notes |
 |--------|----|-------|
 | Zed | `zed` | High-performance editor |
 | Sublime Text | `sublime` | Cross-platform |
 | Kate | `kate` | KDE editor |
+| Gedit | `gedit` | GNOME editor |
 | Xcode | `xcode` | macOS only |
 
 ### Editor Capabilities
 
-- **Folder support**: 22 of 26 editors support opening folders
+- **Folder support**: Most editors (over 20) support opening folders
 - **Line/column navigation**: All editors support positioning
 - **Running instance detection**: Per-editor process monitoring
 
@@ -160,7 +161,7 @@ Workspaces map project names to filesystem paths, enabling portable, partial-pat
 ### MRU Tracking
 
 - Persisted to `~/.config/sorcery/workspace_mru.yaml`
-- 20-second polling for activity detection
+- 60-second polling for activity detection
 - Tracks last-seen timestamps
 - Recent workspaces sorted first in chooser
 
@@ -308,7 +309,7 @@ System integration for srcuri:// URL handling.
 
 ### Process Monitoring
 
-- 10-second polling for active editor detection
+- 15-second polling for active editor detection
 - Tracks foreground application
 - Updates last-seen data per editor
 
