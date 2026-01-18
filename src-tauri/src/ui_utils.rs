@@ -1,8 +1,45 @@
+use tauri::AppHandle;
+
+pub struct DialogConfig {
+    pub id: &'static str,
+    pub html_file: &'static str,
+    pub title: &'static str,
+    pub width: f64,
+    pub height: f64,
+}
+
+pub fn build_dialog(app_handle: &AppHandle, config: DialogConfig) -> Result<(), String> {
+    match tauri::WebviewWindowBuilder::new(
+        app_handle,
+        config.id,
+        tauri::WebviewUrl::App(config.html_file.into()),
+    )
+    .title(config.title)
+    .inner_size(config.width, config.height)
+    .center()
+    .resizable(false)
+    .always_on_top(true)
+    .focused(true)
+    .build()
+    {
+        Ok(window) => {
+            #[cfg(target_os = "macos")]
+            set_dark_titlebar(&window);
+            Ok(())
+        }
+        Err(e) => {
+            let msg = format!("Failed to open {} dialog: {}", config.id, e);
+            tracing::error!("{}", msg);
+            Err(msg)
+        }
+    }
+}
+
 #[cfg(target_os = "macos")]
 pub fn set_dark_titlebar(window: &tauri::WebviewWindow) {
-    use cocoa::base::{id, nil};
-    use cocoa::foundation::NSString;
-    use objc::{class, msg_send, sel, sel_impl};
+    use objc2_app_kit::{
+        NSAppearance, NSAppearanceCustomization, NSAppearanceNameDarkAqua, NSColor, NSWindow,
+    };
     use tauri::Manager;
 
     let app_handle = window.app_handle().clone();
@@ -10,19 +47,17 @@ pub fn set_dark_titlebar(window: &tauri::WebviewWindow) {
 
     let _ = window.run_on_main_thread(move || {
         if let Some(win) = app_handle.get_webview_window(&label) {
-            if let Ok(ns_window) = win.ns_window() {
+            if let Ok(ns_window_ptr) = win.ns_window() {
                 unsafe {
-                    let ns_window = ns_window as id;
+                    let ns_window: &NSWindow = &*(ns_window_ptr as *const NSWindow);
 
-                    let appearance_name =
-                        cocoa::foundation::NSString::alloc(nil).init_str("NSAppearanceNameDarkAqua");
-                    let appearance: id =
-                        msg_send![class!(NSAppearance), appearanceNamed: appearance_name];
-                    let _: () = msg_send![ns_window, setAppearance: appearance];
+                    if let Some(appearance) = NSAppearance::appearanceNamed(NSAppearanceNameDarkAqua)
+                    {
+                        ns_window.setAppearance(Some(&appearance));
+                    }
 
-                    let color: id =
-                        msg_send![class!(NSColor), colorWithRed:0.071 green:0.071 blue:0.071 alpha:1.0];
-                    let _: () = msg_send![ns_window, setBackgroundColor: color];
+                    let color = NSColor::colorWithRed_green_blue_alpha(0.071, 0.071, 0.071, 1.0);
+                    ns_window.setBackgroundColor(Some(&color));
                 }
             }
         }
