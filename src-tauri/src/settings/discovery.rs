@@ -5,7 +5,11 @@ use serde::Serialize;
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 use tracing::{debug, info, warn};
+
+const SCAN_TIMEOUT: Duration = Duration::from_secs(5);
+const MAX_ENTRIES_TO_SCAN: usize = 1000;
 
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct SyncResult {
@@ -148,7 +152,7 @@ impl WorkspaceSync {
     async fn scan_folder(&self, folder: &PathBuf) -> Vec<PathBuf> {
         let folder_for_blocking = folder.clone();
         let folder_for_error = folder.clone();
-        tokio::task::spawn_blocking(move || {
+        let scan_task = tokio::task::spawn_blocking(move || {
             let folder = folder_for_blocking;
             debug!("Scanning default_workspaces_folder: {:?}", folder);
 
@@ -164,8 +168,18 @@ impl WorkspaceSync {
             };
 
             let mut repos = Vec::new();
+            let mut scanned = 0;
 
             for entry in entries.filter_map(|e| e.ok()) {
+                scanned += 1;
+                if scanned > MAX_ENTRIES_TO_SCAN {
+                    warn!(
+                        "Workspace scan stopped: exceeded {} entries in {:?}",
+                        MAX_ENTRIES_TO_SCAN, folder
+                    );
+                    break;
+                }
+
                 let path = entry.path();
 
                 if !path.is_dir() {
@@ -186,15 +200,24 @@ impl WorkspaceSync {
 
             debug!("Found {} git repos in {:?}", repos.len(), folder);
             repos
-        })
-        .await
-        .unwrap_or_else(move |e| {
-            warn!(
-                "Workspace scan task failed for {:?}: {}",
-                folder_for_error,
-                e.to_string()
-            );
-            Vec::new()
-        })
+        });
+
+        match tokio::time::timeout(SCAN_TIMEOUT, scan_task).await {
+            Ok(Ok(repos)) => repos,
+            Ok(Err(e)) => {
+                warn!(
+                    "Workspace scan task failed for {:?}: {}",
+                    folder_for_error, e
+                );
+                Vec::new()
+            }
+            Err(_) => {
+                warn!(
+                    "Workspace scan timed out after {:?} for {:?}",
+                    SCAN_TIMEOUT, folder_for_error
+                );
+                Vec::new()
+            }
+        }
     }
 }
