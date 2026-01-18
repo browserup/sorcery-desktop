@@ -14,8 +14,8 @@ mod tracker;
 mod ui_utils;
 mod workspace_mru;
 
-use std::sync::Arc;
-use std::time::Duration;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 use tauri::{
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
@@ -28,16 +28,16 @@ use crate::git_command_log::GIT_COMMAND_LOG;
 
 #[cfg(target_os = "macos")]
 fn hide_app() {
-    use cocoa::appkit::NSApp;
-    use cocoa::base::nil;
-    use objc::{msg_send, sel, sel_impl};
-    unsafe {
-        let app = NSApp();
-        let _: () = msg_send![app, hide: nil];
+    use objc2::MainThreadMarker;
+    use objc2_app_kit::NSApplication;
+    if let Some(mtm) = MainThreadMarker::new() {
+        let app = NSApplication::sharedApplication(mtm);
+        app.hide(None);
     }
 }
 
 use dialog_state::DialogState;
+use ui_utils::{build_dialog, DialogConfig};
 #[cfg(target_os = "macos")]
 use ui_utils::set_dark_titlebar;
 
@@ -78,25 +78,16 @@ async fn handle_protocol_result(
                 line,
                 column,
             });
-            match tauri::WebviewWindowBuilder::new(
+            let _ = build_dialog(
                 app_handle,
-                "workspace-chooser",
-                tauri::WebviewUrl::App("workspace-chooser.html".into()),
-            )
-            .title("Choose Workspace")
-            .inner_size(600.0, 500.0)
-            .center()
-            .resizable(false)
-            .always_on_top(true)
-            .focused(true)
-            .build()
-            {
-                Ok(window) => {
-                    #[cfg(target_os = "macos")]
-                    set_dark_titlebar(&window);
-                }
-                Err(e) => tracing::error!("Failed to open workspace chooser: {}", e),
-            }
+                DialogConfig {
+                    id: "workspace-chooser",
+                    html_file: "workspace-chooser.html",
+                    title: "Choose Workspace",
+                    width: 600.0,
+                    height: 500.0,
+                },
+            );
         }
         Ok(protocol_handler::HandleResult::ShowRevisionDialog {
             workspace,
@@ -134,25 +125,16 @@ async fn handle_protocol_result(
                 checkout_available,
                 checkout_blocked_reason,
             });
-            match tauri::WebviewWindowBuilder::new(
+            let _ = build_dialog(
                 app_handle,
-                "revision-handler",
-                tauri::WebviewUrl::App("revision-handler.html".into()),
-            )
-            .title("Open File at Revision")
-            .inner_size(600.0, 450.0)
-            .center()
-            .resizable(false)
-            .always_on_top(true)
-            .focused(true)
-            .build()
-            {
-                Ok(window) => {
-                    #[cfg(target_os = "macos")]
-                    set_dark_titlebar(&window);
-                }
-                Err(e) => tracing::error!("Failed to open revision dialog: {}", e),
-            }
+                DialogConfig {
+                    id: "revision-handler",
+                    html_file: "revision-handler.html",
+                    title: "Open File at Revision",
+                    width: 600.0,
+                    height: 450.0,
+                },
+            );
         }
         Ok(protocol_handler::HandleResult::ShowCloneDialog {
             workspace_name,
@@ -189,25 +171,54 @@ async fn handle_protocol_result(
                 git_ref: git_ref_str,
                 git_ref_kind: git_ref.clone(),
             });
-            match tauri::WebviewWindowBuilder::new(
+            let _ = build_dialog(
                 app_handle,
-                "clone-dialog",
-                tauri::WebviewUrl::App("clone-dialog.html".into()),
-            )
-            .title("Clone Repository")
-            .inner_size(520.0, 380.0)
-            .center()
-            .resizable(false)
-            .always_on_top(true)
-            .focused(true)
-            .build()
-            {
-                Ok(window) => {
-                    #[cfg(target_os = "macos")]
-                    set_dark_titlebar(&window);
-                }
-                Err(e) => tracing::error!("Failed to open clone dialog: {}", e),
-            }
+                DialogConfig {
+                    id: "clone-dialog",
+                    html_file: "clone-dialog.html",
+                    title: "Clone Repository",
+                    width: 520.0,
+                    height: 380.0,
+                },
+            );
+        }
+        Ok(protocol_handler::HandleResult::ShowLargeFileDialog {
+            file_path,
+            file_size_bytes,
+            line,
+            column,
+            editor_hint,
+        }) => {
+            let size_mb = file_size_bytes as f64 / (1024.0 * 1024.0);
+            tracing::info!(
+                "Request: showing large file warning for {} ({:.1} MB)",
+                file_path,
+                size_mb
+            );
+            GIT_COMMAND_LOG.log_request(
+                url,
+                true,
+                "large_file_dialog",
+                &format!("File is {:.1} MB, requesting confirmation", size_mb),
+                duration,
+            );
+            dialog_state.set_large_file_dialog(dialog_state::LargeFileDialogData {
+                file_path,
+                file_size_bytes,
+                line,
+                column,
+                editor_hint,
+            });
+            let _ = build_dialog(
+                app_handle,
+                DialogConfig {
+                    id: "large-file-confirm",
+                    html_file: "large-file-confirm.html",
+                    title: "Large File Warning",
+                    width: 500.0,
+                    height: 280.0,
+                },
+            );
         }
         Ok(protocol_handler::HandleResult::OpenInBrowser { url: browser_url }) => {
             tracing::info!("Request: opening in browser: {}", browser_url);
@@ -227,6 +238,39 @@ async fn handle_protocol_result(
             tracing::error!("Request: failed to handle URL: {}", error_msg);
             GIT_COMMAND_LOG.log_request(url, false, "error", &error_msg, duration);
         }
+    }
+}
+
+const MIN_DEEP_LINK_INTERVAL_MS: u64 = 200;
+
+struct DeepLinkThrottle {
+    min_interval: Duration,
+    last_allowed: Mutex<Option<Instant>>,
+}
+
+impl DeepLinkThrottle {
+    fn new(min_interval: Duration) -> Self {
+        Self {
+            min_interval,
+            last_allowed: Mutex::new(None),
+        }
+    }
+
+    fn allow(&self) -> bool {
+        let now = Instant::now();
+        let mut guard = self
+            .last_allowed
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
+
+        if let Some(last) = *guard {
+            if now.duration_since(last) < self.min_interval {
+                return false;
+            }
+        }
+
+        *guard = Some(now);
+        true
     }
 }
 
@@ -258,6 +302,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         workspace_tracker.clone(),
     ));
     let dialog_state = Arc::new(DialogState::new());
+    let deep_link_throttle = Arc::new(DeepLinkThrottle::new(Duration::from_millis(
+        MIN_DEEP_LINK_INTERVAL_MS,
+    )));
 
     settings_manager.load().await?;
     tracing::info!("Settings loaded");
@@ -335,9 +382,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let protocol_handler_clone = protocol_handler.clone();
+    let deep_link_throttle_for_setup = deep_link_throttle.clone();
 
     tauri::Builder::default()
         .setup(move |app| {
+            let deep_link_throttle = deep_link_throttle_for_setup.clone();
             tracing::info!("Setting up Tauri app...");
 
             #[cfg(target_os = "macos")]
@@ -354,6 +403,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let ph = protocol_handler_clone.clone();
             let ph_cold_start = protocol_handler_clone.clone();
 
+            let throttle_for_listener = deep_link_throttle.clone();
             app.handle().listen("deep-link://new-url", move |event| {
                 let payload = event.payload();
                 let event_time = std::time::SystemTime::now()
@@ -380,6 +430,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
 
                 let url = urls[0].clone();
+                if !throttle_for_listener.allow() {
+                    tracing::warn!(
+                        "Dropping deep-link URL due to 200ms rate limit: {}",
+                        url
+                    );
+                    return;
+                }
                 tracing::debug!("Processing deep-link URL: {}", url);
 
                 #[cfg(target_os = "macos")]
@@ -407,20 +464,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             // On macOS, URLs used to launch the app are delivered before the event listener is ready
             #[cfg(target_os = "macos")]
             {
+                let throttle_for_cold_start = deep_link_throttle.clone();
                 let deep_link = app.deep_link();
                 if let Ok(Some(urls)) = deep_link.get_current() {
                     if let Some(url) = urls.first() {
                         let url_str = url.to_string();
                         tracing::info!("Processing cold-start URL: {}", url_str);
-                        hide_app();
-                        let app_handle = app.handle().clone();
-                        let ph = ph_cold_start.clone();
-                        tauri::async_runtime::spawn(async move {
-                            let start = std::time::Instant::now();
-                            let result = ph.handle_url(&url_str).await;
-                            handle_protocol_result(result, &app_handle, &url_str, start.elapsed())
-                                .await;
-                        });
+                        if !throttle_for_cold_start.allow() {
+                            tracing::warn!(
+                                "Dropping cold-start deep-link URL due to 200ms rate limit: {}",
+                                url_str
+                            );
+                        } else {
+                            hide_app();
+                            let app_handle = app.handle().clone();
+                            let ph = ph_cold_start.clone();
+                            tauri::async_runtime::spawn(async move {
+                                let start = std::time::Instant::now();
+                                let result = ph.handle_url(&url_str).await;
+                                handle_protocol_result(result, &app_handle, &url_str, start.elapsed())
+                                    .await;
+                            });
+                        }
                     }
                 }
             }
@@ -446,13 +511,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             // Activate the app to bring it to the foreground
                             #[cfg(target_os = "macos")]
                             {
-                                use cocoa::appkit::NSApp;
-                                use cocoa::base::YES;
-                                use objc::{msg_send, sel, sel_impl};
-                                unsafe {
-                                    let ns_app = NSApp();
-                                    let _: () = msg_send![ns_app, activateIgnoringOtherApps: YES];
-                                }
+                                use objc2::MainThreadMarker;
+                                use objc2_app_kit::NSApplication;
+                                let mtm = MainThreadMarker::new()
+                                    .expect("menu events run on main thread");
+                                let ns_app = NSApplication::sharedApplication(mtm);
+                                #[allow(deprecated)]
+                                ns_app.activateIgnoringOtherApps(true);
                             }
 
                             if let Some(window) = app.get_webview_window("settings") {
@@ -505,19 +570,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .manage(protocol_handler)
         .manage(workspace_sync)
         .manage(dialog_state)
-        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
-            tracing::debug!("Single-instance callback triggered, args: {:?}", args);
+        .plugin(tauri_plugin_single_instance::init({
+            let throttle = deep_link_throttle.clone();
+            move |app, args, _cwd| {
+                tracing::debug!("Single-instance callback triggered, args: {:?}", args);
 
             // Second instance launched - check if it's a URL or a direct app launch
             let mut handled_url = false;
             if args.len() > 1 {
                 if let Some(url) = args.get(1) {
                     if url.starts_with("srcuri://") {
-                        tracing::debug!("Forwarding URL to existing instance: {}", url);
-                        if let Err(e) = app.emit("deep-link://new-url", vec![url.clone()]) {
-                            tracing::error!("Failed to emit deep-link event: {}", e);
+                        if !throttle.allow() {
+                            handled_url = true;
+                            tracing::warn!(
+                                "Dropping single-instance deep-link URL due to 200ms rate limit: {}",
+                                url
+                            );
+                        } else {
+                            tracing::debug!("Forwarding URL to existing instance: {}", url);
+                            if let Err(e) = app.emit("deep-link://new-url", vec![url.clone()]) {
+                                tracing::error!("Failed to emit deep-link event: {}", e);
+                            } else {
+                                handled_url = true;
+                            }
                         }
-                        handled_url = true;
                     }
                 }
             }
@@ -526,20 +602,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             if !handled_url {
                 #[cfg(target_os = "macos")]
                 {
-                    use cocoa::appkit::NSApp;
-                    use cocoa::base::YES;
-                    use objc::{msg_send, sel, sel_impl};
-                    unsafe {
-                        let ns_app = NSApp();
-                        let _: () = msg_send![ns_app, activateIgnoringOtherApps: YES];
-                    }
+                    use objc2::MainThreadMarker;
+                    use objc2_app_kit::NSApplication;
+                    let mtm = MainThreadMarker::new()
+                        .expect("single-instance callback runs on main thread");
+                    let ns_app = NSApplication::sharedApplication(mtm);
+                    #[allow(deprecated)]
+                    ns_app.activateIgnoringOtherApps(true);
                 }
             }
+        }
         }))
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 // Hide window instead of closing, keep app running in tray
@@ -578,6 +656,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             commands::reregister_protocol,
             commands::get_logs_directory,
             commands::open_logs_directory,
+            commands::get_large_file_dialog_data,
+            commands::large_file_confirmed,
+            commands::large_file_cancelled,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
