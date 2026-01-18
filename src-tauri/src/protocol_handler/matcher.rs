@@ -390,8 +390,8 @@ mod tests {
     async fn full_path_match_detects_direct_path() {
         let workspace_dir = TempDir::new().expect("workspace dir");
         let file_path = workspace_dir.path().join("src").join("lib.rs");
-        std::fs::create_dir_all(file_path.parent().unwrap()).unwrap();
-        std::fs::write(&file_path, "fn test_match() {}").unwrap();
+        std::fs::create_dir_all(file_path.parent().expect("file has parent")).expect("create test dir");
+        std::fs::write(&file_path, "fn test_match() {}").expect("write test file");
 
         let matcher = build_matcher(
             &workspace_dir.path().to_path_buf(),
@@ -413,8 +413,8 @@ mod tests {
     async fn full_path_match_detects_windows_like_alias() {
         let workspace_dir = TempDir::new().expect("workspace dir");
         let file_path = workspace_dir.path().join("src").join("main.rs");
-        std::fs::create_dir_all(file_path.parent().unwrap()).unwrap();
-        std::fs::write(&file_path, "fn main() {}").unwrap();
+        std::fs::create_dir_all(file_path.parent().expect("file has parent")).expect("create test dir");
+        std::fs::write(&file_path, "fn main() {}").expect("write test file");
 
         let matcher = build_matcher(&workspace_dir.path().to_path_buf(), "my-workspace").await;
 
@@ -433,8 +433,8 @@ mod tests {
     async fn partial_match_strips_git_diff_a_prefix() {
         let workspace_dir = TempDir::new().expect("workspace dir");
         let file_path = workspace_dir.path().join("src").join("lib.rs");
-        std::fs::create_dir_all(file_path.parent().unwrap()).unwrap();
-        std::fs::write(&file_path, "fn test() {}").unwrap();
+        std::fs::create_dir_all(file_path.parent().expect("file has parent")).expect("create test dir");
+        std::fs::write(&file_path, "fn test() {}").expect("write test file");
 
         let matcher = build_matcher(&workspace_dir.path().to_path_buf(), "test-ws").await;
 
@@ -451,7 +451,7 @@ mod tests {
     async fn partial_match_strips_git_diff_b_prefix() {
         let workspace_dir = TempDir::new().expect("workspace dir");
         let file_path = workspace_dir.path().join("README.md");
-        std::fs::write(&file_path, "# Test").unwrap();
+        std::fs::write(&file_path, "# Test").expect("write test file");
 
         let matcher = build_matcher(&workspace_dir.path().to_path_buf(), "test-ws").await;
 
@@ -468,8 +468,8 @@ mod tests {
     async fn partial_match_preserves_real_a_directory() {
         let workspace_dir = TempDir::new().expect("workspace dir");
         let file_path = workspace_dir.path().join("a").join("file.rs");
-        std::fs::create_dir_all(file_path.parent().unwrap()).unwrap();
-        std::fs::write(&file_path, "fn a() {}").unwrap();
+        std::fs::create_dir_all(file_path.parent().expect("file has parent")).expect("create test dir");
+        std::fs::write(&file_path, "fn a() {}").expect("write test file");
 
         let matcher = build_matcher(&workspace_dir.path().to_path_buf(), "test-ws").await;
 
@@ -486,8 +486,8 @@ mod tests {
     async fn workspace_path_strips_git_diff_prefix() {
         let workspace_dir = TempDir::new().expect("workspace dir");
         let file_path = workspace_dir.path().join("src").join("main.rs");
-        std::fs::create_dir_all(file_path.parent().unwrap()).unwrap();
-        std::fs::write(&file_path, "fn main() {}").unwrap();
+        std::fs::create_dir_all(file_path.parent().expect("file has parent")).expect("create test dir");
+        std::fs::write(&file_path, "fn main() {}").expect("write test file");
 
         let matcher = build_matcher(&workspace_dir.path().to_path_buf(), "myproject").await;
 
@@ -513,8 +513,8 @@ mod tests {
     async fn partial_match_finds_workspace_in_middle_of_path() {
         let workspace_dir = TempDir::new().expect("workspace dir");
         let file_path = workspace_dir.path().join("src").join("main.rs");
-        std::fs::create_dir_all(file_path.parent().unwrap()).unwrap();
-        std::fs::write(&file_path, "fn main() {}").unwrap();
+        std::fs::create_dir_all(file_path.parent().expect("file has parent")).expect("create test dir");
+        std::fs::write(&file_path, "fn main() {}").expect("write test file");
 
         let matcher = build_matcher(&workspace_dir.path().to_path_buf(), "myproject").await;
 
@@ -533,7 +533,7 @@ mod tests {
     async fn partial_match_workspace_detection_is_case_insensitive() {
         let workspace_dir = TempDir::new().expect("workspace dir");
         let file_path = workspace_dir.path().join("lib.rs");
-        std::fs::write(&file_path, "fn test() {}").unwrap();
+        std::fs::write(&file_path, "fn test() {}").expect("write test file");
 
         let matcher = build_matcher(&workspace_dir.path().to_path_buf(), "myproject").await;
 
@@ -551,8 +551,8 @@ mod tests {
     async fn partial_match_workspace_must_be_full_segment() {
         let workspace_dir = TempDir::new().expect("workspace dir");
         let file_path = workspace_dir.path().join("src").join("main.rs");
-        std::fs::create_dir_all(file_path.parent().unwrap()).unwrap();
-        std::fs::write(&file_path, "fn main() {}").unwrap();
+        std::fs::create_dir_all(file_path.parent().expect("file has parent")).expect("create test dir");
+        std::fs::write(&file_path, "fn main() {}").expect("write test file");
 
         let matcher = build_matcher(&workspace_dir.path().to_path_buf(), "api").await;
 
@@ -570,8 +570,8 @@ mod tests {
         let workspace_dir = TempDir::new().expect("workspace dir");
         // Create nested path that has workspace name twice
         let file_path = workspace_dir.path().join("nested").join("file.rs");
-        std::fs::create_dir_all(file_path.parent().unwrap()).unwrap();
-        std::fs::write(&file_path, "fn test() {}").unwrap();
+        std::fs::create_dir_all(file_path.parent().expect("file has parent")).expect("create test dir");
+        std::fs::write(&file_path, "fn test() {}").expect("write test file");
 
         let matcher = build_matcher(&workspace_dir.path().to_path_buf(), "myproject").await;
 
@@ -598,10 +598,10 @@ mod tests {
         // Both have same relative file
         let file1 = workspace1_dir.path().join("src").join("main.rs");
         let file2 = workspace2_dir.path().join("src").join("main.rs");
-        std::fs::create_dir_all(file1.parent().unwrap()).unwrap();
-        std::fs::create_dir_all(file2.parent().unwrap()).unwrap();
-        std::fs::write(&file1, "fn main() { /* ws1 */ }").unwrap();
-        std::fs::write(&file2, "fn main() { /* ws2 */ }").unwrap();
+        std::fs::create_dir_all(file1.parent().expect("file has parent")).expect("create test dir");
+        std::fs::create_dir_all(file2.parent().expect("file has parent")).expect("create test dir");
+        std::fs::write(&file1, "fn main() { /* ws1 */ }").expect("write test file");
+        std::fs::write(&file2, "fn main() { /* ws2 */ }").expect("write test file");
 
         // Create matcher with both workspaces
         let temp_dir = TempDir::new().expect("temp dir");

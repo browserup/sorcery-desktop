@@ -645,7 +645,7 @@ mod tests {
 
     #[test]
     fn test_implicit_workspace_simple() {
-        let request = SrcuriParser::parse("srcuri://myproject/README.md").unwrap();
+        let request = SrcuriParser::parse("srcuri://myproject/README.md").expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::ImplicitWorkspace {
@@ -661,7 +661,7 @@ mod tests {
 
     #[test]
     fn test_implicit_workspace_with_line() {
-        let request = SrcuriParser::parse("srcuri://myproject/README.md:25").unwrap();
+        let request = SrcuriParser::parse("srcuri://myproject/README.md:25").expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::ImplicitWorkspace {
@@ -677,7 +677,7 @@ mod tests {
 
     #[test]
     fn test_implicit_workspace_nested_path() {
-        let request = SrcuriParser::parse("srcuri://myproject/src/main.rs:42").unwrap();
+        let request = SrcuriParser::parse("srcuri://myproject/src/main.rs:42").expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::ImplicitWorkspace {
@@ -693,7 +693,7 @@ mod tests {
 
     #[test]
     fn test_implicit_workspace_with_line_and_column() {
-        let request = SrcuriParser::parse("srcuri://myproject/src/main.rs:42:7").unwrap();
+        let request = SrcuriParser::parse("srcuri://myproject/src/main.rs:42:7").expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::ImplicitWorkspace {
@@ -710,7 +710,7 @@ mod tests {
     #[test]
     fn test_implicit_workspace_with_git_ref() {
         let request =
-            SrcuriParser::parse("srcuri://myrepo/src/file.rs:23?commit=abc123def").unwrap();
+            SrcuriParser::parse("srcuri://myrepo/src/file.rs:23?commit=abc123def").expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::ImplicitWorkspace {
@@ -729,7 +729,7 @@ mod tests {
         let request = SrcuriParser::parse(
             "srcuri://myproject/src/main.rs:42?remote=github.com/user/myproject",
         )
-        .unwrap();
+        .expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::ImplicitWorkspace {
@@ -747,7 +747,7 @@ mod tests {
 
     #[test]
     fn test_explicit_workspace_simple() {
-        let request = SrcuriParser::parse("srcuri://wks/myrepo/src/main.rs:42").unwrap();
+        let request = SrcuriParser::parse("srcuri://wks/myrepo/src/main.rs:42").expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::ExplicitWorkspace {
@@ -764,7 +764,7 @@ mod tests {
     #[test]
     fn test_explicit_workspace_with_git_ref() {
         let request =
-            SrcuriParser::parse("srcuri://wks/myrepo/file.rs:10?branch=main").unwrap();
+            SrcuriParser::parse("srcuri://wks/myrepo/file.rs:10?branch=main").expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::ExplicitWorkspace {
@@ -782,7 +782,7 @@ mod tests {
 
     #[test]
     fn test_rel_mode_simple() {
-        let request = SrcuriParser::parse("srcuri://rel/README.md").unwrap();
+        let request = SrcuriParser::parse("srcuri://rel/README.md").expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::RelativePath {
@@ -796,7 +796,7 @@ mod tests {
 
     #[test]
     fn test_rel_mode_with_line() {
-        let request = SrcuriParser::parse("srcuri://rel/README.md:25").unwrap();
+        let request = SrcuriParser::parse("srcuri://rel/README.md:25").expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::RelativePath {
@@ -811,7 +811,7 @@ mod tests {
     #[test]
     fn test_rel_mode_with_workspace_hint() {
         let request =
-            SrcuriParser::parse("srcuri://rel/src/utils.py:10?workspaceHint=backend").unwrap();
+            SrcuriParser::parse("srcuri://rel/src/utils.py:10?workspaceHint=backend").expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::RelativePath {
@@ -825,7 +825,7 @@ mod tests {
 
     #[test]
     fn test_rel_mode_nested_path() {
-        let request = SrcuriParser::parse("srcuri://rel/src/lib/utils.py:10").unwrap();
+        let request = SrcuriParser::parse("srcuri://rel/src/lib/utils.py:10").expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::RelativePath {
@@ -841,7 +841,7 @@ mod tests {
 
     #[test]
     fn test_abs_mode_posix() {
-        let request = SrcuriParser::parse("srcuri://abs/etc/hosts:1").unwrap();
+        let request = SrcuriParser::parse("srcuri://abs/etc/hosts:1").expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::AbsolutePath {
@@ -855,7 +855,7 @@ mod tests {
     #[test]
     fn test_abs_mode_posix_deep_path() {
         let request =
-            SrcuriParser::parse("srcuri://abs/Users/alice/code/myproject/README.md:50").unwrap();
+            SrcuriParser::parse("srcuri://abs/Users/alice/code/myproject/README.md:50").expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::AbsolutePath {
@@ -869,7 +869,7 @@ mod tests {
     #[test]
     fn test_abs_mode_windows_drive() {
         let request =
-            SrcuriParser::parse("srcuri://abs/C:/Users/Carol/Dev/project/README.md:10").unwrap();
+            SrcuriParser::parse("srcuri://abs/C:/Users/Carol/Dev/project/README.md:10").expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::AbsolutePath {
@@ -883,7 +883,7 @@ mod tests {
     #[test]
     fn test_abs_mode_windows_unc() {
         let request =
-            SrcuriParser::parse("srcuri://abs/UNC/server/share/docs/readme.txt:5").unwrap();
+            SrcuriParser::parse("srcuri://abs/UNC/server/share/docs/readme.txt:5").expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::AbsolutePath {
@@ -896,7 +896,7 @@ mod tests {
 
     #[test]
     fn test_abs_mode_with_column() {
-        let request = SrcuriParser::parse("srcuri://abs/home/user/file.txt:10:5").unwrap();
+        let request = SrcuriParser::parse("srcuri://abs/home/user/file.txt:10:5").expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::AbsolutePath {
@@ -911,7 +911,7 @@ mod tests {
     fn test_abs_mode_path_already_has_leading_slash() {
         // When path already starts with /, don't add another one
         // This can happen when temp directories generate URLs like srcuri://abs//private/var/...
-        let request = SrcuriParser::parse("srcuri://abs//private/var/folders/test.rs:1").unwrap();
+        let request = SrcuriParser::parse("srcuri://abs//private/var/folders/test.rs:1").expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::AbsolutePath {
@@ -925,7 +925,7 @@ mod tests {
     #[test]
     fn test_abs_mode_preserves_symlink_path() {
         // macOS /tmp is symlinked to /private/tmp - we should preserve the path as given
-        let request = SrcuriParser::parse("srcuri://abs/tmp/test.rs:42").unwrap();
+        let request = SrcuriParser::parse("srcuri://abs/tmp/test.rs:42").expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::AbsolutePath {
@@ -943,7 +943,7 @@ mod tests {
         let request = SrcuriParser::parse(
             "srcuri://ext/https/github.com/owner/repo/blob/main/src/lib.rs#L42",
         )
-        .unwrap();
+        .expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::ExternalUrl {
@@ -962,7 +962,7 @@ mod tests {
 
     #[test]
     fn test_ext_mode_github_no_file() {
-        let request = SrcuriParser::parse("srcuri://ext/https/github.com/owner/repo").unwrap();
+        let request = SrcuriParser::parse("srcuri://ext/https/github.com/owner/repo").expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::ExternalUrl {
@@ -984,7 +984,7 @@ mod tests {
         let request = SrcuriParser::parse(
             "srcuri://ext/https/gitlab.com/group/project/-/blob/main/file.py#L10",
         )
-        .unwrap();
+        .expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::ExternalUrl {
@@ -1006,7 +1006,7 @@ mod tests {
         let request = SrcuriParser::parse(
             "srcuri://ext/https/bitbucket.org/workspace/repo/src/main/file.txt#lines-5",
         )
-        .unwrap();
+        .expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::ExternalUrl {
@@ -1028,7 +1028,7 @@ mod tests {
         let request = SrcuriParser::parse(
             "srcuri://ext/https/github.com/owner/repo/blob/main/file.rs?workspace=my.custom.workspace#L42",
         )
-        .unwrap();
+        .expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::ExternalUrl {
@@ -1050,7 +1050,7 @@ mod tests {
         let request = SrcuriParser::parse(
             "srcuri://ext/https/github.com/owner/repo/blob/main/file.rs#L10-L20",
         )
-        .unwrap();
+        .expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::ExternalUrl {
@@ -1072,7 +1072,7 @@ mod tests {
         let request = SrcuriParser::parse(
             "srcuri://ext/https/github.com/owner/repo/blob/main/src/lib.rs#L15C9",
         )
-        .unwrap();
+        .expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::ExternalUrl {
@@ -1127,7 +1127,7 @@ mod tests {
 
     #[test]
     fn test_column_at_boundary_120_accepted() {
-        let request = SrcuriParser::parse("srcuri://myproject/file.txt:10:120").unwrap();
+        let request = SrcuriParser::parse("srcuri://myproject/file.txt:10:120").expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::ImplicitWorkspace {
@@ -1143,7 +1143,7 @@ mod tests {
 
     #[test]
     fn test_column_at_boundary_121_rejected() {
-        let request = SrcuriParser::parse("srcuri://myproject/file.txt:10:121").unwrap();
+        let request = SrcuriParser::parse("srcuri://myproject/file.txt:10:121").expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::ImplicitWorkspace {
@@ -1161,7 +1161,7 @@ mod tests {
 
     #[test]
     fn test_branch_param() {
-        let request = SrcuriParser::parse("srcuri://myproject/README.md:1?branch=main").unwrap();
+        let request = SrcuriParser::parse("srcuri://myproject/README.md:1?branch=main").expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::ImplicitWorkspace {
@@ -1177,7 +1177,7 @@ mod tests {
 
     #[test]
     fn test_tag_param() {
-        let request = SrcuriParser::parse("srcuri://myrepo/src/file.rs:10?tag=v1.0.0").unwrap();
+        let request = SrcuriParser::parse("srcuri://myrepo/src/file.rs:10?tag=v1.0.0").expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::ImplicitWorkspace {
@@ -1193,7 +1193,7 @@ mod tests {
 
     #[test]
     fn test_sha_param_alias() {
-        let request = SrcuriParser::parse("srcuri://myrepo/src/file.rs:23?sha=abc123def").unwrap();
+        let request = SrcuriParser::parse("srcuri://myrepo/src/file.rs:23?sha=abc123def").expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::ImplicitWorkspace {
@@ -1212,7 +1212,7 @@ mod tests {
     #[test]
     fn test_branch_with_plus_is_decoded() {
         let request =
-            SrcuriParser::parse("srcuri://myrepo/file.rs:1?branch=feature%2Fc%2B%2B").unwrap();
+            SrcuriParser::parse("srcuri://myrepo/file.rs:1?branch=feature%2Fc%2B%2B").expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::ImplicitWorkspace {
@@ -1228,7 +1228,7 @@ mod tests {
 
     #[test]
     fn test_branch_with_hash_is_decoded() {
-        let request = SrcuriParser::parse("srcuri://myrepo/file.rs:1?branch=%23pr470").unwrap();
+        let request = SrcuriParser::parse("srcuri://myrepo/file.rs:1?branch=%23pr470").expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::ImplicitWorkspace {
@@ -1277,7 +1277,7 @@ mod tests {
 
     #[test]
     fn test_hash_line_implicit_workspace() {
-        let request = SrcuriParser::parse("srcuri://myproject/src/main.rs#100").unwrap();
+        let request = SrcuriParser::parse("srcuri://myproject/src/main.rs#100").expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::ImplicitWorkspace {
@@ -1293,7 +1293,7 @@ mod tests {
 
     #[test]
     fn test_colon_takes_precedence_over_hash() {
-        let request = SrcuriParser::parse("srcuri://myproject/file.txt:42#99").unwrap();
+        let request = SrcuriParser::parse("srcuri://myproject/file.txt:42#99").expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::ImplicitWorkspace {
@@ -1311,7 +1311,7 @@ mod tests {
 
     #[test]
     fn test_trailing_colon_implicit_workspace() {
-        let request = SrcuriParser::parse("srcuri://myproject/src/main.rs:").unwrap();
+        let request = SrcuriParser::parse("srcuri://myproject/src/main.rs:").expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::ImplicitWorkspace {
@@ -1327,7 +1327,7 @@ mod tests {
 
     #[test]
     fn test_trailing_colon_abs_mode() {
-        let request = SrcuriParser::parse("srcuri://abs/Users/ebeland/file.txt:").unwrap();
+        let request = SrcuriParser::parse("srcuri://abs/Users/ebeland/file.txt:").expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::AbsolutePath {
@@ -1340,7 +1340,7 @@ mod tests {
 
     #[test]
     fn test_trailing_colon_rel_mode() {
-        let request = SrcuriParser::parse("srcuri://rel/README.md:").unwrap();
+        let request = SrcuriParser::parse("srcuri://rel/README.md:").expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::RelativePath {
@@ -1356,7 +1356,7 @@ mod tests {
 
     #[test]
     fn test_unknown_query_params_ignored() {
-        let request = SrcuriParser::parse("srcuri://myproject/file.rs?foo=bar&baz=qux").unwrap();
+        let request = SrcuriParser::parse("srcuri://myproject/file.rs?foo=bar&baz=qux").expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::ImplicitWorkspace {
@@ -1377,7 +1377,7 @@ mod tests {
         // "rel" is a reserved authority, can't be used as workspace name
         let result = SrcuriParser::parse("srcuri://rel");
         // This should parse as rel mode with empty path
-        let request = result.unwrap();
+        let request = result.expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::RelativePath {
@@ -1391,40 +1391,30 @@ mod tests {
 
     #[test]
     fn test_reserved_authorities_not_workspaces() {
-        // All reserved authorities should be parsed as their modes, not workspaces
-        // "wks" is parsed as explicit workspace mode
-        let result = SrcuriParser::parse("srcuri://wks/myrepo/file.rs").unwrap();
-        matches!(result, SrcuriRequest::ExplicitWorkspace { .. });
+        let result = SrcuriParser::parse("srcuri://wks/myrepo/file.rs").expect("parse URL");
+        assert!(matches!(result, SrcuriRequest::ExplicitWorkspace { .. }));
 
-        // "rel" is parsed as rel mode
-        let result = SrcuriParser::parse("srcuri://rel/file.rs").unwrap();
-        matches!(result, SrcuriRequest::RelativePath { .. });
+        let result = SrcuriParser::parse("srcuri://rel/file.rs").expect("parse URL");
+        assert!(matches!(result, SrcuriRequest::RelativePath { .. }));
 
-        // "abs" is parsed as absolute path mode
-        let result = SrcuriParser::parse("srcuri://abs/etc/hosts").unwrap();
-        matches!(result, SrcuriRequest::AbsolutePath { .. });
+        let result = SrcuriParser::parse("srcuri://abs/etc/hosts").expect("parse URL");
+        assert!(matches!(result, SrcuriRequest::AbsolutePath { .. }));
 
-        // "ext" is parsed as external URL mode
         let result = SrcuriParser::parse("srcuri://ext/https/github.com/owner/repo");
-        // ext mode requires more path components, this may fail, but should NOT be ImplicitWorkspace
         if let Ok(req) = result {
-            assert!(
-                !matches!(req, SrcuriRequest::ImplicitWorkspace { .. }),
-                "'ext' should never be treated as implicit workspace"
-            );
+            assert!(!matches!(req, SrcuriRequest::ImplicitWorkspace { .. }));
         }
     }
 
     #[test]
     fn test_reserved_authorities_case_insensitive() {
-        // Reserved authorities should be case-insensitive
-        let result = SrcuriParser::parse("srcuri://REL/file.rs:1").unwrap();
-        matches!(result, SrcuriRequest::RelativePath { .. });
+        let result = SrcuriParser::parse("srcuri://REL/file.rs:1").expect("parse URL");
+        assert!(matches!(result, SrcuriRequest::RelativePath { .. }));
 
-        let result = SrcuriParser::parse("srcuri://ABS/etc/hosts").unwrap();
-        matches!(result, SrcuriRequest::AbsolutePath { .. });
+        let result = SrcuriParser::parse("srcuri://ABS/etc/hosts").expect("parse URL");
+        assert!(matches!(result, SrcuriRequest::AbsolutePath { .. }));
 
-        let result = SrcuriParser::parse("srcuri://WKS/repo/file.rs").unwrap();
-        matches!(result, SrcuriRequest::ExplicitWorkspace { .. });
+        let result = SrcuriParser::parse("srcuri://WKS/repo/file.rs").expect("parse URL");
+        assert!(matches!(result, SrcuriRequest::ExplicitWorkspace { .. }));
     }
 }

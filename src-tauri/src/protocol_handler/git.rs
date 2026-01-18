@@ -609,19 +609,28 @@ mod tests {
         let temp = TempDir::new().expect("temp dir");
         let origin = temp.path().join("origin.git");
         run(
-            Command::new("git").args(["init", "--bare", origin.to_str().unwrap()]),
+            Command::new("git").args([
+                "init",
+                "--bare",
+                origin.to_str().expect("origin path is valid UTF-8"),
+            ]),
             temp.path(),
         );
 
         let work = temp.path().join("work");
-        std::fs::create_dir(&work).unwrap();
+        std::fs::create_dir(&work).expect("create work dir");
         run(Command::new("git").arg("init"), &work);
-        std::fs::write(work.join("README.md"), "hello").unwrap();
+        std::fs::write(work.join("README.md"), "hello").expect("write README");
         run(Command::new("git").args(["add", "README.md"]), &work);
         run(Command::new("git").args(["commit", "-m", "init"]), &work);
         run(Command::new("git").args(["branch", "-M", "main"]), &work);
         run(
-            Command::new("git").args(["remote", "add", "origin", origin.to_str().unwrap()]),
+            Command::new("git").args([
+                "remote",
+                "add",
+                "origin",
+                origin.to_str().expect("origin path is valid UTF-8"),
+            ]),
             &work,
         );
         run(Command::new("git").args(["push", "origin", "main"]), &work);
@@ -646,7 +655,7 @@ mod tests {
         let (temp, origin, commit) = create_remote_repo();
         let target = temp.path().join("clone");
         GitHandler::clone_repo(
-            origin.to_str().unwrap(),
+            origin.to_str().expect("origin path is valid UTF-8"),
             &target,
             Some(&GitRef::Commit(commit.clone())),
         )
