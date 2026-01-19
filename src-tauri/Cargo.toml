@@ -42,10 +42,11 @@ parking_lot = "0.12"
 shellexpand = "3.1"
 shell-escape = "0.1"
 chrono = { version = "0.4", features = ["serde"] }
+futures = "0.3"
 git2 = "0.18"
-sysinfo = "0.30"
 open = "5"
 srcuri-core = { path = "../srcuri-core" }
+openssl = { version = "0.10.75", features = ["vendored"] }
 
 # Platform-specific dependencies
 [target.'cfg(target_os = "macos")'.dependencies]
