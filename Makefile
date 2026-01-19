@@ -1,4 +1,4 @@
-.PHONY: help build build-release build-dmg install install-quick test-protocol clean dev
+.PHONY: help build build-release build-dmg build-linux install install-quick test-protocol clean dev
 
 help:
 	@echo "Sorcery Desktop Development Makefile"
@@ -7,11 +7,14 @@ help:
 	@echo "  make build          - Build debug version"
 	@echo "  make build-release  - Build release version"
 	@echo "  make build-dmg      - Build signed/notarized DMG for distribution (macOS)"
+	@echo "  make build-linux    - Build .deb/.rpm/.AppImage for distribution (Linux)"
 	@echo "  make install        - Build and install to /Applications (macOS)"
 	@echo "  make install-quick  - Install existing build (no rebuild)"
 	@echo "  make test-protocol  - Test srcuri:// protocol handler"
 	@echo "  make clean          - Clean build artifacts"
 	@echo "  make dev            - Build, install, and test"
+	@echo ""
+	@echo "Windows: Run scripts/build-windows-release.ps1 in PowerShell"
 
 build:
 	@echo "==> Building debug version (app bundle only)..."
@@ -24,6 +27,10 @@ build-release:
 build-dmg:
 	@echo "==> Building signed/notarized DMG for distribution..."
 	@./scripts/build-macos-release.sh
+
+build-linux:
+	@echo "==> Building Linux packages..."
+	@./scripts/build-linux-release.sh
 
 install: build
 	@echo ""

@@ -18,38 +18,63 @@ if [ -z "$APPLE_ID" ] || [ -z "$APPLE_PASSWORD" ] || [ -z "$APPLE_TEAM_ID" ]; th
     echo ""
 fi
 
-# Check for signing identity
+# Check for signing identity - auto-detect if not set
 if [ -z "$APPLE_SIGNING_IDENTITY" ]; then
     echo "Checking for available signing identities..."
-    IDENTITIES=$(security find-identity -v -p codesigning 2>/dev/null | grep "Developer ID Application" || true)
-    if [ -n "$IDENTITIES" ]; then
-        echo "Found signing identities:"
-        echo "$IDENTITIES"
-        echo ""
-        echo "Set APPLE_SIGNING_IDENTITY to use one of these."
+    IDENTITY=$(security find-identity -v -p codesigning 2>/dev/null | grep "Developer ID Application" | head -1 | sed 's/.*"\(.*\)".*/\1/')
+    if [ -n "$IDENTITY" ]; then
+        export APPLE_SIGNING_IDENTITY="$IDENTITY"
+        echo "Auto-detected: $APPLE_SIGNING_IDENTITY"
     else
         echo "No Developer ID Application certificates found."
         echo "Building unsigned (won't pass Gatekeeper)..."
     fi
     echo ""
+else
+    echo "Using signing identity: $APPLE_SIGNING_IDENTITY"
+    echo ""
 fi
 
 echo "==> Building universal binary (Intel + Apple Silicon)..."
 cd src-tauri
+
+# Build - capture exit code but don't fail immediately (DMG bundler has bugs)
+set +e
 cargo tauri build --target universal-apple-darwin
+BUILD_EXIT=$?
+set -e
+
+echo ""
+APP_DIR="../target/universal-apple-darwin/release/bundle/macos"
+DMG_DIR="../target/universal-apple-darwin/release/bundle/dmg"
+BUNDLE_DIR="../target/universal-apple-darwin/release/bundle"
+
+# Check if app bundle was created (the important part)
+if [ ! -d "$APP_DIR/Sorcery Desktop.app" ]; then
+    echo "ERROR: App bundle was not created"
+    exit 1
+fi
+
+echo "==> App bundle created successfully"
+
+# Check if DMG was created, if not create it manually (Tauri bundler bug workaround)
+DMG_FILE=$(ls "$DMG_DIR"/*.dmg 2>/dev/null | head -1)
+if [ -z "$DMG_FILE" ]; then
+    echo "==> DMG bundler failed, creating DMG manually..."
+    mkdir -p "$DMG_DIR"
+    DMG_NAME="Sorcery Desktop_$(grep '"version"' ../src-tauri/tauri.conf.json | head -1 | sed 's/.*: *"\(.*\)".*/\1/')_universal.dmg"
+    hdiutil create -volname "Sorcery Desktop" -srcfolder "$APP_DIR/Sorcery Desktop.app" -ov -format UDZO "$BUNDLE_DIR/$DMG_NAME"
+    DMG_FILE="$BUNDLE_DIR/$DMG_NAME"
+    echo "  Created: $DMG_FILE"
+fi
 
 echo ""
 echo "==> Build complete!"
 echo ""
 
 # Show output location
-DMG_DIR="../target/universal-apple-darwin/release/bundle/dmg"
-APP_DIR="../target/universal-apple-darwin/release/bundle/macos"
-
-if [ -d "$DMG_DIR" ]; then
-    echo "DMG location:"
-    ls -la "$DMG_DIR"/*.dmg 2>/dev/null || echo "  (no DMG found)"
-fi
+echo "DMG location:"
+ls -la "$DMG_FILE" 2>/dev/null || ls -la "$BUNDLE_DIR"/*.dmg 2>/dev/null || echo "  (no DMG found)"
 
 echo ""
 echo "App bundle location:"
