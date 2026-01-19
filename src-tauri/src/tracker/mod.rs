@@ -1,8 +1,10 @@
 mod detector;
 
 use crate::editors::EditorRegistry;
-use crate::settings::LastSeenData;
+use crate::settings::{LastSeenData, SettingsManager};
+use crate::workspace_mru::ActiveWorkspaceTracker;
 use anyhow::{Context, Result};
+use serde_yaml_ng as serde_yaml;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -14,6 +16,8 @@ pub struct ActiveEditorTracker {
     last_seen_path: PathBuf,
     #[allow(dead_code)]
     registry: Arc<EditorRegistry>,
+    settings_manager: Option<Arc<SettingsManager>>,
+    workspace_tracker: Option<Arc<ActiveWorkspaceTracker>>,
 }
 
 impl ActiveEditorTracker {
@@ -25,7 +29,19 @@ impl ActiveEditorTracker {
             last_seen: Arc::new(RwLock::new(LastSeenData::default())),
             last_seen_path,
             registry,
+            settings_manager: None,
+            workspace_tracker: None,
         }
+    }
+
+    pub fn with_workspace_tracking(
+        mut self,
+        settings_manager: Arc<SettingsManager>,
+        workspace_tracker: Arc<ActiveWorkspaceTracker>,
+    ) -> Self {
+        self.settings_manager = Some(settings_manager);
+        self.workspace_tracker = Some(workspace_tracker);
+        self
     }
 
     fn get_last_seen_path() -> Result<PathBuf> {
@@ -87,12 +103,14 @@ impl ActiveEditorTracker {
     }
 
     async fn update_last_seen(&self) {
-        if let Some(editor_id) = detector::detect_active_editor().await {
+        let detection = detector::detect_active_editor().await;
+
+        if let Some(ref editor_id) = detection.editor_id {
             let timestamp = chrono::Utc::now().timestamp_millis();
 
             let changed = {
                 let last_seen = self.last_seen.read().await;
-                last_seen.most_recent.as_ref() != Some(&editor_id)
+                last_seen.most_recent.as_ref() != Some(editor_id)
             };
 
             if changed {
@@ -101,7 +119,7 @@ impl ActiveEditorTracker {
                 {
                     let mut last_seen = self.last_seen.write().await;
                     last_seen.editors.insert(editor_id.clone(), timestamp);
-                    last_seen.most_recent = Some(editor_id);
+                    last_seen.most_recent = Some(editor_id.clone());
                 }
 
                 if let Err(e) = self.save().await {
@@ -109,6 +127,28 @@ impl ActiveEditorTracker {
                 }
             }
         }
+
+        if let Some(ref title) = detection.window_title {
+            if let Some(ws_path) = self.extract_workspace_from_title(title).await {
+                if let Some(ref tracker) = self.workspace_tracker {
+                    tracker.record_workspace_seen(&ws_path).await;
+                }
+            }
+        }
+    }
+
+    async fn extract_workspace_from_title(&self, title: &str) -> Option<PathBuf> {
+        let settings_manager = self.settings_manager.as_ref()?;
+        let title_lower = title.to_lowercase();
+
+        for ws in settings_manager.get_workspaces().await {
+            if let Some(ref name) = ws.name {
+                if title_lower.contains(&name.to_lowercase()) {
+                    return ws.normalized_path.clone();
+                }
+            }
+        }
+        None
     }
 
     pub async fn get_last_seen_data(&self) -> LastSeenData {

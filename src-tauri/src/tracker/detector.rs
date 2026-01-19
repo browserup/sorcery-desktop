@@ -1,7 +1,12 @@
 use std::process::Command;
 use tracing::debug;
 
-pub async fn detect_active_editor() -> Option<String> {
+pub struct DetectionResult {
+    pub editor_id: Option<String>,
+    pub window_title: Option<String>,
+}
+
+pub async fn detect_active_editor() -> DetectionResult {
     #[cfg(target_os = "macos")]
     return detect_active_editor_macos().await;
 
@@ -13,54 +18,50 @@ pub async fn detect_active_editor() -> Option<String> {
 }
 
 #[cfg(target_os = "macos")]
-async fn detect_active_editor_macos() -> Option<String> {
-    let app_name = get_frontmost_app_native()?.to_lowercase();
+async fn detect_active_editor_macos() -> DetectionResult {
+    let (app_name, window_title) = get_frontmost_app_info_native();
+    let app_name_lower = app_name.as_deref().map(|s| s.to_lowercase());
 
-    debug!("Detected frontmost app: {}", app_name);
+    debug!(
+        "Detected frontmost app: {:?}, title: {:?}",
+        app_name, window_title
+    );
 
-    if app_name == "electron" {
-        if let Some(editor) = detect_vscodium_via_ps().await {
-            return Some(editor);
+    let editor_id = if let Some(ref name) = app_name_lower {
+        if name == "electron" {
+            detect_vscodium_via_ps().await.or_else(|| map_app_name_to_editor(name))
+        } else if name.contains("iterm") || name.contains("terminal") {
+            detect_terminal_editor()
+                .await
+                .or_else(|| map_app_name_to_editor(name))
+        } else {
+            map_app_name_to_editor(name)
         }
-    }
+    } else {
+        None
+    };
 
-    if app_name.contains("iterm") || app_name.contains("terminal") {
-        if let Some(editor) = detect_terminal_editor().await {
-            return Some(editor);
-        }
+    DetectionResult {
+        editor_id,
+        window_title,
     }
-
-    map_app_name_to_editor(&app_name)
 }
 
 #[cfg(target_os = "macos")]
-fn get_frontmost_app_native() -> Option<String> {
-    use cocoa::base::nil;
-    use objc::runtime::{Class, Object};
-    use objc::{msg_send, sel, sel_impl};
+fn get_frontmost_app_info_native() -> (Option<String>, Option<String>) {
+    use objc2_app_kit::{NSRunningApplication, NSWorkspace};
 
-    unsafe {
-        let cls = Class::get("NSWorkspace")?;
-        let workspace: *mut Object = msg_send![cls, sharedWorkspace];
-        let frontmost_app: *mut Object = msg_send![workspace, frontmostApplication];
+    let workspace = NSWorkspace::sharedWorkspace();
+    let frontmost_app: Option<objc2::rc::Retained<NSRunningApplication>> =
+        workspace.frontmostApplication();
 
-        if frontmost_app.is_null() || frontmost_app == nil as *mut Object {
-            return None;
-        }
+    let Some(app) = frontmost_app else {
+        return (None, None);
+    };
 
-        let name: *mut Object = msg_send![frontmost_app, localizedName];
-        if name.is_null() || name == nil as *mut Object {
-            return None;
-        }
+    let app_name = app.localizedName().map(|n| n.to_string());
 
-        let utf8: *const std::ffi::c_char = msg_send![name, UTF8String];
-        if utf8.is_null() {
-            return None;
-        }
-
-        let c_str = std::ffi::CStr::from_ptr(utf8);
-        c_str.to_str().ok().map(|s| s.to_string())
-    }
+    (app_name, None)
 }
 
 #[cfg(target_os = "macos")]
@@ -127,7 +128,7 @@ async fn detect_terminal_editor() -> Option<String> {
 }
 
 #[cfg(target_os = "windows")]
-async fn detect_active_editor_windows() -> Option<String> {
+async fn detect_active_editor_windows() -> DetectionResult {
     let ps_script = r#"
 Add-Type @"
   using System;
@@ -154,19 +155,33 @@ $title.ToString()
             ps_script,
         ])
         .output()
-        .ok()?;
+        .ok();
+
+    let Some(output) = output else {
+        return DetectionResult {
+            editor_id: None,
+            window_title: None,
+        };
+    };
 
     if !output.status.success() {
-        return None;
+        return DetectionResult {
+            editor_id: None,
+            window_title: None,
+        };
     }
 
-    let title = String::from_utf8_lossy(&output.stdout)
-        .trim()
-        .to_lowercase();
+    let title = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let title_lower = title.to_lowercase();
 
     debug!("Detected window title: {}", title);
 
-    map_window_title_to_editor(&title)
+    let editor_id = map_window_title_to_editor(&title_lower);
+
+    DetectionResult {
+        editor_id,
+        window_title: Some(title),
+    }
 }
 
 #[cfg(target_os = "windows")]
@@ -203,11 +218,16 @@ fn map_window_title_to_editor(title: &str) -> Option<String> {
 }
 
 #[cfg(target_os = "linux")]
-async fn detect_active_editor_linux() -> Option<String> {
-    if let Some(title) = get_active_window_title_x11() {
-        return map_window_title_to_editor(&title.to_lowercase());
+async fn detect_active_editor_linux() -> DetectionResult {
+    let window_title = get_active_window_title_x11();
+    let title_lower = window_title.as_ref().map(|t| t.to_lowercase());
+
+    let editor_id = title_lower.as_ref().and_then(|t| map_window_title_to_editor(t));
+
+    DetectionResult {
+        editor_id,
+        window_title,
     }
-    None
 }
 
 #[cfg(target_os = "linux")]
