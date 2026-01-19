@@ -5,12 +5,9 @@ STAR_CENTER_X = 370
 STAR_CENTER_Y = 145
 
 def lerp_color(c1, c2, t):
-    """Linear interpolate between two RGB colors"""
     return tuple(int(c1[i] + (c2[i] - c1[i]) * t) for i in range(3))
 
 def get_gradient_color(distance, max_distance):
-    """Get color based on distance from center (radial gradient)"""
-    # Gradient stops: 0% -> 70% -> 100%
     colors = [
         (0.0, (147, 51, 234)),    # #9333ea - purple
         (0.7, (192, 38, 211)),    # #c026d3 - magenta
@@ -19,7 +16,6 @@ def get_gradient_color(distance, max_distance):
 
     t = min(distance / max_distance, 1.0) if max_distance > 0 else 0
 
-    # Find the two stops to interpolate between
     for i in range(len(colors) - 1):
         if t <= colors[i + 1][0]:
             t_local = (t - colors[i][0]) / (colors[i + 1][0] - colors[i][0])
@@ -28,8 +24,6 @@ def get_gradient_color(distance, max_distance):
     return colors[-1][1]
 
 def draw_four_point_star_gradient(img, cx, cy, outer_r, inner_r):
-    """Draw a 4-pointed star with radial gradient"""
-    # Calculate star polygon points
     points = []
     for i in range(8):
         angle = -math.pi / 2 + i * math.pi / 4
@@ -38,12 +32,10 @@ def draw_four_point_star_gradient(img, cx, cy, outer_r, inner_r):
         y = cy + r * math.sin(angle)
         points.append((x, y))
 
-    # Create a mask for the star shape
     mask = Image.new('L', img.size, 0)
     mask_draw = ImageDraw.Draw(mask)
     mask_draw.polygon(points, fill=255)
 
-    # Draw gradient pixels within bounding box
     min_x = int(cx - outer_r)
     max_x = int(cx + outer_r) + 1
     min_y = int(cy - outer_r)
@@ -51,8 +43,6 @@ def draw_four_point_star_gradient(img, cx, cy, outer_r, inner_r):
 
     pixels = img.load()
     mask_pixels = mask.load()
-
-    # Use full outer_r as max distance (matching SVG r="115")
     max_dist = outer_r
 
     for y in range(max(0, min_y), min(img.size[1], max_y)):
@@ -62,8 +52,18 @@ def draw_four_point_star_gradient(img, cx, cy, outer_r, inner_r):
                 color = get_gradient_color(dist, max_dist)
                 pixels[x, y] = color + (255,)
 
+def draw_white_mini_star(img, cx, cy, outer_r, inner_r):
+    draw = ImageDraw.Draw(img)
+    points = []
+    for i in range(8):
+        angle = -math.pi / 2 + i * math.pi / 4
+        r = outer_r if i % 2 == 0 else inner_r
+        x = cx + r * math.cos(angle)
+        y = cy + r * math.sin(angle)
+        points.append((x, y))
+    draw.polygon(points, fill=(255, 255, 255, 255))
+
 def draw_wand(draw, base_scale, color):
-    """Draw the wand polygon"""
     wand_points = [
         (52 * base_scale, 428 * base_scale),
         (87 * base_scale, 463 * base_scale),
@@ -73,7 +73,6 @@ def draw_wand(draw, base_scale, color):
     draw.polygon(wand_points, fill=color)
 
 def create_wand_icon(output_path='wand_icon_new.png', size=512):
-    # Draw at 2x resolution for smooth anti-aliased edges
     scale = 2
     canvas_size = size * scale
     base_scale = canvas_size / 512
@@ -81,19 +80,23 @@ def create_wand_icon(output_path='wand_icon_new.png', size=512):
     img = Image.new('RGBA', (canvas_size, canvas_size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
 
-    # Draw wand
     draw_wand(draw, base_scale, (0, 0, 0, 255))
 
-    # Draw star with gradient
+    cx = STAR_CENTER_X * base_scale
+    cy = STAR_CENTER_Y * base_scale
+
     draw_four_point_star_gradient(
-        img,
-        STAR_CENTER_X * base_scale,
-        STAR_CENTER_Y * base_scale,
+        img, cx, cy,
         outer_r=115 * base_scale,
         inner_r=40 * base_scale
     )
 
-    # Downsample with anti-aliasing
+    draw_white_mini_star(
+        img, cx, cy,
+        outer_r=20 * base_scale,
+        inner_r=7 * base_scale
+    )
+
     img = img.resize((size, size), Image.LANCZOS)
 
     img.save(output_path)

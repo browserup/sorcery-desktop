@@ -1,6 +1,7 @@
 <svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
   <polygon points="52,428 87,463 328,230 293,195" fill="#1a1a1a"/>
   <polygon points="370,30 398,117 485,145 398,173 370,260 342,173 255,145 342,117" fill="url(#starGradient)"/>
+  <polygon points="370,125 375,140 390,145 375,150 370,165 365,150 350,145 365,140" fill="white"/>
   <defs>
     <radialGradient id="starGradient" cx="370" cy="145" r="115" gradientUnits="userSpaceOnUse">
       <stop offset="0%" stop-color="#9333ea"/>
