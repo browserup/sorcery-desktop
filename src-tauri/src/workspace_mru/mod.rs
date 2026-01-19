@@ -1,26 +1,22 @@
-mod fs_signal;
-mod git_signals;
+pub mod git_signals;
 mod models;
-mod probe;
-mod process;
 
 pub use models::{WorkspaceActivity, WorkspaceMruData};
 
 use crate::settings::SettingsManager;
 use anyhow::{Context, Result};
-use std::path::PathBuf;
+use serde_yaml_ng as serde_yaml;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::SystemTime;
-use sysinfo::System;
 use tokio::sync::RwLock;
-use tokio::time::{interval, Duration};
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 pub struct ActiveWorkspaceTracker {
     mru_data: Arc<RwLock<WorkspaceMruData>>,
     mru_path: PathBuf,
+    #[allow(dead_code)]
     settings_manager: Arc<SettingsManager>,
-    system: Arc<RwLock<System>>,
 }
 
 impl ActiveWorkspaceTracker {
@@ -32,7 +28,6 @@ impl ActiveWorkspaceTracker {
             mru_data: Arc::new(RwLock::new(WorkspaceMruData::default())),
             mru_path,
             settings_manager,
-            system: Arc::new(RwLock::new(System::new())),
         }
     }
 
@@ -76,53 +71,50 @@ impl ActiveWorkspaceTracker {
             .await
             .context("Failed to write workspace MRU file")?;
 
-        info!("Workspace MRU data saved to {:?}", self.mru_path);
+        debug!("Workspace MRU data saved to {:?}", self.mru_path);
         Ok(())
     }
 
-    pub async fn start_polling(self: Arc<Self>) {
-        info!("Starting workspace MRU tracking (60s interval)");
-
-        let mut ticker = interval(Duration::from_secs(60));
-
-        loop {
-            ticker.tick().await;
-            self.update_workspace_activity().await;
-        }
-    }
-
-    async fn update_workspace_activity(&self) {
-        let workspaces = self.settings_manager.get_workspaces().await;
-
-        {
-            let mut sys = self.system.write().await;
-            process::refresh_process_snapshot(&mut sys);
-        }
-
-        let sys = self.system.read().await;
-
-        for workspace_config in &workspaces {
-            if let Some(workspace_path) = &workspace_config.normalized_path {
-                let probe_result = probe::probe_workspace(workspace_path, &sys).await;
-
-                if let Some(last_active) = probe_result.last_active {
-                    let mut mru_data = self.mru_data.write().await;
-                    mru_data
-                        .workspaces
-                        .insert(workspace_path.clone(), WorkspaceActivity { last_active });
-                }
-            }
-        }
-
+    pub async fn record_workspace_seen(&self, workspace_path: &Path) {
+        let mut data = self.mru_data.write().await;
+        data.workspaces.insert(
+            workspace_path.to_path_buf(),
+            WorkspaceActivity {
+                last_seen: SystemTime::now(),
+            },
+        );
+        drop(data);
         if let Err(e) = self.save().await {
             warn!("Failed to save workspace MRU data: {}", e);
         }
     }
 
-    pub async fn get_workspace_last_active(&self, workspace_path: &PathBuf) -> Option<SystemTime> {
+    pub fn get_folder_mtime(workspace_path: &Path) -> Option<SystemTime> {
+        std::fs::metadata(workspace_path).ok()?.modified().ok()
+    }
+
+    pub async fn get_last_seen(&self, workspace_path: &Path) -> Option<SystemTime> {
         let data = self.mru_data.read().await;
         data.workspaces
             .get(workspace_path)
-            .map(|activity| activity.last_active)
+            .map(|activity| activity.last_seen)
+    }
+
+    pub async fn compute_effective_time(
+        &self,
+        workspace_path: &Path,
+        include_reflog: bool,
+    ) -> Option<SystemTime> {
+        let last_seen = self.get_last_seen(workspace_path).await;
+        let folder_mtime = Self::get_folder_mtime(workspace_path);
+        let reflog_time = if include_reflog {
+            git_signals::head_reflog_time(workspace_path)
+        } else {
+            None
+        };
+        [last_seen, folder_mtime, reflog_time]
+            .into_iter()
+            .flatten()
+            .max()
     }
 }
