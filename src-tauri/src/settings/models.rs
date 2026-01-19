@@ -53,6 +53,12 @@ pub struct DefaultEditorConfig {
 
     #[serde(default = "default_strip_git_diff_prefixes")]
     pub strip_git_diff_prefixes: bool,
+
+    #[serde(default = "default_large_file_warning_mb")]
+    pub large_file_warning_mb: u64,
+
+    #[serde(default = "default_max_file_size_mb")]
+    pub max_file_size_mb: u64,
 }
 
 fn default_editor() -> String {
@@ -120,6 +126,14 @@ fn default_strip_git_diff_prefixes() -> bool {
     true
 }
 
+fn default_large_file_warning_mb() -> u64 {
+    5
+}
+
+fn default_max_file_size_mb() -> u64 {
+    50
+}
+
 impl Default for DefaultEditorConfig {
     fn default() -> Self {
         Self {
@@ -130,6 +144,8 @@ impl Default for DefaultEditorConfig {
             auto_switch_clean_branches: default_auto_switch_clean_branches(),
             ignored_workspaces: Vec::new(),
             strip_git_diff_prefixes: default_strip_git_diff_prefixes(),
+            large_file_warning_mb: default_large_file_warning_mb(),
+            max_file_size_mb: default_max_file_size_mb(),
         }
     }
 }

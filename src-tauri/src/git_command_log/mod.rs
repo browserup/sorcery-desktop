@@ -3,7 +3,7 @@ use parking_lot::Mutex;
 use serde::Serialize;
 use std::collections::VecDeque;
 use std::process::Output;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 use std::time::{Duration, Instant};
 
 const MAX_LOG_ENTRIES: usize = 30;
@@ -201,9 +201,8 @@ impl GitCommandLog {
     }
 }
 
-lazy_static::lazy_static! {
-    pub static ref GIT_COMMAND_LOG: Arc<GitCommandLog> = Arc::new(GitCommandLog::new());
-}
+pub static GIT_COMMAND_LOG: LazyLock<Arc<GitCommandLog>> =
+    LazyLock::new(|| Arc::new(GitCommandLog::new()));
 
 pub fn run_git_command(working_dir: &str, args: &[&str]) -> std::io::Result<Output> {
     let start = Instant::now();

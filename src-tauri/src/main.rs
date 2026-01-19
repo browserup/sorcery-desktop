@@ -285,10 +285,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let settings_manager = Arc::new(settings::SettingsManager::new().await?);
     let path_validator = Arc::new(path_validator::PathValidator::new(settings_manager.clone()));
     let editor_registry = Arc::new(editors::EditorRegistry::new());
-    let tracker = Arc::new(tracker::ActiveEditorTracker::new(editor_registry.clone()));
     let workspace_tracker = Arc::new(workspace_mru::ActiveWorkspaceTracker::new(
         settings_manager.clone(),
     ));
+    let tracker = Arc::new(
+        tracker::ActiveEditorTracker::new(editor_registry.clone()).with_workspace_tracking(
+            settings_manager.clone(),
+            workspace_tracker.clone(),
+        ),
+    );
     let workspace_sync = Arc::new(settings::WorkspaceSync::new(settings_manager.clone()));
     let dispatcher = Arc::new(dispatcher::EditorDispatcher::new(
         settings_manager.clone(),
@@ -324,12 +329,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tokio::spawn(async move {
         tracing::info!("Starting active editor tracker...");
         tracker_handle.start_polling().await;
-    });
-
-    let workspace_tracker_handle = workspace_tracker.clone();
-    tokio::spawn(async move {
-        tracing::info!("Starting workspace MRU tracker...");
-        workspace_tracker_handle.start_polling().await;
     });
 
     tracing::info!("All services initialized");

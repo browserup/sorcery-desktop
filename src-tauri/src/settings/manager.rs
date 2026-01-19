@@ -1,5 +1,6 @@
 use super::models::{Settings, WorkspaceConfig};
 use anyhow::{Context, Result};
+use serde_yaml_ng as serde_yaml;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -155,6 +156,14 @@ impl SettingsManager {
             .defaults
             .default_workspaces_folder
             .clone()
+    }
+
+    pub async fn get_large_file_warning_bytes(&self) -> u64 {
+        self.settings.read().await.defaults.large_file_warning_mb * 1024 * 1024
+    }
+
+    pub async fn get_max_file_size_bytes(&self) -> u64 {
+        self.settings.read().await.defaults.max_file_size_mb * 1024 * 1024
     }
 
     async fn normalize_workspace_paths(&self, settings: &mut Settings) -> Result<()> {

@@ -46,10 +46,20 @@ pub struct CloneDialogData {
     pub git_ref_kind: Option<GitRef>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LargeFileDialogData {
+    pub file_path: String,
+    pub file_size_bytes: u64,
+    pub line: Option<usize>,
+    pub column: Option<usize>,
+    pub editor_hint: Option<String>,
+}
+
 pub struct DialogState {
     workspace_chooser: Mutex<Option<WorkspaceChooserData>>,
     revision_dialog: Mutex<Option<RevisionDialogData>>,
     clone_dialog: Mutex<Option<CloneDialogData>>,
+    large_file_dialog: Mutex<Option<LargeFileDialogData>>,
 }
 
 impl DialogState {
@@ -58,6 +68,7 @@ impl DialogState {
             workspace_chooser: Mutex::new(None),
             revision_dialog: Mutex::new(None),
             clone_dialog: Mutex::new(None),
+            large_file_dialog: Mutex::new(None),
         }
     }
 
@@ -93,6 +104,14 @@ impl DialogState {
         } else {
             false
         }
+    }
+
+    pub fn set_large_file_dialog(&self, data: LargeFileDialogData) {
+        *self.large_file_dialog.lock() = Some(data);
+    }
+
+    pub fn take_large_file_dialog(&self) -> Option<LargeFileDialogData> {
+        self.large_file_dialog.lock().take()
     }
 }
 

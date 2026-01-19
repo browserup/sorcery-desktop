@@ -1,11 +1,14 @@
 use crate::dialog_state::DialogState;
-pub use crate::dialog_state::{CloneDialogData, RevisionDialogData, WorkspaceChooserData};
+pub use crate::dialog_state::{
+    CloneDialogData, LargeFileDialogData, RevisionDialogData, WorkspaceChooserData,
+};
 use crate::dispatcher::EditorDispatcher;
 use crate::editors::EditorRegistry;
 use crate::git_command_log::{GitCommandLogEntry, GIT_COMMAND_LOG};
 use crate::protocol_handler::{GitHandler, WorkingTreeStatus};
 use crate::settings::{Settings, SettingsManager, WorkspaceSync};
 use crate::tracker::ActiveEditorTracker;
+use crate::workspace_mru::ActiveWorkspaceTracker;
 #[cfg(target_os = "macos")]
 use crate::ui_utils::set_dark_titlebar;
 use serde::Serialize;
@@ -386,6 +389,7 @@ pub async fn workspace_chosen(
     index: usize,
     dispatcher: State<'_, Arc<EditorDispatcher>>,
     dialog_state: State<'_, Arc<DialogState>>,
+    workspace_tracker: State<'_, Arc<ActiveWorkspaceTracker>>,
 ) -> Result<(), String> {
     let data = dialog_state
         .take_workspace_chooser()
@@ -396,6 +400,10 @@ pub async fn workspace_chosen(
     }
 
     let workspace_match = &data.matches[index];
+
+    workspace_tracker
+        .record_workspace_seen(&workspace_match.workspace_path)
+        .await;
 
     dispatcher
         .open(
@@ -700,6 +708,48 @@ pub async fn test_protocol_url(
 
             Ok(())
         }
+        Ok(HandleResult::ShowLargeFileDialog {
+            file_path,
+            file_size_bytes,
+            line,
+            column,
+            editor_hint,
+        }) => {
+            let size_mb = file_size_bytes as f64 / (1024.0 * 1024.0);
+            GIT_COMMAND_LOG.log_request(
+                &url,
+                true,
+                "large_file_dialog",
+                &format!("File is {:.1} MB, requesting confirmation", size_mb),
+                duration,
+            );
+            dialog_state.set_large_file_dialog(LargeFileDialogData {
+                file_path,
+                file_size_bytes,
+                line,
+                column,
+                editor_hint,
+            });
+
+            let window = tauri::WebviewWindowBuilder::new(
+                &app,
+                "large-file-confirm",
+                tauri::WebviewUrl::App("large-file-confirm.html".into()),
+            )
+            .title("Large File Warning")
+            .inner_size(500.0, 280.0)
+            .center()
+            .resizable(false)
+            .always_on_top(true)
+            .focused(true)
+            .build()
+            .map_err(|e| e.to_string())?;
+
+            #[cfg(target_os = "macos")]
+            set_dark_titlebar(&window);
+
+            Ok(())
+        }
         Ok(HandleResult::OpenInBrowser { url: browser_url }) => {
             GIT_COMMAND_LOG.log_request(
                 &url,
@@ -789,6 +839,34 @@ pub fn update_clone_path(
 
 #[tauri::command]
 pub fn clone_cancelled(_dialog_state: State<'_, Arc<DialogState>>) -> Result<(), String> {
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_large_file_dialog_data(
+    dialog_state: State<'_, Arc<DialogState>>,
+) -> Result<LargeFileDialogData, String> {
+    dialog_state
+        .take_large_file_dialog()
+        .ok_or_else(|| "No large file dialog data available".to_string())
+}
+
+#[tauri::command]
+pub async fn large_file_confirmed(
+    file_path: String,
+    line: Option<usize>,
+    column: Option<usize>,
+    editor_hint: Option<String>,
+    dispatcher: State<'_, Arc<EditorDispatcher>>,
+) -> Result<(), String> {
+    dispatcher
+        .open(&file_path, line, column, false, editor_hint)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn large_file_cancelled() -> Result<(), String> {
     Ok(())
 }
 

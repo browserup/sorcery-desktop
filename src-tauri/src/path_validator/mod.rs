@@ -1,16 +1,15 @@
 use crate::settings::SettingsManager;
 use anyhow::{bail, Context, Result};
-use once_cell::sync::Lazy;
 use regex::Regex;
 use std::borrow::Cow;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 
 // Blocks shell/HTML metacharacters that could enable command or DOM injection.
 // Parentheses and square brackets are intentionally omitted—they're common in
 // macOS-generated directory names and Git repo folders and are safe because we
 // never invoke a shell when launching editors.
-static SUSPICIOUS_PATTERNS: Lazy<Regex> = Lazy::new(|| {
+static SUSPICIOUS_PATTERNS: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"(\.\./|\.\.\\|//|[\x00-\x1f]|[<>|?*;'`$&{}"]|#)"#)
         .expect("SUSPICIOUS_PATTERNS regex is valid")
 });
