@@ -5,7 +5,7 @@
 Sorcery Desktop is an open source, MIT license, cross-platform, hyperlinker for editors/IDE. The srcuri:// protocol (also known as the "Sorcery protocol") lets developers share code references in an editor-independent manner that links to what developers like--the file and line, but *in their own editor*. Without Sorcery links, developers share github links, but opening github.com doesn't help you debug and edit code.
 
 For example:
-* srcuri://@myproject/README.md:75
+* srcuri://myproject/README.md:75
 
 With Sorcery Desktop installed, and the srcuri:// protocol registered, devs can open their own editor to the exact file and line with a click.
 

@@ -53,8 +53,7 @@ The answer, for our approach, is that we return the first match, but we are care
 We look in most recently active workspace first, so we have the highest chances of giving the user 
 the file they are actually looking for. We check its existence, and open it if it exists where we expect.
 
-The selection algorithm uses the dev/workspace-mru-spec.md algorithm to track which is most recently used.
-Let's implement that algorithm now.
+The selection algorithm uses event-driven workspace MRU tracking to determine the most recently used workspace. Activity is recorded when links open or when the user selects a workspace in the chooser. The effective ranking considers `MAX(last_seen, folder_mtime, reflog_time)`.
 
 # Fragment Matching algorithm overview
 Goal:  We want to match the fragment path we are given by combining the 

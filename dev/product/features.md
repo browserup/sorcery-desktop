@@ -161,8 +161,10 @@ Workspaces map project names to filesystem paths, enabling portable, partial-pat
 ### MRU Tracking
 
 - Persisted to `~/.config/sorcery/workspace_mru.yaml`
-- 60-second polling for activity detection
-- Tracks last-seen timestamps
+- Event-driven tracking: records activity when links open or user selects in chooser
+- Best-effort workspace detection from editor window titles
+- Effective ranking: `MAX(last_seen, folder_mtime, reflog_time)`
+- On-demand git reflog checks (top 5 matches only for performance)
 - Recent workspaces sorted first in chooser
 
 ### Workspace Chooser

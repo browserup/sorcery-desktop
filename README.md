@@ -1,4 +1,27 @@
-# Sorcery Desktop
+# Sorcery
+
+Hyperlinks make it easy for devs to *view* source code in a browser, but don't make it easy to *edit* source.
+Hyperlinks for your editor (or IDE) that open on the right line. That's *Sorcery!*
+
+Sorcery Desktop is an open source tool, built on the open-source srcuri:// (pronounced Sorcery) protocol.
+
+Sorcery Desktop provides the local protocol handler component for srcuri:// links. 
+It routes srcuri:// protocol links to your editor or IDE of choice.
+
+Goal:
+* Make source code editor links possible, and everywhere
+
+Use-cases:
+* Open terminal links from file paths in the terminal, or from srcuri:// links
+* 
+
+
+What's it do:
+* Sorcery Desktop - Makes srcuri links open in your editor, right to the file/line
+* Sorcery Chrome Extension - Makes stack traces, and file paths in the browser command-clickable so they open
+in editor.
+
+
 
 ## Problem: Your co-worker shares links to source code--but they open in github, not your editor.
 
@@ -13,7 +36,7 @@ No Longer!
 
 Sorcery uses the srcuri:// protocol to link to lines of code in *your* editor. Now, your coworker shares:
 
-srcuri://@reponame/path/to/file.js:53
+srcuri://reponame/path/to/file.js:53
 
 With one click, you're on *that line* in **your** local editor and repo.
 
@@ -35,7 +58,7 @@ https://github.com/user/myrepo/blob/main/src/main.rs#L42
 
 Use:
 ```
-srcuri://@myrepo/src/main.rs:42
+srcuri://myrepo/src/main.rs:42
 ```
 
 When clicked, this opens `src/main.rs` at line 42 in **your** preferred editor - whether that's VS Code, IntelliJ IDEA, Neovim, Vim, Emacs, Sublime Text, or any other supported editor.
@@ -92,7 +115,7 @@ https://srcuri.com/open#src/main.rs:42?workspace=myrepo
 
 When clicked, the web page parses the URL fragment and redirects to:
 ```
-srcuri://@myrepo/src/main.rs:42
+srcuri://myrepo/src/main.rs:42
 ```
 
 Sorcery Desktop then opens your editor to that exact file and line.
@@ -106,68 +129,7 @@ Sorcery Desktop then opens your editor to that exact file and line.
 
 ## Architecture
 
-Sorcery Desktop is built with Tauri 2.0, combining a Rust backend with a web-based UI for configuration and testing.
-
-### Core Components
-
-```
-src-tauri/src/
-├── main.rs              # Application entry point, Tauri setup
-├── settings/            # Settings persistence and management
-│   ├── mod.rs           # SettingsManager
-│   └── models.rs        # Settings data structures
-├── path_validator/      # Path security and normalization
-│   └── mod.rs           # PathValidator
-├── editors/             # Editor integrations
-│   ├── mod.rs           # EditorRegistry
-│   ├── traits.rs        # EditorManager trait
-│   ├── vscode.rs        # VS Code family managers
-│   ├── jetbrains.rs     # JetBrains IDE manager
-│   ├── terminal.rs      # Vim, Neovim, Emacs managers
-│   ├── sublime.rs       # Sublime Text manager
-│   └── zed.rs           # Zed manager
-├── tracker/             # Active editor detection
-│   ├── mod.rs           # ActiveEditorTracker
-│   └── detector.rs      # OS-specific frontmost app detection
-├── dispatcher/          # Request routing and execution
-│   └── mod.rs           # EditorDispatcher
-└── commands.rs          # Tauri command handlers
-```
-
-### Component Responsibilities
-
-#### **SettingsManager** (`settings/`)
-- Persists user preferences to JSON
-- Manages editor preferences per workspace
-- Tracks last-seen editors and timestamps
-- Thread-safe with RwLock for concurrent access
-
-#### **PathValidator** (`path_validator/`)
-- Sanitizes and normalizes file paths without ever invoking a shell
-- Expands a leading `~` (home-relative paths) while rejecting all other `~` usage
-- Blocks shell/HTML metacharacters (`;`, `&`, `|`, `` ` ``, `$`, `#`, quotes, braces, angle brackets, etc.) to prevent command or DOM injection
-- Permits common filesystem characters such as parentheses `()` and square brackets `[]` so macOS-style folders (e.g., `Project (1)`) work safely
-- Validates path existence and prevents traversal (`../`, symlink escapes)
-- Ensures only files or directories are opened
-
-#### **EditorRegistry** (`editors/`)
-- Central registry of all editor managers
-- Provides lookup by editor ID
-- Discovers installed editors on-demand
-- Caches binary locations with TTL
-
-#### **EditorManager Trait** (`editors/traits.rs`)
-Each editor implements the `EditorManager` trait:
-```rust
-#[async_trait]
-pub trait EditorManager: Send + Sync {
-    fn id(&self) -> &str;
-    fn display_name(&self) -> &str;
-    async fn find_binary(&self) -> Option<PathBuf>;
-    async fn open(&self, path: &Path, options: &OpenOptions) -> EditorResult<()>;
-    async fn get_running_instances(&self) -> EditorResult<Vec<EditorInstance>>;
-}
-```
+Sorcery Desktop is built with Tauri/Rust to keep it lightweight. It sits in the system tray while running.
 
 Key features per editor type:
 
@@ -217,7 +179,7 @@ Key features per editor type:
 ### Data Flow
 
 ```
-1. Deep link clicked: srcuri://@project/file.rs:42
+1. Deep link clicked: srcuri://project/file.rs:42
    ↓
 2. OS routes to sorcery application
    ↓
@@ -387,9 +349,9 @@ srcuri://<workspace>/<path>:<line>:<column>?editor=<editor-id>
 
 Examples:
 ```
-srcuri://@myapp/src/main.rs:42
-srcuri://@webapp/index.ts:10:5?editor=cursor
-srcuri://@backend/api/handler.go:100?editor=goland
+srcuri://myapp/src/main.rs:42
+srcuri://webapp/index.ts:10:5?editor=cursor
+srcuri://backend/api/handler.go:100?editor=goland
 ```
 
 ### Opening Folders
@@ -397,7 +359,7 @@ srcuri://@backend/api/handler.go:100?editor=goland
 In addition to files, srcuri:// links can open folders in most editors:
 
 ```
-srcuri://@myapp/src/controllers          # Open a folder within a workspace
+srcuri://myapp/src/controllers          # Open a folder within a workspace
 srcuri:///Users/dev/projects/myapp       # Open an absolute folder path
 ```
 
