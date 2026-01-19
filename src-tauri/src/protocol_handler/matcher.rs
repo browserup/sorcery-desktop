@@ -328,21 +328,51 @@ impl PathMatcher {
     }
 
     pub async fn sort_by_recent_usage(&self, matches: &mut Vec<WorkspaceMatch>) {
+        const MAX_REFLOG_CHECKS: usize = 5;
+
         for ws_match in matches.iter_mut() {
             ws_match.last_active = self
                 .workspace_tracker
-                .get_workspace_last_active(&ws_match.workspace_path)
+                .compute_effective_time(&ws_match.workspace_path, false)
                 .await;
         }
 
+        Self::sort_matches(matches);
+
+        let reflog_futures: Vec<_> = matches
+            .iter()
+            .take(MAX_REFLOG_CHECKS)
+            .map(|m| {
+                let path = m.workspace_path.clone();
+                tokio::task::spawn_blocking(move || {
+                    crate::workspace_mru::git_signals::head_reflog_time(&path)
+                })
+            })
+            .collect();
+
+        let results = futures::future::join_all(reflog_futures).await;
+
+        for (i, result) in results.into_iter().enumerate() {
+            if let Ok(Some(reflog_time)) = result {
+                let current = matches[i].last_active;
+                if current.map_or(true, |t| reflog_time > t) {
+                    matches[i].last_active = Some(reflog_time);
+                }
+            }
+        }
+
+        Self::sort_matches(matches);
+
+        debug!("Sorted {} matches by workspace MRU", matches.len());
+    }
+
+    fn sort_matches(matches: &mut Vec<WorkspaceMatch>) {
         matches.sort_by(|a, b| match (a.last_active, b.last_active) {
             (Some(time_a), Some(time_b)) => time_b.cmp(&time_a),
             (Some(_), None) => std::cmp::Ordering::Less,
             (None, Some(_)) => std::cmp::Ordering::Greater,
             (None, None) => a.workspace_name.cmp(&b.workspace_name),
         });
-
-        debug!("Sorted {} matches by workspace MRU", matches.len());
     }
 }
 

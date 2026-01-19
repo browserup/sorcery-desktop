@@ -10,6 +10,7 @@ use crate::dispatcher::EditorDispatcher;
 use crate::settings::SettingsManager;
 use crate::workspace_mru::ActiveWorkspaceTracker;
 use anyhow::{bail, Context, Result};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tracing::info;
 
@@ -17,6 +18,7 @@ pub struct ProtocolHandler {
     matcher: PathMatcher,
     settings_manager: Arc<SettingsManager>,
     dispatcher: Arc<EditorDispatcher>,
+    workspace_tracker: Arc<ActiveWorkspaceTracker>,
 }
 
 impl ProtocolHandler {
@@ -26,10 +28,76 @@ impl ProtocolHandler {
         workspace_tracker: Arc<ActiveWorkspaceTracker>,
     ) -> Self {
         Self {
-            matcher: PathMatcher::new(settings_manager.clone(), workspace_tracker),
+            matcher: PathMatcher::new(settings_manager.clone(), workspace_tracker.clone()),
             settings_manager,
             dispatcher,
+            workspace_tracker,
         }
+    }
+
+    async fn open_with_size_check(
+        &self,
+        file_path: &str,
+        line: Option<usize>,
+        column: Option<usize>,
+        editor_hint: Option<String>,
+    ) -> Result<HandleResult> {
+        let path = Path::new(file_path);
+
+        if path.is_file() {
+            if let Ok(metadata) = std::fs::metadata(path) {
+                let file_size = metadata.len();
+                let max_size = self.settings_manager.get_max_file_size_bytes().await;
+                let warning_size = self.settings_manager.get_large_file_warning_bytes().await;
+
+                if file_size > max_size {
+                    let size_mb = file_size as f64 / (1024.0 * 1024.0);
+                    let max_mb = max_size as f64 / (1024.0 * 1024.0);
+                    bail!(
+                        "File is too large ({:.1} MB). Maximum allowed size is {:.0} MB. \
+                         You can increase this limit in Settings.",
+                        size_mb,
+                        max_mb
+                    );
+                }
+
+                if file_size > warning_size {
+                    return Ok(HandleResult::ShowLargeFileDialog {
+                        file_path: file_path.to_string(),
+                        file_size_bytes: file_size,
+                        line,
+                        column,
+                        editor_hint,
+                    });
+                }
+            }
+        }
+
+        self.dispatcher
+            .open(file_path, line, column, false, editor_hint)
+            .await?;
+
+        if let Some(workspace_path) = self.find_workspace_for_path(file_path).await {
+            self.workspace_tracker
+                .record_workspace_seen(&workspace_path)
+                .await;
+        }
+
+        Ok(HandleResult::Opened {
+            file_path: file_path.to_string(),
+        })
+    }
+
+    async fn find_workspace_for_path(&self, file_path: &str) -> Option<PathBuf> {
+        let path = std::path::Path::new(file_path);
+        for ws in self.settings_manager.get_workspaces().await {
+            if let Some(ref ws_path) = ws.normalized_path {
+                if path.starts_with(ws_path) {
+                    return Some(ws_path.clone());
+                }
+            }
+        }
+        None
     }
 
     pub async fn handle_url(&self, url: &str) -> Result<HandleResult> {
@@ -148,13 +216,9 @@ impl ProtocolHandler {
             );
 
             let file_path_str = workspace_match.full_file_path.to_string_lossy().to_string();
-            self.dispatcher
-                .open(&file_path_str, line, column, false, None)
-                .await?;
-
-            return Ok(HandleResult::Opened {
-                file_path: file_path_str,
-            });
+            return self
+                .open_with_size_check(&file_path_str, line, column, None)
+                .await;
         }
 
         self.matcher.sort_by_recent_usage(&mut matches).await;
@@ -183,12 +247,8 @@ impl ProtocolHandler {
         match self.matcher.find_workspace_path(workspace, path).await {
             Ok(full_path) => {
                 let file_path_str = full_path.to_string_lossy().to_string();
-                self.dispatcher
-                    .open(&file_path_str, line, column, false, None)
-                    .await?;
-                Ok(HandleResult::Opened {
-                    file_path: file_path_str,
-                })
+                self.open_with_size_check(&file_path_str, line, column, None)
+                    .await
             }
             Err(WorkspaceLookupError::WorkspaceNotFound(_)) if remote.is_some() => {
                 let remote_url = remote.unwrap();
@@ -228,12 +288,9 @@ impl ProtocolHandler {
         if matches.is_empty() {
             if self.settings_manager.allows_non_workspace_files().await {
                 info!("No workspace matches, attempting to open as absolute path");
-                self.dispatcher
-                    .open(full_path, line, column, false, None)
-                    .await?;
-                return Ok(HandleResult::Opened {
-                    file_path: full_path.to_string(),
-                });
+                return self
+                    .open_with_size_check(full_path, line, column, None)
+                    .await;
             } else {
                 bail!(
                     "File '{}' not found in any workspace and non-workspace files are disabled",
@@ -250,13 +307,9 @@ impl ProtocolHandler {
             );
 
             let file_path_str = workspace_match.full_file_path.to_string_lossy().to_string();
-            self.dispatcher
-                .open(&file_path_str, line, column, false, None)
-                .await?;
-
-            return Ok(HandleResult::Opened {
-                file_path: file_path_str,
-            });
+            return self
+                .open_with_size_check(&file_path_str, line, column, None)
+                .await;
         }
 
         self.matcher.sort_by_recent_usage(&mut matches).await;
@@ -329,12 +382,9 @@ impl ProtocolHandler {
         if GitHandler::should_skip_revision_dialog(&git_root, rev)? {
             info!("Already on target revision {}, opening directly", rev);
             let file_path_str = full_path.to_string_lossy().to_string();
-            self.dispatcher
-                .open(&file_path_str, line, column, false, None)
-                .await?;
-            return Ok(HandleResult::Opened {
-                file_path: file_path_str,
-            });
+            return self
+                .open_with_size_check(&file_path_str, line, column, None)
+                .await;
         }
 
         let current_ref = GitHandler::get_current_ref(&git_root)?;
@@ -399,12 +449,8 @@ impl ProtocolHandler {
                 }
 
                 let file_path_str = full_path.to_string_lossy().to_string();
-                self.dispatcher
-                    .open(&file_path_str, line, column, false, None)
-                    .await?;
-                Ok(HandleResult::Opened {
-                    file_path: file_path_str,
-                })
+                self.open_with_size_check(&file_path_str, line, column, None)
+                    .await
             }
             Err(_) => {
                 let mut url = String::from("https://srcuri.com/");
@@ -451,6 +497,13 @@ pub enum HandleResult {
         line: Option<usize>,
         column: Option<usize>,
         git_ref: Option<GitRef>,
+    },
+    ShowLargeFileDialog {
+        file_path: String,
+        file_size_bytes: u64,
+        line: Option<usize>,
+        column: Option<usize>,
+        editor_hint: Option<String>,
     },
     OpenInBrowser {
         url: String,
