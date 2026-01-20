@@ -93,6 +93,10 @@
         <h3>Absolute Paths</h3>
         <a href="srcuri:///Users/ebeland/apps/sorcery-desktop/README.md:1">Open project README (absolute path)</a><br>
         <a href="srcuri:///Users/ebeland/apps/sorcery-desktop/README.md:50">Open project README at line 50 (absolute path)</a>
+
+        <h3>Any Mode</h3>
+        <a href="srcuri://any/sorcery-desktop/README.md:1">Open README via any (workspace-leading)</a><br>
+        <a href="srcuri://any//etc/hosts:1">Open /etc/hosts via any (absolute)</a>
     </div>
 
     <div class="test-section">
@@ -102,6 +106,8 @@
         <button onclick="testProtocol('/etc/hosts:1')">Test /etc/hosts</button>
         <button onclick="testProtocol('/tmp/test.txt:10')">Test /tmp/test.txt</button>
         <button onclick="testProtocol('sorcery-desktop/README.md:1', true)">Test Workspace Link</button>
+        <button onclick="testProtocol('any/sorcery-desktop/README.md:1')">Test Any (workspace-leading)</button>
+        <button onclick="testProtocol('any//etc/hosts:1')">Test Any (absolute)</button>
 
         <div class="result" id="result">
             <em>Click a button above to test...</em>

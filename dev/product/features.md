@@ -40,6 +40,7 @@ The srcuri:// protocol enables editor-independent code linking. Developers can s
 | Implicit Workspace | `srcuri://myproject/src/main.rs:42` | Authority is workspace name (recommended) |
 | Explicit Workspace | `srcuri://wks/myproject/src/main.rs:42` | Explicit workspace mode |
 | Relative (Search) | `srcuri://rel/file.rs:42` | Searches all workspaces |
+| Any (Best-Effort) | `srcuri://any/file.rs:42` | Best-effort resolution for unknown path context |
 | Absolute Path | `srcuri://abs/etc/hosts:42` | Absolute filesystem path |
 | External URL | `srcuri://ext/https/github.com/user/repo/blob/main/file.rs#L42` | Git provider URL |
 | Revision Path | `srcuri://myproject/file.rs:42?commit=abc123` | Git-aware with revision |

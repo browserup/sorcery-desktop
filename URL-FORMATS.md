@@ -14,9 +14,9 @@ srcuri://<authority>/<path>:<line>:<column>
 
 The **authority** determines how the link is interpreted:
 - A **workspace name** (most common) — opens file relative to that workspace
-- A **reserved token** (`wks`, `rel`, `abs`, `ext`) — explicit mode
+- A **reserved token** (`wks`, `rel`, `any`, `abs`, `ext`) — explicit mode
 
-## Four Link Modes
+## Five Link Modes
 
 ### 1. Workspace Mode (Implicit) — Recommended
 
@@ -106,7 +106,21 @@ srcuri://rel/D:/Code/myproject/src/main.rs:42
 # Opens: ~/code/myproject/src/main.rs (your local path)
 ```
 
-### 4. Absolute Path Mode
+### 4. Any Mode (Best-Effort)
+
+**Format:** `srcuri://any/<path>:<line>:<column>`
+
+Best-effort resolution when the source does not know whether the path is workspace-relative, search-relative, or absolute.
+
+**Examples:**
+```
+srcuri://any/src/main.rs:42
+srcuri://any/Users/ebeland/apps/sorcery/README.md:50
+```
+
+**Resolution order:** workspace, relative, absolute (applicable steps only).
+
+### 5. Absolute Path Mode
 
 **Format:** `srcuri://abs/<path>:<line>:<column>`
 
@@ -134,7 +148,7 @@ srcuri://abs/UNC/server/share/file.txt:5
 - Testing specific files
 - No workspace mapping needed
 
-### 5. External Mode (Provider URLs)
+### 6. External Mode (Provider URLs)
 
 **Format:** `srcuri://ext/<scheme>/<host>/<path>#<fragment>`
 
@@ -268,13 +282,13 @@ srcuri://myproject/README.md:1?branch=main&remote=github.com/user/myproject
 4. Developer B confirms → repo is cloned, workspace is added, file opens
 5. Future links to `srcuri://cool-lib/...` work directly
 
-### Workspace Hint (Relative Mode)
+### Workspace Hint (Relative/Any Mode)
 
 ```
 srcuri://rel/lib/utils.rs:10?workspaceHint=backend
 ```
 
-- Used in rel mode to prefer a specific workspace when multiple matches exist
+- Used in rel or any mode to prefer a specific workspace when multiple matches exist
 
 ## Usage Examples
 
@@ -389,12 +403,17 @@ The parser (`src-tauri/src/protocol_handler/parser.rs`) follows these rules:
    srcuri://abs/etc/hosts:1
    ```
 
-4. **Authority = "ext"** → External URL mode
+4. **Authority = "any"** → Any mode (best-effort)
+   ```
+   srcuri://any/src/main.rs:42
+   ```
+
+5. **Authority = "ext"** → External URL mode
    ```
    srcuri://ext/https/github.com/user/repo/blob/main/file.rs#L42
    ```
 
-5. **Authority = anything else** → Implicit workspace mode
+6. **Authority = anything else** → Implicit workspace mode
    ```
    srcuri://myproject/file.rs:1
    ```
@@ -451,6 +470,7 @@ These words cannot be used as workspace names:
 
 - `wks` — explicit workspace mode
 - `rel` — relative/search mode
+- `any` — best-effort mode
 - `abs` — absolute path mode
 - `ext` — external URL mode
 

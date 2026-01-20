@@ -338,11 +338,11 @@ workspaces:
 The srcuri protocol (also known as the "Sorcery protocol") uses this format:
 
 ```
-srcuri://<workspace>/<path>:<line>:<column>?editor=<editor-id>
+srcuri://<authority>/<path>:<line>:<column>?editor=<editor-id>
 ```
 
-- `workspace`: Logical workspace name (maps to filesystem path)
-- `path`: Relative path within workspace
+- `authority`: Workspace name (default) or reserved token (`wks`, `rel`, `any`, `abs`, `ext`)
+- `path`: Relative path for workspace modes, search path for `rel`/`any`, or absolute path for `abs`
 - `line`: Optional line number (1-indexed)
 - `column`: Optional column number (1-indexed)
 - `editor`: Optional editor hint (overrides preferences)
@@ -350,6 +350,8 @@ srcuri://<workspace>/<path>:<line>:<column>?editor=<editor-id>
 Examples:
 ```
 srcuri://myapp/src/main.rs:42
+srcuri://any/src/main.rs:42
+srcuri://abs/etc/hosts:1
 srcuri://webapp/index.ts:10:5?editor=cursor
 srcuri://backend/api/handler.go:100?editor=goland
 ```
@@ -360,7 +362,7 @@ In addition to files, srcuri:// links can open folders in most editors:
 
 ```
 srcuri://myapp/src/controllers          # Open a folder within a workspace
-srcuri:///Users/dev/projects/myapp       # Open an absolute folder path
+srcuri://abs/Users/dev/projects/myapp    # Open an absolute folder path
 ```
 
 Most editors (22 of 26) support opening folders. Line/column numbers are silently ignored for folders.

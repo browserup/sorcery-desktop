@@ -158,6 +158,15 @@ impl ProtocolHandler {
                 column,
                 workspace_hint,
             } => self.handle_rel_path(&path, line, column, workspace_hint.as_deref()).await,
+            SrcuriRequest::AnyPath {
+                path,
+                line,
+                column,
+                workspace_hint,
+            } => {
+                self.handle_any_path(&path, line, column, workspace_hint.as_deref())
+                    .await
+            }
             SrcuriRequest::AbsolutePath {
                 full_path,
                 line,
@@ -232,6 +241,80 @@ impl ProtocolHandler {
             line,
             column,
         })
+    }
+
+    async fn handle_any_path(
+        &self,
+        path: &str,
+        line: Option<usize>,
+        column: Option<usize>,
+        workspace_hint: Option<&str>,
+    ) -> Result<HandleResult> {
+        info!("Handling any path: {}", path);
+        if let Some(hint) = workspace_hint {
+            info!("  workspace hint: {}", hint);
+        }
+
+        if Self::is_absolute_any_path(path) {
+            return self.handle_absolute_path(path, line, column).await;
+        }
+
+        if let Some(hint) = workspace_hint {
+            return self
+                .handle_workspace_path(hint, path, line, column, None)
+                .await;
+        }
+
+        if let Some((workspace, relative_path)) = self.extract_leading_workspace_path(path).await {
+            return self
+                .handle_workspace_path(&workspace, &relative_path, line, column, None)
+                .await;
+        }
+
+        self.handle_rel_path(path, line, column, None).await
+    }
+
+    async fn extract_leading_workspace_path(&self, path: &str) -> Option<(String, String)> {
+        let normalized = path.replace('\\', "/");
+        let mut segments = normalized.split('/').filter(|s| !s.is_empty());
+        let first = segments.next()?;
+        let remainder = segments.collect::<Vec<_>>().join("/");
+
+        for workspace in self.settings_manager.get_workspaces().await {
+            let ws_name = workspace.name.as_deref().or_else(|| {
+                Path::new(&workspace.path)
+                    .file_name()
+                    .and_then(|name| name.to_str())
+            });
+
+            if let Some(ws_name) = ws_name {
+                if ws_name.eq_ignore_ascii_case(first) {
+                    return Some((ws_name.to_string(), remainder));
+                }
+            }
+        }
+
+        None
+    }
+
+    fn is_absolute_any_path(path: &str) -> bool {
+        if path.is_empty() {
+            return false;
+        }
+
+        if path.starts_with('/') || path.starts_with('\\') || path.starts_with('~') {
+            return true;
+        }
+
+        let bytes = path.as_bytes();
+        if bytes.len() >= 2 && bytes[1] == b':' && bytes[0].is_ascii_alphabetic() {
+            if bytes.len() == 2 {
+                return true;
+            }
+            return matches!(bytes.get(2), Some(b'/') | Some(b'\\'));
+        }
+
+        false
     }
 
     async fn handle_workspace_path(
