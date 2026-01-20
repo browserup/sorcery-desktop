@@ -34,8 +34,9 @@
 
 **As a developer browsing a remote repository**, I want to open the current file in my local editor to transition from reading to editing.
 
+**As a developer reading terminal output**, I want to click a file path that opens in my editor even when the path type is unknown.
+
 **As a developer**, I want to convert a web-based repository link (GitHub/GitLab) into a universal link to share with others.
 
 **As an observability tools vendor**, I want to create a link-to-edit that I can embed in my web-based observability tool that opens the user's editor to the right file
 and line, and if they don't have sorcery installed, I want to have it fall back to a view-only link to the repo.
-

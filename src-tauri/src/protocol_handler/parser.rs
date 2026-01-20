@@ -38,6 +38,14 @@ pub enum SrcuriRequest {
         column: Option<usize>,
         workspace_hint: Option<String>,
     },
+    /// Any mode: authority is "any" - best-effort resolution
+    /// srcuri://any/path/file.rs:42
+    AnyPath {
+        path: String,
+        line: Option<usize>,
+        column: Option<usize>,
+        workspace_hint: Option<String>,
+    },
     /// Absolute path: authority is "abs"
     /// srcuri://abs/etc/hosts:1
     /// srcuri://abs/C:/Windows/system.ini:1
@@ -169,6 +177,7 @@ impl SrcuriParser {
                 remote,
             ),
             "rel" => Self::parse_rel_mode(path_after_authority, fragment, workspace_hint),
+            "any" => Self::parse_any_mode(path_after_authority, fragment, workspace_hint),
             "abs" => Self::parse_abs_mode(path_after_authority, fragment),
             "ext" => Self::parse_ext_mode(path_after_authority, query_part, fragment, git_ref, workspace_hint),
             _ => Self::parse_implicit_workspace_mode(
@@ -276,6 +285,27 @@ impl SrcuriParser {
         }
 
         Ok(SrcuriRequest::RelativePath {
+            path: file_path,
+            line,
+            column,
+            workspace_hint,
+        })
+    }
+
+    /// Parse any mode: srcuri://any/path/file.rs:42
+    /// Best-effort resolution in handler
+    fn parse_any_mode(
+        path_part: &str,
+        fragment: Option<&str>,
+        workspace_hint: Option<String>,
+    ) -> Result<SrcuriRequest> {
+        let (file_path, mut line, column) = Self::parse_path_with_location(path_part)?;
+
+        if line.is_none() {
+            line = Self::parse_fragment_line(fragment);
+        }
+
+        Ok(SrcuriRequest::AnyPath {
             path: file_path,
             line,
             column,
@@ -837,6 +867,51 @@ mod tests {
         );
     }
 
+    // Any mode tests
+
+    #[test]
+    fn test_any_mode_simple() {
+        let request = SrcuriParser::parse("srcuri://any/README.md").expect("parse URL");
+        assert_eq!(
+            request,
+            SrcuriRequest::AnyPath {
+                path: "README.md".to_string(),
+                line: None,
+                column: None,
+                workspace_hint: None,
+            }
+        );
+    }
+
+    #[test]
+    fn test_any_mode_with_line() {
+        let request = SrcuriParser::parse("srcuri://any/src/lib.rs:10").expect("parse URL");
+        assert_eq!(
+            request,
+            SrcuriRequest::AnyPath {
+                path: "src/lib.rs".to_string(),
+                line: Some(10),
+                column: None,
+                workspace_hint: None,
+            }
+        );
+    }
+
+    #[test]
+    fn test_any_mode_with_workspace_hint() {
+        let request =
+            SrcuriParser::parse("srcuri://any/src/utils.py:10?workspaceHint=backend").expect("parse URL");
+        assert_eq!(
+            request,
+            SrcuriRequest::AnyPath {
+                path: "src/utils.py".to_string(),
+                line: Some(10),
+                column: None,
+                workspace_hint: Some("backend".to_string()),
+            }
+        );
+    }
+
     // Absolute path mode tests
 
     #[test]
@@ -1352,6 +1427,20 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_trailing_colon_any_mode() {
+        let request = SrcuriParser::parse("srcuri://any/README.md:").expect("parse URL");
+        assert_eq!(
+            request,
+            SrcuriRequest::AnyPath {
+                path: "README.md".to_string(),
+                line: None,
+                column: None,
+                workspace_hint: None,
+            }
+        );
+    }
+
     // Unknown query params ignored
 
     #[test]
@@ -1397,6 +1486,9 @@ mod tests {
         let result = SrcuriParser::parse("srcuri://rel/file.rs").expect("parse URL");
         assert!(matches!(result, SrcuriRequest::RelativePath { .. }));
 
+        let result = SrcuriParser::parse("srcuri://any/file.rs").expect("parse URL");
+        assert!(matches!(result, SrcuriRequest::AnyPath { .. }));
+
         let result = SrcuriParser::parse("srcuri://abs/etc/hosts").expect("parse URL");
         assert!(matches!(result, SrcuriRequest::AbsolutePath { .. }));
 
@@ -1410,6 +1502,9 @@ mod tests {
     fn test_reserved_authorities_case_insensitive() {
         let result = SrcuriParser::parse("srcuri://REL/file.rs:1").expect("parse URL");
         assert!(matches!(result, SrcuriRequest::RelativePath { .. }));
+
+        let result = SrcuriParser::parse("srcuri://ANY/file.rs:1").expect("parse URL");
+        assert!(matches!(result, SrcuriRequest::AnyPath { .. }));
 
         let result = SrcuriParser::parse("srcuri://ABS/etc/hosts").expect("parse URL");
         assert!(matches!(result, SrcuriRequest::AbsolutePath { .. }));

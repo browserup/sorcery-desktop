@@ -42,6 +42,7 @@ Sorcery supports several modes, determined by the first path segment:
 |------|--------|---------|
 | **Workspace** (default) | `/myrepo/path:line` | Reference code via shared workspace names |
 | **Relative** | `/rel/path:line` | Search for a path across all workspaces |
+| **Any** | `/any/path:line` | Best-effort resolution when path context is unknown |
 | **Absolute** | `/abs/path:line` | Reference a specific filesystem path |
 | **External** | `/ext/https/github.com/...` | Encode an upstream URL (GitHub, GitLab, etc.) |
 
@@ -89,6 +90,16 @@ srcuri.com/rel/config/routes.rb
 
 Use this for generic paths in blog posts, tutorials, or documentation—where readers will open the file in their own project.
 
+### Any Mode
+
+Best-effort resolution when the source doesn't know if a path is workspace-relative, search-relative, or absolute.
+
+```
+srcuri://any/src/main.rs:42
+```
+
+Resolution order (applicable steps only): workspace, relative, absolute. `any` never attempts external (`ext`) resolution. Prefer specific modes when you know the context.
+
 ### Absolute Mode
 
 References a specific filesystem path. Useful for system files or documentation that points to known locations.
@@ -120,6 +131,8 @@ Do you share workspace conventions with your audience?
    │
    └─ System or absolute filesystem path? → Use ABS mode
 ```
+
+If you control the local environment (terminal, logs, scripts) and can't tell which path type you have, use ANY mode.
 
 ## Common Scenarios
 
@@ -171,7 +184,7 @@ See the authentication flow: https://srcuri.com/backend/src/auth/flow.rs:25?remo
 Custom protocols work here, and you control the environment.
 
 ```
-srcuri://myrepo/src/main.rs:42
+srcuri://any/src/main.rs:42
 ```
 
 ## Quick Reference
@@ -183,4 +196,4 @@ srcuri://myrepo/src/main.rs:42
 | External OSS (no workspace relationship) | ext | `srcuri.com/ext/https/github.com/...` |
 | Generic path (tutorials, blogs) | rel | `srcuri.com/rel/path:line` |
 | System files | abs | `srcuri.com/abs/etc/hosts:1` |
-| Local scripts / terminal | `srcuri://` | any |
+| Local scripts / terminal | `srcuri://any/path:line` | any |
