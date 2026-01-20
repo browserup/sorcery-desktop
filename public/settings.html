@@ -716,13 +716,23 @@
               <span>Auto-switch branches when working tree is clean</span>
             </label>
           </div>
-          <div class="form-group" style="margin-bottom: 0;">
+          <div class="form-group">
             <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
               <input type="checkbox" id="strip-git-diff-prefixes" style="width: auto; cursor: pointer;" checked>
               <span>Strip git diff prefixes</span>
               <span style="color: var(--text-tertiary); cursor: help;"
                     title="Automatically strip a/ and b/ prefixes from paths like a/README.md or b/src/main.rs. These prefixes are added by git diff output.">ⓘ</span>
             </label>
+          </div>
+          <div class="form-group">
+            <label for="large-file-warning-mb">Large File Warning (MB)</label>
+            <input type="number" id="large-file-warning-mb" min="1" max="1000" value="5" style="width: 120px;">
+            <p class="help-text">Show confirmation dialog for files larger than this size</p>
+          </div>
+          <div class="form-group" style="margin-bottom: 0;">
+            <label for="max-file-size-mb">Maximum File Size (MB)</label>
+            <input type="number" id="max-file-size-mb" min="1" max="10000" value="50" style="width: 120px;">
+            <p class="help-text">Refuse to open files larger than this size</p>
           </div>
         </div>
 
@@ -984,6 +994,8 @@
     let autoSwitchCleanBranches = true;
     let stripGitDiffPrefixes = true;
     let defaultWorkspacesFolder = '~/code';
+    let largeFileWarningMb = 5;
+    let maxFileSizeMb = 50;
     let installedEditors = [];
 
     async function loadInstalledEditors() {
@@ -1022,6 +1034,8 @@
         preferredTerminal = settings.defaults?.preferred_terminal || 'auto';
         autoSwitchCleanBranches = settings.defaults?.auto_switch_clean_branches ?? true;
         stripGitDiffPrefixes = settings.defaults?.strip_git_diff_prefixes ?? true;
+        largeFileWarningMb = settings.defaults?.large_file_warning_mb ?? 5;
+        maxFileSizeMb = settings.defaults?.max_file_size_mb ?? 50;
 
         // Auto-detect repo folder on first launch (when not yet saved in settings)
         if (!settings.defaults?.default_workspaces_folder) {
@@ -1037,6 +1051,8 @@
         document.getElementById('auto-switch-clean-branches').checked = autoSwitchCleanBranches;
         document.getElementById('strip-git-diff-prefixes').checked = stripGitDiffPrefixes;
         document.getElementById('default-workspaces-folder').value = defaultWorkspacesFolder;
+        document.getElementById('large-file-warning-mb').value = largeFileWarningMb;
+        document.getElementById('max-file-size-mb').value = maxFileSizeMb;
         renderWorkspaces();
         await loadDiscoveredWorkspaces();
       } catch (e) {
@@ -1083,7 +1099,9 @@
           preferred_terminal: preferredTerminal,
           auto_switch_clean_branches: autoSwitchCleanBranches,
           strip_git_diff_prefixes: stripGitDiffPrefixes,
-          default_workspaces_folder: defaultWorkspacesFolder
+          default_workspaces_folder: defaultWorkspacesFolder,
+          large_file_warning_mb: largeFileWarningMb,
+          max_file_size_mb: maxFileSizeMb
         }
       };
 
@@ -1318,6 +1336,23 @@
     document.getElementById('strip-git-diff-prefixes').addEventListener('change', async (e) => {
       stripGitDiffPrefixes = e.target.checked;
       await saveSettings();
+    });
+
+    let fileSizeSaveTimeout = null;
+    document.getElementById('large-file-warning-mb').addEventListener('input', (e) => {
+      largeFileWarningMb = parseInt(e.target.value, 10) || 5;
+      clearTimeout(fileSizeSaveTimeout);
+      fileSizeSaveTimeout = setTimeout(async () => {
+        await saveSettings();
+      }, 500);
+    });
+
+    document.getElementById('max-file-size-mb').addEventListener('input', (e) => {
+      maxFileSizeMb = parseInt(e.target.value, 10) || 50;
+      clearTimeout(fileSizeSaveTimeout);
+      fileSizeSaveTimeout = setTimeout(async () => {
+        await saveSettings();
+      }, 500);
     });
 
     let workspacesFolderSaveTimeout = null;
