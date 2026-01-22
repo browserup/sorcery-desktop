@@ -1,6 +1,7 @@
 use crate::dialog_state::DialogState;
 pub use crate::dialog_state::{
-    CloneDialogData, LargeFileDialogData, RevisionDialogData, WorkspaceChooserData,
+    CloneDialogData, LargeFileDialogData, RevisionDialogData, TrustDialogData,
+    WorkspaceChooserData,
 };
 use crate::dispatcher::EditorDispatcher;
 use crate::editors::EditorRegistry;
@@ -139,6 +140,7 @@ pub async fn promote_workspace(
         name: Some(name),
         editor: String::new(),
         auto_discovered: false,
+        trusted: false,
         normalized_path: Some(target_path),
     });
 
@@ -750,6 +752,60 @@ pub async fn test_protocol_url(
 
             Ok(())
         }
+        Ok(HandleResult::ShowTrustDialog {
+            workspace_path,
+            workspace_name,
+            task_labels,
+            vim_local_rc_files,
+            scan_error,
+            pending_file_path,
+            line,
+            column,
+            editor_hint,
+        }) => {
+            let task_count = task_labels.len();
+            let vim_rc_count = vim_local_rc_files.len();
+            GIT_COMMAND_LOG.log_request(
+                &url,
+                true,
+                "trust_dialog",
+                &format!(
+                    "Workspace '{}' has {} auto-run tasks and {} vim rc files, requesting trust confirmation",
+                    workspace_name, task_count, vim_rc_count
+                ),
+                duration,
+            );
+            dialog_state.set_trust_dialog(TrustDialogData {
+                workspace_path: workspace_path.to_string_lossy().to_string(),
+                workspace_name,
+                task_labels,
+                vim_local_rc_files,
+                scan_error,
+                pending_file_path,
+                line,
+                column,
+                editor_hint,
+            });
+
+            let window = tauri::WebviewWindowBuilder::new(
+                &app,
+                "trust-warning",
+                tauri::WebviewUrl::App("trust-warning.html".into()),
+            )
+            .title("Security Warning")
+            .inner_size(600.0, 520.0)
+            .center()
+            .resizable(false)
+            .always_on_top(true)
+            .focused(true)
+            .build()
+            .map_err(|e| e.to_string())?;
+
+            #[cfg(target_os = "macos")]
+            set_dark_titlebar(&window);
+
+            Ok(())
+        }
         Ok(HandleResult::OpenInBrowser { url: browser_url }) => {
             GIT_COMMAND_LOG.log_request(
                 &url,
@@ -802,6 +858,7 @@ pub async fn clone_and_open(
         name: Some(data.workspace_name.clone()),
         editor: String::new(),
         auto_discovered: false,
+        trusted: false,
         normalized_path: Some(target_path.clone()),
     });
     settings_manager
@@ -957,5 +1014,45 @@ pub fn open_logs_directory() -> Result<(), String> {
             .map_err(|e| format!("Failed to open logs directory: {}", e))?;
     }
 
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_trust_dialog_data(
+    dialog_state: State<'_, Arc<DialogState>>,
+) -> Result<TrustDialogData, String> {
+    dialog_state
+        .take_trust_dialog()
+        .ok_or_else(|| "No trust dialog data available".to_string())
+}
+
+#[tauri::command]
+pub async fn trust_confirmed(
+    workspace_path: String,
+    file_path: String,
+    line: Option<usize>,
+    column: Option<usize>,
+    editor_hint: Option<String>,
+    settings_manager: State<'_, Arc<SettingsManager>>,
+    dispatcher: State<'_, Arc<EditorDispatcher>>,
+) -> Result<(), String> {
+    let workspace = PathBuf::from(&workspace_path);
+
+    settings_manager
+        .trust_workspace(&workspace)
+        .await
+        .map_err(|e| format!("Failed to trust workspace: {}", e))?;
+
+    tracing::info!("Workspace '{}' marked as trusted", workspace_path);
+
+    dispatcher
+        .open(&file_path, line, column, false, editor_hint)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn trust_cancelled() -> Result<(), String> {
+    tracing::info!("Trust dialog cancelled");
     Ok(())
 }

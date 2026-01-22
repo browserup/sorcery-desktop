@@ -180,6 +180,7 @@ async fn configure_workspace(
             name: Some(workspace_name),
             editor: "null".to_string(),
             auto_discovered: false,
+            trusted: false,
             normalized_path: None,
         });
     settings_manager

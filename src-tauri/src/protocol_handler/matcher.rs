@@ -408,6 +408,7 @@ mod tests {
             name: Some(workspace_name.to_string()),
             editor: String::new(),
             auto_discovered: false,
+            trusted: false,
             normalized_path: Some(workspace_dir.clone()),
         });
         manager.save(settings).await.expect("save settings");
@@ -648,6 +649,7 @@ mod tests {
             name: Some("backend".to_string()),
             editor: String::new(),
             auto_discovered: false,
+            trusted: false,
             normalized_path: Some(workspace1_dir.path().to_path_buf()),
         });
         settings.workspaces.push(WorkspaceConfig {
@@ -655,6 +657,7 @@ mod tests {
             name: Some("frontend".to_string()),
             editor: String::new(),
             auto_discovered: false,
+            trusted: false,
             normalized_path: Some(workspace2_dir.path().to_path_buf()),
         });
         manager.save(settings).await.expect("save settings");

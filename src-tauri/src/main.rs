@@ -11,6 +11,7 @@ mod protocol_handler;
 mod protocol_registration;
 mod settings;
 mod tracker;
+mod trust_check;
 mod ui_utils;
 mod workspace_mru;
 
@@ -217,6 +218,57 @@ async fn handle_protocol_result(
                     title: "Large File Warning",
                     width: 500.0,
                     height: 280.0,
+                },
+            );
+        }
+        Ok(protocol_handler::HandleResult::ShowTrustDialog {
+            workspace_path,
+            workspace_name,
+            task_labels,
+            vim_local_rc_files,
+            scan_error,
+            pending_file_path,
+            line,
+            column,
+            editor_hint,
+        }) => {
+            let task_count = task_labels.len();
+            let vim_rc_count = vim_local_rc_files.len();
+            tracing::info!(
+                "Request: showing trust dialog for workspace '{}' ({} auto-run tasks, {} vim rc files)",
+                workspace_name,
+                task_count,
+                vim_rc_count
+            );
+            GIT_COMMAND_LOG.log_request(
+                url,
+                true,
+                "trust_dialog",
+                &format!(
+                    "Workspace '{}' has {} auto-run tasks and {} vim rc files, requesting trust confirmation",
+                    workspace_name, task_count, vim_rc_count
+                ),
+                duration,
+            );
+            dialog_state.set_trust_dialog(dialog_state::TrustDialogData {
+                workspace_path: workspace_path.to_string_lossy().to_string(),
+                workspace_name,
+                task_labels,
+                vim_local_rc_files,
+                scan_error,
+                pending_file_path,
+                line,
+                column,
+                editor_hint,
+            });
+            let _ = build_dialog(
+                app_handle,
+                DialogConfig {
+                    id: "trust-warning",
+                    html_file: "trust-warning.html",
+                    title: "Security Warning",
+                    width: 600.0,
+                    height: 520.0,
                 },
             );
         }
@@ -501,7 +553,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .tooltip("Sorcery Desktop - Editor Link Handler")
                 .icon(
                     app.default_window_icon()
-                        .expect("app icon must be configured in tauri.conf.json")
+                        .expect("app icon must be configured in tauri.conf.json") // Invariant: app icon is always configured.
                         .clone(),
                 )
                 .on_menu_event(|app, event| {
@@ -512,11 +564,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             {
                                 use objc2::MainThreadMarker;
                                 use objc2_app_kit::NSApplication;
-                                let mtm = MainThreadMarker::new()
-                                    .expect("menu events run on main thread");
-                                let ns_app = NSApplication::sharedApplication(mtm);
-                                #[allow(deprecated)]
-                                ns_app.activateIgnoringOtherApps(true);
+                                if let Some(mtm) = MainThreadMarker::new() {
+                                    let ns_app = NSApplication::sharedApplication(mtm);
+                                    #[allow(deprecated)]
+                                    ns_app.activateIgnoringOtherApps(true);
+                                } else {
+                                    tracing::warn!(
+                                        "Skipping app activation: menu event not on main thread"
+                                    );
+                                }
                             }
 
                             if let Some(window) = app.get_webview_window("settings") {
@@ -603,11 +659,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 {
                     use objc2::MainThreadMarker;
                     use objc2_app_kit::NSApplication;
-                    let mtm = MainThreadMarker::new()
-                        .expect("single-instance callback runs on main thread");
-                    let ns_app = NSApplication::sharedApplication(mtm);
-                    #[allow(deprecated)]
-                    ns_app.activateIgnoringOtherApps(true);
+                    if let Some(mtm) = MainThreadMarker::new() {
+                        let ns_app = NSApplication::sharedApplication(mtm);
+                        #[allow(deprecated)]
+                        ns_app.activateIgnoringOtherApps(true);
+                    } else {
+                        tracing::warn!(
+                            "Skipping app activation: single-instance callback not on main thread"
+                        );
+                    }
                 }
             }
         }
@@ -658,6 +718,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             commands::get_large_file_dialog_data,
             commands::large_file_confirmed,
             commands::large_file_cancelled,
+            commands::get_trust_dialog_data,
+            commands::trust_confirmed,
+            commands::trust_cancelled,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

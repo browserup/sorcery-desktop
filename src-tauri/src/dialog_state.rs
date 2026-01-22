@@ -55,11 +55,25 @@ pub struct LargeFileDialogData {
     pub editor_hint: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TrustDialogData {
+    pub workspace_path: String,
+    pub workspace_name: String,
+    pub task_labels: Vec<String>,
+    pub vim_local_rc_files: Vec<String>,
+    pub scan_error: Option<String>,
+    pub pending_file_path: String,
+    pub line: Option<usize>,
+    pub column: Option<usize>,
+    pub editor_hint: Option<String>,
+}
+
 pub struct DialogState {
     workspace_chooser: Mutex<Option<WorkspaceChooserData>>,
     revision_dialog: Mutex<Option<RevisionDialogData>>,
     clone_dialog: Mutex<Option<CloneDialogData>>,
     large_file_dialog: Mutex<Option<LargeFileDialogData>>,
+    trust_dialog: Mutex<Option<TrustDialogData>>,
 }
 
 impl DialogState {
@@ -69,6 +83,7 @@ impl DialogState {
             revision_dialog: Mutex::new(None),
             clone_dialog: Mutex::new(None),
             large_file_dialog: Mutex::new(None),
+            trust_dialog: Mutex::new(None),
         }
     }
 
@@ -112,6 +127,14 @@ impl DialogState {
 
     pub fn take_large_file_dialog(&self) -> Option<LargeFileDialogData> {
         self.large_file_dialog.lock().take()
+    }
+
+    pub fn set_trust_dialog(&self, data: TrustDialogData) {
+        *self.trust_dialog.lock() = Some(data);
+    }
+
+    pub fn take_trust_dialog(&self) -> Option<TrustDialogData> {
+        self.trust_dialog.lock().take()
     }
 }
 

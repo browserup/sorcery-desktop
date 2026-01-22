@@ -8,4 +8,5 @@ pub mod path_validator;
 pub mod protocol_handler;
 pub mod settings;
 pub mod tracker;
+pub mod trust_check;
 pub mod workspace_mru;
