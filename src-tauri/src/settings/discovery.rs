@@ -81,6 +81,7 @@ impl WorkspaceSync {
                         name: Some(name),
                         editor: String::new(),
                         auto_discovered: true,
+                        trusted: false,
                         normalized_path: Some(repo.clone()),
                     });
                 }

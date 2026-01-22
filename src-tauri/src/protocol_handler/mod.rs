@@ -8,6 +8,7 @@ pub use parser::{GitRef, SrcuriParser, SrcuriRequest};
 
 use crate::dispatcher::EditorDispatcher;
 use crate::settings::SettingsManager;
+use crate::trust_check;
 use crate::workspace_mru::ActiveWorkspaceTracker;
 use anyhow::{bail, Context, Result};
 use std::path::{Path, PathBuf};
@@ -86,6 +87,90 @@ impl ProtocolHandler {
         Ok(HandleResult::Opened {
             file_path: file_path.to_string(),
         })
+    }
+
+    async fn open_with_trust_and_size_check(
+        &self,
+        file_path: &str,
+        line: Option<usize>,
+        column: Option<usize>,
+        editor_hint: Option<String>,
+    ) -> Result<HandleResult> {
+        let path = Path::new(file_path);
+
+        if let Some(workspace_path) = self.find_workspace_for_path(file_path).await {
+            let is_trusted = self
+                .settings_manager
+                .is_workspace_trusted(&workspace_path)
+                .await;
+
+            if let Some(scan_result) = trust_check::needs_trust_check(&workspace_path, is_trusted) {
+                let workspace_name = workspace_path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("unknown")
+                    .to_string();
+
+                info!(
+                    "Trust check triggered for workspace '{}': {} auto-run tasks found",
+                    workspace_name,
+                    scan_result.task_labels.len()
+                );
+
+                return Ok(HandleResult::ShowTrustDialog {
+                    workspace_path,
+                    workspace_name,
+                    task_labels: scan_result.task_labels,
+                    vim_local_rc_files: scan_result.vim_local_rc_files,
+                    scan_error: scan_result.scan_error,
+                    pending_file_path: file_path.to_string(),
+                    line,
+                    column,
+                    editor_hint,
+                });
+            }
+        } else if path.is_file() {
+            if let Some(parent) = path.parent() {
+                let git_root = GitHandler::find_git_root(parent);
+                if let Some(workspace_path) = git_root {
+                    let is_trusted = self
+                        .settings_manager
+                        .is_workspace_trusted(&workspace_path)
+                        .await;
+
+                    if let Some(scan_result) =
+                        trust_check::needs_trust_check(&workspace_path, is_trusted)
+                    {
+                        let workspace_name = workspace_path
+                            .file_name()
+                            .and_then(|n| n.to_str())
+                            .unwrap_or("unknown")
+                            .to_string();
+
+                        info!(
+                            "Trust check triggered for workspace '{}': {} auto-run tasks found",
+                            workspace_name,
+                            scan_result.task_labels.len()
+                        );
+
+                        return Ok(HandleResult::ShowTrustDialog {
+                            workspace_path,
+                            workspace_name,
+                            task_labels: scan_result.task_labels,
+                            vim_local_rc_files: scan_result.vim_local_rc_files,
+                            scan_error: scan_result.scan_error,
+                            pending_file_path: file_path.to_string(),
+                            line,
+                            column,
+                            editor_hint,
+                        });
+                    }
+                }
+            }
+        }
+
+        self.open_with_size_check(file_path, line, column, editor_hint)
+            .await
     }
 
     async fn find_workspace_for_path(&self, file_path: &str) -> Option<PathBuf> {
@@ -226,7 +311,7 @@ impl ProtocolHandler {
 
             let file_path_str = workspace_match.full_file_path.to_string_lossy().to_string();
             return self
-                .open_with_size_check(&file_path_str, line, column, None)
+                .open_with_trust_and_size_check(&file_path_str, line, column, None)
                 .await;
         }
 
@@ -330,7 +415,7 @@ impl ProtocolHandler {
         match self.matcher.find_workspace_path(workspace, path).await {
             Ok(full_path) => {
                 let file_path_str = full_path.to_string_lossy().to_string();
-                self.open_with_size_check(&file_path_str, line, column, None)
+                self.open_with_trust_and_size_check(&file_path_str, line, column, None)
                     .await
             }
             Err(WorkspaceLookupError::WorkspaceNotFound(_)) if remote.is_some() => {
@@ -372,7 +457,7 @@ impl ProtocolHandler {
             if self.settings_manager.allows_non_workspace_files().await {
                 info!("No workspace matches, attempting to open as absolute path");
                 return self
-                    .open_with_size_check(full_path, line, column, None)
+                    .open_with_trust_and_size_check(full_path, line, column, None)
                     .await;
             } else {
                 bail!(
@@ -391,7 +476,7 @@ impl ProtocolHandler {
 
             let file_path_str = workspace_match.full_file_path.to_string_lossy().to_string();
             return self
-                .open_with_size_check(&file_path_str, line, column, None)
+                .open_with_trust_and_size_check(&file_path_str, line, column, None)
                 .await;
         }
 
@@ -466,7 +551,7 @@ impl ProtocolHandler {
             info!("Already on target revision {}, opening directly", rev);
             let file_path_str = full_path.to_string_lossy().to_string();
             return self
-                .open_with_size_check(&file_path_str, line, column, None)
+                .open_with_trust_and_size_check(&file_path_str, line, column, None)
                 .await;
         }
 
@@ -532,7 +617,7 @@ impl ProtocolHandler {
                 }
 
                 let file_path_str = full_path.to_string_lossy().to_string();
-                self.open_with_size_check(&file_path_str, line, column, None)
+                self.open_with_trust_and_size_check(&file_path_str, line, column, None)
                     .await
             }
             Err(_) => {
@@ -584,6 +669,17 @@ pub enum HandleResult {
     ShowLargeFileDialog {
         file_path: String,
         file_size_bytes: u64,
+        line: Option<usize>,
+        column: Option<usize>,
+        editor_hint: Option<String>,
+    },
+    ShowTrustDialog {
+        workspace_path: PathBuf,
+        workspace_name: String,
+        task_labels: Vec<String>,
+        vim_local_rc_files: Vec<String>,
+        scan_error: Option<String>,
+        pending_file_path: String,
         line: Option<usize>,
         column: Option<usize>,
         editor_hint: Option<String>,

@@ -172,6 +172,9 @@ pub struct WorkspaceConfig {
     #[serde(default)]
     pub auto_discovered: bool,
 
+    #[serde(default)]
+    pub trusted: bool,
+
     #[serde(skip)]
     pub normalized_path: Option<PathBuf>,
 }

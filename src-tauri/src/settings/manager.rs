@@ -166,6 +166,33 @@ impl SettingsManager {
         self.settings.read().await.defaults.max_file_size_mb * 1024 * 1024
     }
 
+    pub async fn is_workspace_trusted(&self, workspace_path: &Path) -> bool {
+        let settings = self.settings.read().await;
+        for workspace in &settings.workspaces {
+            if let Some(ref normalized) = workspace.normalized_path {
+                if workspace_path.starts_with(normalized) {
+                    return workspace.trusted;
+                }
+            }
+        }
+        false
+    }
+
+    pub async fn trust_workspace(&self, workspace_path: &Path) -> Result<()> {
+        self.modify(|settings| {
+            for workspace in &mut settings.workspaces {
+                if let Some(ref normalized) = workspace.normalized_path {
+                    if workspace_path.starts_with(normalized) {
+                        workspace.trusted = true;
+                        return Ok(((), true));
+                    }
+                }
+            }
+            Ok(((), false))
+        })
+        .await
+    }
+
     async fn normalize_workspace_paths(&self, settings: &mut Settings) -> Result<()> {
         for workspace in &mut settings.workspaces {
             match Self::normalize_path(&workspace.path) {
