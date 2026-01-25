@@ -123,6 +123,7 @@ impl GitCommandLog {
         editor: &str,
         file_path: &str,
         line: Option<usize>,
+        workspace_root: Option<&std::path::Path>,
         success: bool,
         error: Option<&str>,
         duration: Duration,
@@ -133,10 +134,15 @@ impl GitCommandLog {
             entries.pop_front();
         }
 
-        let mut args = vec![file_path.to_string()];
-        if let Some(l) = line {
-            args.push(format!("--line {}", l));
+        let mut args = vec![];
+        if let Some(ws) = workspace_root {
+            args.push(ws.display().to_string());
         }
+        if let Some(l) = line {
+            args.push("--line".to_string());
+            args.push(l.to_string());
+        }
+        args.push(file_path.to_string());
 
         let entry = GitCommandLogEntry {
             timestamp: Utc::now(),
