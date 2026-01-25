@@ -1,0 +1,68 @@
+name: Update WinGet Manifest
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to update (e.g., 0.1.1)'
+        required: true
+
+jobs:
+  update-winget:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        shell: bash
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+
+      - name: Install wingetcreate
+        shell: pwsh
+        run: |
+          iwr https://aka.ms/wingetcreate/latest -OutFile wingetcreate.exe
+
+      - name: Update WinGet manifest
+        shell: pwsh
+        env:
+          WINGET_GITHUB_TOKEN: ${{ secrets.WINGET_GITHUB_TOKEN }}
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          $url = "https://github.com/${{ github.repository }}/releases/download/v${version}/Sorcery.Desktop_${version}_x64-setup.msi"
+
+          Write-Host "Updating WinGet manifest for version $version"
+          Write-Host "MSI URL: $url"
+
+          # Update and optionally submit
+          if ($env:WINGET_GITHUB_TOKEN) {
+            ./wingetcreate.exe update ebeland.SorceryDesktop `
+              --version $version `
+              --urls $url `
+              --token $env:WINGET_GITHUB_TOKEN `
+              --submit
+          } else {
+            Write-Host "WINGET_GITHUB_TOKEN not set, generating manifest only"
+            ./wingetcreate.exe update ebeland.SorceryDesktop `
+              --version $version `
+              --urls $url `
+              --out ./winget-output
+
+            Get-ChildItem -Recurse ./winget-output
+          }
+
+      - name: Upload manifest artifacts
+        if: ${{ !env.WINGET_GITHUB_TOKEN }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: winget-manifest-${{ steps.version.outputs.version }}
+          path: winget-output/

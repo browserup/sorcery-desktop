@@ -1,0 +1,84 @@
+name: Update Homebrew Cask
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to update (e.g., 0.1.1)'
+        required: true
+
+jobs:
+  update-cask:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Get version
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+
+      - name: Download and hash DMGs
+        id: hash
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          BASE_URL="https://github.com/${{ github.repository }}/releases/download/v${VERSION}"
+
+          # Download ARM64 DMG
+          echo "Downloading ARM64 DMG..."
+          curl -fsSL -o arm64.dmg "${BASE_URL}/Sorcery.Desktop_${VERSION}_aarch64.dmg"
+          ARM64_SHA=$(sha256sum arm64.dmg | cut -d' ' -f1)
+          echo "ARM64 SHA256: $ARM64_SHA"
+          echo "arm64_sha=$ARM64_SHA" >> $GITHUB_OUTPUT
+
+          # Download x64 DMG
+          echo "Downloading x64 DMG..."
+          curl -fsSL -o x64.dmg "${BASE_URL}/Sorcery.Desktop_${VERSION}_x64.dmg"
+          X64_SHA=$(sha256sum x64.dmg | cut -d' ' -f1)
+          echo "x64 SHA256: $X64_SHA"
+          echo "x64_sha=$X64_SHA" >> $GITHUB_OUTPUT
+
+          rm arm64.dmg x64.dmg
+
+      - name: Update cask formula
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          ARM64_SHA="${{ steps.hash.outputs.arm64_sha }}"
+          X64_SHA="${{ steps.hash.outputs.x64_sha }}"
+
+          CASK_FILE="homebrew/Casks/sorcery-desktop.rb"
+
+          # Update version
+          sed -i "s/version \".*\"/version \"${VERSION}\"/" "$CASK_FILE"
+
+          # Update ARM64 SHA256
+          sed -i "s/arm:   \"[a-f0-9]*\"/arm:   \"${ARM64_SHA}\"/" "$CASK_FILE"
+
+          # Update x64 SHA256
+          sed -i "s/intel: \"[a-f0-9]*\"/intel: \"${X64_SHA}\"/" "$CASK_FILE"
+
+          echo "Updated $CASK_FILE:"
+          head -10 "$CASK_FILE"
+
+      - name: Commit and push
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add homebrew/Casks/sorcery-desktop.rb
+          git diff --staged --quiet || git commit -m "Update Homebrew cask to v${VERSION}"
+          git push

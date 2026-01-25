@@ -1,0 +1,95 @@
+name: Update AUR Package
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to update (e.g., 0.1.1)'
+        required: true
+
+jobs:
+  update-aur:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+
+      - name: Download and hash AppImages
+        id: hash
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          BASE_URL="https://github.com/${{ github.repository }}/releases/download/v${VERSION}"
+
+          # Download x86_64 AppImage
+          echo "Downloading x86_64 AppImage..."
+          curl -fsSL -o x86_64.AppImage "${BASE_URL}/sorcery-desktop_${VERSION}_amd64.AppImage"
+          X86_64_SHA=$(sha256sum x86_64.AppImage | cut -d' ' -f1)
+          echo "x86_64 SHA256: $X86_64_SHA"
+          echo "x86_64_sha=$X86_64_SHA" >> $GITHUB_OUTPUT
+
+          # Download aarch64 AppImage
+          echo "Downloading aarch64 AppImage..."
+          curl -fsSL -o aarch64.AppImage "${BASE_URL}/sorcery-desktop_${VERSION}_aarch64.AppImage"
+          AARCH64_SHA=$(sha256sum aarch64.AppImage | cut -d' ' -f1)
+          echo "aarch64 SHA256: $AARCH64_SHA"
+          echo "aarch64_sha=$AARCH64_SHA" >> $GITHUB_OUTPUT
+
+          rm x86_64.AppImage aarch64.AppImage
+
+      - name: Update PKGBUILD
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          X86_64_SHA="${{ steps.hash.outputs.x86_64_sha }}"
+          AARCH64_SHA="${{ steps.hash.outputs.aarch64_sha }}"
+
+          cd aur
+
+          # Update version
+          sed -i "s/pkgver=.*/pkgver=${VERSION}/" PKGBUILD
+          sed -i "s/pkgrel=.*/pkgrel=1/" PKGBUILD
+
+          # Update source URLs
+          sed -i "s|releases/download/v[^/]*/|releases/download/v${VERSION}/|g" PKGBUILD
+
+          # Update SHA256 sums
+          sed -i "s/sha256sums_x86_64=('[^']*')/sha256sums_x86_64=('${X86_64_SHA}')/" PKGBUILD
+          sed -i "s/sha256sums_aarch64=('[^']*')/sha256sums_aarch64=('${AARCH64_SHA}')/" PKGBUILD
+
+          # Update .SRCINFO
+          sed -i "s/pkgver = .*/pkgver = ${VERSION}/" .SRCINFO
+          sed -i "s/pkgrel = .*/pkgrel = 1/" .SRCINFO
+          sed -i "s|releases/download/v[^/]*/|releases/download/v${VERSION}/|g" .SRCINFO
+          sed -i "s/sha256sums_x86_64 = .*/sha256sums_x86_64 = ${X86_64_SHA}/" .SRCINFO
+          sed -i "s/sha256sums_aarch64 = .*/sha256sums_aarch64 = ${AARCH64_SHA}/" .SRCINFO
+
+          echo "Updated PKGBUILD:"
+          cat PKGBUILD
+
+      - name: Commit changes
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add aur/
+          git diff --staged --quiet || git commit -m "Update AUR package to v${VERSION}"
+          git push
+
+      - name: Upload AUR files
+        uses: actions/upload-artifact@v4
+        with:
+          name: aur-package-${{ steps.version.outputs.version }}
+          path: aur/
