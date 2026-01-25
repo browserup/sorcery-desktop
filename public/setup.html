@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Welcome to Sorcery</title>
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --primary: #6366f1;
+      --primary-hover: #4f46e5;
+      --primary-active: #4338ca;
+      --success: #10b981;
+      --bg-primary: #121212;
+      --bg-surface: #1e1e1e;
+      --bg-elevated: #2d2d2d;
+      --text-primary: #f5f5f5;
+      --text-secondary: #a0a0a0;
+      --text-tertiary: #6b6b6b;
+      --border: #333333;
+      --border-hover: #444444;
+      --shadow: rgba(0, 0, 0, 0.4);
+    }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Roboto, 'Helvetica Neue', sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      -webkit-font-smoothing: antialiased;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .title-bar {
+      height: 35px;
+      background: var(--bg-surface);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      -webkit-app-region: drag;
+    }
+
+    .container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 1.5rem;
+      overflow-y: auto;
+    }
+
+    .step {
+      display: none;
+      flex-direction: column;
+      flex: 1;
+    }
+
+    .step.active {
+      display: flex;
+    }
+
+    .step-content {
+      flex: 1;
+    }
+
+    .step-header {
+      margin-bottom: 1.5rem;
+    }
+
+    .step-header h1 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+    }
+
+    .step-header p {
+      color: var(--text-secondary);
+      font-size: 0.9375rem;
+      line-height: 1.5;
+    }
+
+    .progress-bar {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .progress-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--border);
+      transition: all 0.2s;
+    }
+
+    .progress-dot.active {
+      background: var(--primary);
+    }
+
+    .progress-dot.completed {
+      background: var(--success);
+    }
+
+    .button-group {
+      display: flex;
+      gap: 0.75rem;
+      justify-content: flex-end;
+      margin-top: 1.5rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border);
+    }
+
+    .button {
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 0.625rem 1.25rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.875rem;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+
+    .button:hover:not(:disabled) {
+      background: var(--primary-hover);
+    }
+
+    .button:active:not(:disabled) {
+      background: var(--primary-active);
+    }
+
+    .button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .button.secondary {
+      background: var(--bg-elevated);
+      color: var(--text-primary);
+    }
+
+    .button.secondary:hover {
+      background: var(--border-hover);
+    }
+
+    .editor-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 0.75rem;
+    }
+
+    .editor-option {
+      background: var(--bg-surface);
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.5rem;
+      text-align: center;
+    }
+
+    .editor-option:hover {
+      border-color: var(--border-hover);
+      background: var(--bg-elevated);
+    }
+
+    .editor-option.selected {
+      border-color: var(--primary);
+      background: rgba(99, 102, 241, 0.1);
+    }
+
+    .editor-option.not-installed {
+      opacity: 0.5;
+    }
+
+    .editor-option .icon {
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+    }
+
+    .editor-option .name {
+      font-weight: 500;
+      font-size: 0.8125rem;
+    }
+
+    .editor-option .status {
+      font-size: 0.6875rem;
+      color: var(--text-secondary);
+    }
+
+    .editor-option .status.installed {
+      color: var(--success);
+    }
+
+    .folder-section {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+    }
+
+    .folder-option {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.75rem;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-bottom: 0.5rem;
+    }
+
+    .folder-option:last-child {
+      margin-bottom: 0;
+    }
+
+    .folder-option:hover {
+      background: var(--bg-elevated);
+    }
+
+    .folder-option.selected {
+      background: rgba(99, 102, 241, 0.1);
+      border: 1px solid var(--primary);
+      margin: -1px;
+      padding: calc(0.75rem + 1px);
+      margin-bottom: calc(0.5rem - 1px);
+    }
+
+    .folder-option input[type="radio"] {
+      display: none;
+    }
+
+    .folder-option .radio-circle {
+      width: 18px;
+      height: 18px;
+      border: 2px solid var(--border);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .folder-option.selected .radio-circle {
+      border-color: var(--primary);
+    }
+
+    .folder-option.selected .radio-circle::after {
+      content: '';
+      width: 10px;
+      height: 10px;
+      background: var(--primary);
+      border-radius: 50%;
+    }
+
+    .folder-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .folder-path {
+      font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+      font-size: 0.875rem;
+      color: var(--text-primary);
+      word-break: break-all;
+    }
+
+    .folder-meta {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      margin-top: 0.25rem;
+    }
+
+    .browse-btn {
+      background: var(--bg-elevated);
+      color: var(--text-secondary);
+      border: 1px solid var(--border);
+      padding: 0.375rem 0.75rem;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.75rem;
+      font-weight: 500;
+      transition: all 0.2s;
+      flex-shrink: 0;
+    }
+
+    .browse-btn:hover {
+      background: var(--border-hover);
+      color: var(--text-primary);
+    }
+
+    .summary-section {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+    }
+
+    .summary-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.5rem 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .summary-item:last-child {
+      border-bottom: none;
+    }
+
+    .summary-label {
+      color: var(--text-secondary);
+      font-size: 0.8125rem;
+    }
+
+    .summary-value {
+      color: var(--text-primary);
+      font-size: 0.875rem;
+      font-weight: 500;
+    }
+
+    .test-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.75rem 1rem;
+      color: var(--primary);
+      font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+      font-size: 0.8125rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-decoration: none;
+    }
+
+    .test-link:hover {
+      background: var(--bg-elevated);
+      border-color: var(--primary);
+    }
+
+    .welcome-icon {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+    }
+
+    .extension-section {
+      margin: 1rem 0;
+    }
+
+    .extension-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .extension-icon {
+      flex-shrink: 0;
+    }
+
+    .extension-info {
+      flex: 1;
+    }
+
+    .extension-name {
+      font-weight: 600;
+      font-size: 0.9375rem;
+      margin-bottom: 0.25rem;
+    }
+
+    .extension-desc {
+      color: var(--text-secondary);
+      font-size: 0.8125rem;
+    }
+
+    .extension-note {
+      color: var(--text-secondary);
+      font-size: 0.8125rem;
+      margin-top: 1rem;
+    }
+
+    .extension-note a {
+      color: var(--primary);
+      text-decoration: none;
+    }
+
+    .extension-note a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="title-bar"></div>
+
+  <div class="container">
+    <div class="progress-bar" id="progress-bar">
+      <div class="progress-dot active" data-step="0"></div>
+      <div class="progress-dot" data-step="1"></div>
+      <div class="progress-dot" data-step="2"></div>
+      <div class="progress-dot" data-step="3" id="extension-dot"></div>
+      <div class="progress-dot" data-step="4"></div>
+    </div>
+
+    <!-- Step 0: Welcome -->
+    <div class="step active" data-step="0">
+      <div class="step-content">
+        <div class="step-header">
+          <div class="welcome-icon">&#x2728;</div>
+          <h1>Welcome to Sorcery</h1>
+          <p>Sorcery connects your browser to your editor. Click any file path on the web and open it directly in your preferred editor.</p>
+        </div>
+      </div>
+      <div class="button-group">
+        <button class="button" onclick="nextStep()">Let's Set Up</button>
+      </div>
+    </div>
+
+    <!-- Step 1: Default Editor -->
+    <div class="step" data-step="1">
+      <div class="step-content">
+        <div class="step-header">
+          <h1>Choose Your Default Editor</h1>
+          <p>Select the editor you use most often. You can always change this later or set per-workspace overrides.</p>
+        </div>
+        <div class="editor-grid" id="editor-grid">
+          <!-- Populated by JavaScript -->
+        </div>
+      </div>
+      <div class="button-group">
+        <button class="button secondary" onclick="prevStep()">Back</button>
+        <button class="button" id="editor-next-btn" onclick="nextStep()" disabled>Continue</button>
+      </div>
+    </div>
+
+    <!-- Step 2: Workspaces Folder -->
+    <div class="step" data-step="2">
+      <div class="step-content">
+        <div class="step-header">
+          <h1>Where Are Your Projects?</h1>
+          <p>Sorcery will scan this folder to discover your git repositories and make them available for linking.</p>
+        </div>
+        <div class="folder-section" id="folder-section">
+          <!-- Populated by JavaScript -->
+        </div>
+      </div>
+      <div class="button-group">
+        <button class="button secondary" onclick="prevStep()">Back</button>
+        <button class="button" onclick="nextStep()">Continue</button>
+      </div>
+    </div>
+
+    <!-- Step 3: Chrome Extension (conditional) -->
+    <div class="step" data-step="3" id="extension-step">
+      <div class="step-content">
+        <div class="step-header">
+          <h1>Install Browser Extension</h1>
+          <p>The Sorcery browser extension enables click-to-open for file paths on GitHub, error pages, and anywhere on the web.</p>
+        </div>
+
+        <div class="extension-section">
+          <div class="extension-card" id="chrome-extension-card">
+            <div class="extension-icon">
+              <svg width="32" height="32" viewBox="0 0 48 48">
+                <circle cx="24" cy="24" r="20" fill="#4285F4"/>
+                <circle cx="24" cy="24" r="10" fill="#fff"/>
+                <circle cx="24" cy="24" r="8" fill="#4285F4"/>
+                <path d="M24 4c-11 0-20 9-20 20h16" fill="#EA4335"/>
+                <path d="M44 24c0-11-9-20-20-20v16" fill="#34A853"/>
+                <path d="M24 44c11 0 20-9 20-20H28" fill="#FBBC05"/>
+              </svg>
+            </div>
+            <div class="extension-info">
+              <div class="extension-name">Chrome Extension</div>
+              <div class="extension-desc">Click file paths to open in your editor</div>
+            </div>
+            <button class="button" onclick="installChromeExtension()">Install</button>
+          </div>
+        </div>
+
+        <p class="extension-note">
+          You can always install the extension later from <a href="#" onclick="openExtensionPage(event)">getsorcery.com/chrome</a>
+        </p>
+      </div>
+      <div class="button-group">
+        <button class="button secondary" onclick="prevStep()">Back</button>
+        <button class="button secondary" onclick="skipExtension()">Skip</button>
+      </div>
+    </div>
+
+    <!-- Step 4: Ready -->
+    <div class="step" data-step="4">
+      <div class="step-content">
+        <div class="step-header">
+          <h1>You're All Set!</h1>
+          <p>Sorcery is ready to use. Try clicking a srcuri:// link to open a file in your editor.</p>
+        </div>
+
+        <div class="summary-section">
+          <div class="summary-item">
+            <span class="summary-label">Default Editor</span>
+            <span class="summary-value" id="summary-editor">...</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">Workspaces Folder</span>
+            <span class="summary-value" id="summary-folder">...</span>
+          </div>
+        </div>
+
+        <p style="color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 0.75rem;">
+          Test it out:
+        </p>
+        <a class="test-link" id="test-link" href="#">
+          <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+          </svg>
+          <span id="test-link-text">srcuri://sorcery-desktop/README.md:1</span>
+        </a>
+      </div>
+      <div class="button-group">
+        <button class="button secondary" onclick="prevStep()">Back</button>
+        <button class="button" onclick="finishSetup()">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const { invoke } = window.__TAURI__.core;
+    const { getCurrentWindow } = window.__TAURI__.window;
+    const { open } = window.__TAURI__.dialog;
+
+    let currentStep = 0;
+    let setupData = null;
+    let selectedEditor = null;
+    let selectedFolder = null;
+    let browsers = [];
+    let showExtensionStep = false;
+    const TOTAL_STEPS = 5;
+
+    async function init() {
+      try {
+        setupData = await invoke('get_setup_data');
+        browsers = await invoke('detect_browsers');
+
+        selectedEditor = setupData.current_editor;
+        selectedFolder = setupData.detected_folder;
+
+        const chrome = browsers.find(b => b.id === 'chrome');
+        showExtensionStep = chrome && chrome.is_installed;
+
+        if (!showExtensionStep) {
+          document.getElementById('extension-step').style.display = 'none';
+          document.getElementById('extension-dot').style.display = 'none';
+        }
+
+        renderEditorGrid();
+        renderFolderSection();
+        updateSummary();
+      } catch (e) {
+        console.error('Failed to load setup data:', e);
+      }
+    }
+
+    function renderEditorGrid() {
+      const grid = document.getElementById('editor-grid');
+      grid.innerHTML = '';
+
+      const editorIcons = {
+        'vscode': '&#x1F4DD;',
+        'cursor': '&#x1F4BB;',
+        'zed': '&#x26A1;',
+        'sublime': '&#x1F3A8;',
+        'intellij': '&#x2699;',
+        'webstorm': '&#x1F310;',
+        'pycharm': '&#x1F40D;',
+        'rubymine': '&#x1F48E;',
+        'goland': '&#x1F439;',
+        'rider': '&#x1F3AE;',
+        'vim': '&#x1F4D7;',
+        'neovim': '&#x1F4D7;',
+        'emacs': '&#x1F4DC;',
+      };
+
+      for (const editor of setupData.editors) {
+        const div = document.createElement('div');
+        div.className = 'editor-option';
+        if (editor.editor_id === selectedEditor) {
+          div.classList.add('selected');
+        }
+        if (!editor.is_installed) {
+          div.classList.add('not-installed');
+        }
+
+        const icon = editorIcons[editor.editor_id] || '&#x1F4DD;';
+
+        div.innerHTML = `
+          <div class="icon">${icon}</div>
+          <div class="name">${editor.display_name}</div>
+          <div class="status ${editor.is_installed ? 'installed' : ''}">${editor.is_installed ? 'Installed' : 'Not found'}</div>
+        `;
+
+        div.onclick = () => selectEditor(editor.editor_id, div);
+        grid.appendChild(div);
+      }
+
+      updateEditorNextButton();
+    }
+
+    function selectEditor(editorId, element) {
+      selectedEditor = editorId;
+
+      document.querySelectorAll('.editor-option').forEach(el => el.classList.remove('selected'));
+      element.classList.add('selected');
+
+      updateEditorNextButton();
+    }
+
+    function updateEditorNextButton() {
+      const btn = document.getElementById('editor-next-btn');
+      btn.disabled = !selectedEditor;
+    }
+
+    function renderFolderSection() {
+      const section = document.getElementById('folder-section');
+      section.innerHTML = '';
+
+      const folders = setupData.folder_suggestions || [setupData.detected_folder];
+
+      for (let i = 0; i < folders.length; i++) {
+        const folder = folders[i];
+        const isSelected = folder.path === selectedFolder;
+
+        const div = document.createElement('div');
+        div.className = 'folder-option' + (isSelected ? ' selected' : '');
+
+        div.innerHTML = `
+          <input type="radio" name="folder" ${isSelected ? 'checked' : ''}>
+          <div class="radio-circle"></div>
+          <div class="folder-info">
+            <div class="folder-path">${folder.path}</div>
+            ${folder.repo_count > 0 ? `<div class="folder-meta">${folder.repo_count} repositories</div>` : ''}
+          </div>
+        `;
+
+        div.onclick = () => selectFolder(folder.path);
+        section.appendChild(div);
+      }
+
+      const browseDiv = document.createElement('div');
+      browseDiv.className = 'folder-option';
+      browseDiv.innerHTML = `
+        <div class="radio-circle"></div>
+        <div class="folder-info">
+          <div class="folder-path" style="color: var(--text-secondary)">Choose a different folder...</div>
+        </div>
+        <button class="browse-btn" onclick="browseFolder(event)">Browse</button>
+      `;
+      section.appendChild(browseDiv);
+    }
+
+    function selectFolder(path) {
+      selectedFolder = path;
+      renderFolderSection();
+      updateSummary();
+    }
+
+    async function browseFolder(event) {
+      event.stopPropagation();
+      try {
+        const selected = await open({
+          directory: true,
+          multiple: false,
+          title: 'Select Workspaces Folder'
+        });
+
+        if (selected) {
+          selectedFolder = selected;
+          setupData.folder_suggestions = setupData.folder_suggestions || [];
+          if (!setupData.folder_suggestions.find(f => f.path === selected)) {
+            setupData.folder_suggestions.unshift({ path: selected, repo_count: 0 });
+          }
+          renderFolderSection();
+          updateSummary();
+        }
+      } catch (e) {
+        console.error('Failed to select folder:', e);
+      }
+    }
+
+    function updateSummary() {
+      const editorName = setupData.editors.find(e => e.editor_id === selectedEditor)?.display_name || selectedEditor;
+      document.getElementById('summary-editor').textContent = editorName;
+      document.getElementById('summary-folder').textContent = selectedFolder || setupData.detected_folder;
+    }
+
+    function getVisibleSteps() {
+      return showExtensionStep ? [0, 1, 2, 3, 4] : [0, 1, 2, 4];
+    }
+
+    function updateProgressBar() {
+      const visibleSteps = getVisibleSteps();
+      const currentIndex = visibleSteps.indexOf(currentStep);
+
+      document.querySelectorAll('.progress-dot').forEach((dot) => {
+        const dotStep = parseInt(dot.dataset.step);
+        if (!visibleSteps.includes(dotStep)) {
+          return;
+        }
+        const dotIndex = visibleSteps.indexOf(dotStep);
+
+        dot.classList.remove('active', 'completed');
+        if (dotIndex < currentIndex) {
+          dot.classList.add('completed');
+        } else if (dotIndex === currentIndex) {
+          dot.classList.add('active');
+        }
+      });
+    }
+
+    function showStep(step) {
+      document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+      document.querySelector(`.step[data-step="${step}"]`).classList.add('active');
+      updateProgressBar();
+    }
+
+    function nextStep() {
+      const visibleSteps = getVisibleSteps();
+      const currentIndex = visibleSteps.indexOf(currentStep);
+
+      if (currentIndex < visibleSteps.length - 1) {
+        currentStep = visibleSteps[currentIndex + 1];
+        showStep(currentStep);
+
+        if (currentStep === 4) {
+          updateSummary();
+        }
+      }
+    }
+
+    function prevStep() {
+      const visibleSteps = getVisibleSteps();
+      const currentIndex = visibleSteps.indexOf(currentStep);
+
+      if (currentIndex > 0) {
+        currentStep = visibleSteps[currentIndex - 1];
+        showStep(currentStep);
+      }
+    }
+
+    function skipExtension() {
+      nextStep();
+    }
+
+    function installChromeExtension() {
+      window.__TAURI__.shell.open('https://chrome.google.com/webstore').catch(e => {
+        console.error('Failed to open Chrome Web Store:', e);
+      });
+      nextStep();
+    }
+
+    function openExtensionPage(event) {
+      event.preventDefault();
+      window.__TAURI__.shell.open('https://getsorcery.com/chrome').catch(e => {
+        console.error('Failed to open extension page:', e);
+      });
+    }
+
+    async function finishSetup() {
+      try {
+        await invoke('complete_setup', {
+          editor: selectedEditor,
+          workspacesFolder: selectedFolder || setupData.detected_folder
+        });
+        getCurrentWindow().close();
+      } catch (e) {
+        console.error('Failed to complete setup:', e);
+      }
+    }
+
+    document.getElementById('test-link').onclick = async function(e) {
+      e.preventDefault();
+      try {
+        await invoke('test_protocol_url', {
+          url: 'srcuri://sorcery-desktop/README.md:1'
+        });
+      } catch (e) {
+        console.error('Failed to test link:', e);
+      }
+    };
+
+    init();
+  </script>
+</body>
+</html>
