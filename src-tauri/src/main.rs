@@ -1,6 +1,7 @@
 // Prevents additional console window on Windows in release builds
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod browser_detection;
 mod commands;
 mod dialog_state;
 mod dispatcher;
@@ -285,6 +286,21 @@ async fn handle_protocol_result(
                 tracing::error!("Failed to open browser: {}", e);
             }
         }
+        Ok(protocol_handler::HandleResult::Pong) => {
+            tracing::info!("Request: ping received, Desktop is running");
+            GIT_COMMAND_LOG.log_request(url, true, "ping", "Desktop is running", duration);
+        }
+        Ok(protocol_handler::HandleResult::HelloAck { version }) => {
+            let version_str = version.as_deref().unwrap_or("unknown");
+            tracing::info!("Request: extension hello from version {}", version_str);
+            GIT_COMMAND_LOG.log_request(
+                url,
+                true,
+                "hello",
+                &format!("Extension version {} registered", version_str),
+                duration,
+            );
+        }
         Err(e) => {
             let error_msg = e.to_string();
             tracing::error!("Request: failed to handle URL: {}", error_msg);
@@ -434,11 +450,49 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let protocol_handler_clone = protocol_handler.clone();
     let deep_link_throttle_for_setup = deep_link_throttle.clone();
+    let setup_needed = settings_manager.is_setup_needed().await;
 
     tauri::Builder::default()
         .setup(move |app| {
             let deep_link_throttle = deep_link_throttle_for_setup.clone();
             tracing::info!("Setting up Tauri app...");
+
+            // Show setup wizard if this is first run
+            if setup_needed {
+                tracing::info!("First run detected, showing setup wizard");
+                #[cfg(target_os = "macos")]
+                {
+                    use objc2::MainThreadMarker;
+                    use objc2_app_kit::NSApplication;
+                    if let Some(mtm) = MainThreadMarker::new() {
+                        let ns_app = NSApplication::sharedApplication(mtm);
+                        #[allow(deprecated)]
+                        ns_app.activateIgnoringOtherApps(true);
+                    }
+                }
+
+                match tauri::WebviewWindowBuilder::new(
+                    app,
+                    "setup",
+                    tauri::WebviewUrl::App("setup.html".into()),
+                )
+                .title("Welcome to Sorcery")
+                .inner_size(500.0, 550.0)
+                .center()
+                .resizable(false)
+                .focused(true)
+                .build()
+                {
+                    Ok(window) => {
+                        #[cfg(target_os = "macos")]
+                        set_dark_titlebar(&window);
+                        tracing::info!("Setup window opened");
+                    }
+                    Err(e) => {
+                        tracing::error!("Failed to open setup window: {}", e);
+                    }
+                }
+            }
 
             #[cfg(target_os = "macos")]
             {
@@ -722,6 +776,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             commands::get_trust_dialog_data,
             commands::trust_confirmed,
             commands::trust_cancelled,
+            commands::get_setup_data,
+            commands::complete_setup,
+            commands::is_setup_needed,
+            commands::detect_browsers,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

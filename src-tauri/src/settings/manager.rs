@@ -264,4 +264,9 @@ impl SettingsManager {
 
         Ok(())
     }
+
+    pub async fn is_setup_needed(&self) -> bool {
+        let settings = self.settings.read().await;
+        !settings.defaults.setup_completed
+    }
 }

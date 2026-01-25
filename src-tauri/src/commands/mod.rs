@@ -824,6 +824,21 @@ pub async fn test_protocol_url(
             }
             Ok(())
         }
+        Ok(HandleResult::Pong) => {
+            GIT_COMMAND_LOG.log_request(&url, true, "ping", "Desktop is running", duration);
+            Ok(())
+        }
+        Ok(HandleResult::HelloAck { version }) => {
+            let version_str = version.as_deref().unwrap_or("unknown");
+            GIT_COMMAND_LOG.log_request(
+                &url,
+                true,
+                "hello",
+                &format!("Extension version {} registered", version_str),
+                duration,
+            );
+            Ok(())
+        }
         Err(e) => {
             let error_msg = e.to_string();
             GIT_COMMAND_LOG.log_request(&url, false, "error", &error_msg, duration);
@@ -1060,4 +1075,142 @@ pub async fn trust_confirmed(
 pub fn trust_cancelled() -> Result<(), String> {
     tracing::info!("Trust dialog cancelled");
     Ok(())
+}
+
+#[derive(Serialize)]
+pub struct SetupEditorInfo {
+    pub editor_id: String,
+    pub display_name: String,
+    pub is_installed: bool,
+}
+
+#[derive(Serialize)]
+pub struct FolderSuggestion {
+    pub path: String,
+    pub repo_count: usize,
+}
+
+#[derive(Serialize)]
+pub struct SetupData {
+    pub editors: Vec<SetupEditorInfo>,
+    pub current_editor: String,
+    pub detected_folder: String,
+    pub folder_suggestions: Vec<FolderSuggestion>,
+}
+
+#[tauri::command]
+pub async fn get_setup_data(
+    registry: State<'_, Arc<EditorRegistry>>,
+    settings_manager: State<'_, Arc<SettingsManager>>,
+) -> Result<SetupData, String> {
+    let settings = settings_manager.get().await;
+
+    let mut editors = Vec::new();
+    for editor_id in registry.list_editors() {
+        if let Some(manager) = registry.get(&editor_id) {
+            let is_installed = manager.is_installed().await;
+            editors.push(SetupEditorInfo {
+                editor_id: editor_id.clone(),
+                display_name: manager.display_name().to_string(),
+                is_installed,
+            });
+        }
+    }
+
+    // Sort: installed first, then alphabetically by display name
+    editors.sort_by(|a, b| {
+        match (a.is_installed, b.is_installed) {
+            (true, false) => std::cmp::Ordering::Less,
+            (false, true) => std::cmp::Ordering::Greater,
+            _ => a.display_name.cmp(&b.display_name),
+        }
+    });
+
+    let detected_folder = detect_source_folder().await.unwrap_or_else(|_| "~/code".to_string());
+
+    let mut folder_suggestions = Vec::new();
+    let home_dir = dirs::home_dir().ok_or_else(|| "Could not find home directory".to_string())?;
+
+    let candidates = ["code", "repos", "projects", "dev", "src", "apps", "work"];
+    for candidate in candidates {
+        let path = home_dir.join(candidate);
+        if path.is_dir() {
+            let repo_count = count_git_repos(&path).unwrap_or(0);
+            if repo_count > 0 {
+                folder_suggestions.push(FolderSuggestion {
+                    path: path.to_string_lossy().to_string(),
+                    repo_count,
+                });
+            }
+        }
+    }
+
+    // Sort by repo count descending
+    folder_suggestions.sort_by(|a, b| b.repo_count.cmp(&a.repo_count));
+
+    // Include current setting if different
+    let current_folder = settings.defaults.default_workspaces_folder.clone();
+    let expanded_current = shellexpand::tilde(&current_folder).to_string();
+    if !folder_suggestions.iter().any(|f| f.path == expanded_current) {
+        let path = PathBuf::from(&expanded_current);
+        let repo_count = if path.is_dir() {
+            count_git_repos(&path).unwrap_or(0)
+        } else {
+            0
+        };
+        folder_suggestions.insert(0, FolderSuggestion {
+            path: expanded_current.clone(),
+            repo_count,
+        });
+    }
+
+    let best_folder = folder_suggestions
+        .first()
+        .map_or(detected_folder, |f| f.path.clone());
+
+    Ok(SetupData {
+        editors,
+        current_editor: settings.defaults.editor,
+        detected_folder: best_folder,
+        folder_suggestions,
+    })
+}
+
+#[tauri::command]
+pub async fn complete_setup(
+    editor: String,
+    workspaces_folder: String,
+    settings_manager: State<'_, Arc<SettingsManager>>,
+    workspace_sync: State<'_, Arc<crate::settings::WorkspaceSync>>,
+) -> Result<(), String> {
+    let mut settings = settings_manager.get().await;
+
+    settings.defaults.editor = editor;
+    settings.defaults.default_workspaces_folder = workspaces_folder;
+    settings.defaults.setup_completed = true;
+
+    settings_manager
+        .save(settings)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // Sync workspaces from the selected folder
+    if let Err(e) = workspace_sync.sync().await {
+        tracing::warn!("Failed to sync workspaces after setup: {}", e);
+    }
+
+    tracing::info!("Setup completed successfully");
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn is_setup_needed(
+    settings_manager: State<'_, Arc<SettingsManager>>,
+) -> Result<bool, String> {
+    Ok(settings_manager.is_setup_needed().await)
+}
+
+#[tauri::command]
+pub fn detect_browsers() -> Vec<crate::browser_detection::BrowserInfo> {
+    crate::browser_detection::BrowserDetector::detect_browsers()
 }

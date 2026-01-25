@@ -59,6 +59,9 @@ pub struct DefaultEditorConfig {
 
     #[serde(default = "default_max_file_size_mb")]
     pub max_file_size_mb: u64,
+
+    #[serde(default)]
+    pub setup_completed: bool,
 }
 
 fn default_editor() -> String {
@@ -146,6 +149,7 @@ impl Default for DefaultEditorConfig {
             strip_git_diff_prefixes: default_strip_git_diff_prefixes(),
             large_file_warning_mb: default_large_file_warning_mb(),
             max_file_size_mb: default_max_file_size_mb(),
+            setup_completed: false,
         }
     }
 }
