@@ -1,7 +1,12 @@
+#[cfg(unix)]
 use std::fs;
+#[cfg(unix)]
 use std::io::Write;
+#[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
+#[cfg(unix)]
 use std::path::PathBuf;
+#[cfg(unix)]
 use std::process::Command;
 use tracing::debug;
 
@@ -147,6 +152,14 @@ impl TerminalApp {
             .output()
             .map(|output| output.status.success())
             .unwrap_or(false)
+    }
+
+    #[cfg(target_os = "windows")]
+    pub fn detect_installed_with_preference(_preferred: Option<&str>) -> Option<Self> {
+        // Terminal-based editors are not supported on Windows in the same way
+        // Windows users should use GUI editors like VS Code
+        debug!("Terminal detection not supported on Windows");
+        None
     }
 
     pub fn launch_editor(&self, editor: &str, args: &[String]) -> Result<(), String> {
