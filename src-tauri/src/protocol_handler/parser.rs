@@ -1,5 +1,5 @@
-use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum GitRef {
@@ -72,6 +72,35 @@ pub enum SrcuriRequest {
 
 pub struct SrcuriParser;
 
+#[derive(Debug, Error)]
+pub enum SrcuriParseError {
+    #[error("Invalid scheme: expected 'srcuri://'")]
+    InvalidScheme,
+    #[error("Path is empty after scheme prefix")]
+    EmptyPath,
+    #[error("Missing workspace name after 'workspace/' authority")]
+    MissingWorkspaceName,
+    #[error("Invalid workspace name '{0}': may only contain letters, numbers, and - _ .")]
+    InvalidWorkspaceName(String),
+    #[error("Invalid commit SHA '{0}': must be 7-64 hexadecimal characters")]
+    InvalidCommitSha(String),
+    #[error("Invalid branch name '{0}': may only contain letters, numbers, and - _ . / @ , ( ) + # =")]
+    InvalidBranchName(String),
+    #[error("Invalid tag name '{0}': may only contain letters, numbers, and - _ . / +")]
+    InvalidTagName(String),
+    #[error("Invalid remote URL '{0}': may only contain letters, numbers, and - _ . / : @")]
+    InvalidRemoteUrl(String),
+    #[error("External URL must start with https/ or http/")]
+    InvalidExternalUrlScheme,
+    #[error("Failed to parse external URL")]
+    ExternalUrlParse {
+        #[source]
+        source: srcuri_core::ParseError,
+    },
+}
+
+type Result<T> = std::result::Result<T, SrcuriParseError>;
+
 fn is_valid_branch_name(name: &str) -> bool {
     !name.is_empty()
         && name.len() <= 128
@@ -133,13 +162,13 @@ impl SrcuriParser {
 
         // Only accept srcuri:// (not srcuri: without //)
         if !link.starts_with("srcuri://") {
-            bail!("Invalid scheme: expected 'srcuri://'");
+            return Err(SrcuriParseError::InvalidScheme);
         }
 
         let remainder = &link[9..]; // after srcuri://
 
         if remainder.is_empty() {
-            bail!("Path is empty after scheme prefix");
+            return Err(SrcuriParseError::EmptyPath);
         }
 
         // Handle fragment (e.g., #L42 for line numbers from provider URLs)
@@ -210,10 +239,9 @@ impl SrcuriParser {
     ) -> Result<SrcuriRequest> {
         // Validate workspace name
         if !is_valid_workspace_name(authority) {
-            bail!(
-                "Invalid workspace name '{}': may only contain letters, numbers, and - _ .",
-                Self::safe_display(authority)
-            );
+            return Err(SrcuriParseError::InvalidWorkspaceName(Self::safe_display(
+                authority,
+            )));
         }
 
         let (file_path, mut line, column) = Self::parse_path_with_location(path_part)?;
@@ -245,14 +273,13 @@ impl SrcuriParser {
         let (workspace, relative_path) = Self::split_authority_path(path_part);
 
         if workspace.is_empty() {
-            bail!("Missing workspace name after 'workspace/' authority");
+            return Err(SrcuriParseError::MissingWorkspaceName);
         }
 
         if !is_valid_workspace_name(workspace) {
-            bail!(
-                "Invalid workspace name '{}': may only contain letters, numbers, and - _ .",
-                Self::safe_display(workspace)
-            );
+            return Err(SrcuriParseError::InvalidWorkspaceName(Self::safe_display(
+                workspace,
+            )));
         }
 
         let (file_path, mut line, column) = Self::parse_path_with_location(relative_path)?;
@@ -379,7 +406,7 @@ impl SrcuriParser {
 
         // Use srcuri-core for comprehensive provider URL parsing
         let target = srcuri_core::parse_remote_url(&full_url)
-            .map_err(|e| anyhow::anyhow!("Failed to parse external URL: {}", e))?;
+            .map_err(|source| SrcuriParseError::ExternalUrlParse { source })?;
 
         let (fragment_line, fragment_column) = Self::parse_provider_fragment(fragment);
 
@@ -401,16 +428,25 @@ impl SrcuriParser {
     }
 
     /// Reconstruct external URL from ext-mode path
-    /// https/github.com/owner/repo → https://github.com/owner/repo
+    /// Accepts two formats:
+    /// - https/github.com/owner/repo → https://github.com/owner/repo
+    /// - https://github.com/owner/repo → https://github.com/owner/repo (pass-through)
     fn reconstruct_external_url(path: &str) -> Result<String> {
-        // Format: <scheme>/<host>/<rest-of-path>
+        // Format 1: scheme already has :// (from srcuri.com)
+        if let Some(rest) = path.strip_prefix("https://") {
+            return Ok(format!("https://{}", rest));
+        }
+        if let Some(rest) = path.strip_prefix("http://") {
+            return Ok(format!("http://{}", rest));
+        }
+        // Format 2: scheme uses / instead of :// (canonical srcuri format)
         if let Some(rest) = path.strip_prefix("https/") {
             return Ok(format!("https://{}", rest));
         }
         if let Some(rest) = path.strip_prefix("http/") {
             return Ok(format!("http://{}", rest));
         }
-        bail!("External URL must start with https/ or http/");
+        Err(SrcuriParseError::InvalidExternalUrlScheme)
     }
 
     /// Parse fragment as simple line number (e.g., #42)
@@ -499,28 +535,25 @@ impl SrcuriParser {
                 match key {
                     "commit" | "sha" => {
                         if !is_valid_commit_sha(&decoded_str) {
-                            bail!(
-                                "Invalid commit SHA '{}': must be 7-64 hexadecimal characters",
-                                Self::safe_display(&decoded_str)
-                            );
+                            return Err(SrcuriParseError::InvalidCommitSha(Self::safe_display(
+                                &decoded_str,
+                            )));
                         }
                         return Ok(Some(GitRef::Commit(decoded_str)));
                     }
                     "branch" => {
                         if !is_valid_branch_name(&decoded_str) {
-                            bail!(
-                                "Invalid branch name '{}': may only contain letters, numbers, and - _ . / @ , ( ) + # =",
-                                Self::safe_display(&decoded_str)
-                            );
+                            return Err(SrcuriParseError::InvalidBranchName(Self::safe_display(
+                                &decoded_str,
+                            )));
                         }
                         return Ok(Some(GitRef::Branch(decoded_str)));
                     }
                     "tag" => {
                         if !is_valid_tag_name(&decoded_str) {
-                            bail!(
-                                "Invalid tag name '{}': may only contain letters, numbers, and - _ . / +",
-                                Self::safe_display(&decoded_str)
-                            );
+                            return Err(SrcuriParseError::InvalidTagName(Self::safe_display(
+                                &decoded_str,
+                            )));
                         }
                         return Ok(Some(GitRef::Tag(decoded_str)));
                     }
@@ -553,10 +586,9 @@ impl SrcuriParser {
             if let Some((key, value)) = pair.split_once('=') {
                 if key == "remote" && !value.is_empty() {
                     if !is_valid_remote_url(value) {
-                        bail!(
-                            "Invalid remote URL '{}': may only contain letters, numbers, and - _ . / : @",
-                            Self::safe_display(value)
-                        );
+                        return Err(SrcuriParseError::InvalidRemoteUrl(Self::safe_display(
+                            value,
+                        )));
                     }
                     return Ok(Some(value.to_string()));
                 }
@@ -575,10 +607,9 @@ impl SrcuriParser {
             if let Some((key, value)) = pair.split_once('=') {
                 if (key == "workspaceHint" || key == "workspace") && !value.is_empty() {
                     if !is_valid_workspace_name(value) {
-                        bail!(
-                            "Invalid workspace name '{}': may only contain letters, numbers, and - _ .",
-                            Self::safe_display(value)
-                        );
+                        return Err(SrcuriParseError::InvalidWorkspaceName(Self::safe_display(
+                            value,
+                        )));
                     }
                     return Ok(Some(value.to_string()));
                 }
@@ -1196,6 +1227,49 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("must start with https/ or http/"));
+    }
+
+    #[test]
+    fn test_ext_mode_srcuri_com_format() {
+        // srcuri.com generates URLs with https:// instead of https/
+        let request =
+            SrcuriParser::parse("srcuri://ext/https://github.com/fcsonline/drill").expect("parse URL");
+        assert_eq!(
+            request,
+            SrcuriRequest::ExternalUrl {
+                provider: "github.com/fcsonline/drill".to_string(),
+                repo_name: "drill".to_string(),
+                provider_path: "https://github.com/fcsonline/drill".to_string(),
+                path: "".to_string(),
+                line: None,
+                column: None,
+                git_ref: None,
+                workspace_override: None,
+                fragment: None,
+            }
+        );
+    }
+
+    #[test]
+    fn test_ext_mode_srcuri_com_format_with_file() {
+        let request = SrcuriParser::parse(
+            "srcuri://ext/https://github.com/owner/repo/blob/main/src/lib.rs#L42",
+        )
+        .expect("parse URL");
+        assert_eq!(
+            request,
+            SrcuriRequest::ExternalUrl {
+                provider: "github.com/owner/repo".to_string(),
+                repo_name: "repo".to_string(),
+                provider_path: "https://github.com/owner/repo/blob/main/src/lib.rs".to_string(),
+                path: "src/lib.rs".to_string(),
+                line: Some(42),
+                column: None,
+                git_ref: Some(GitRef::Branch("main".to_string())),
+                workspace_override: None,
+                fragment: Some("L42".to_string()),
+            }
+        );
     }
 
     // Column boundary tests
