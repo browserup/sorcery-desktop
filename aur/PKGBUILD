@@ -1,0 +1,63 @@
+# Maintainer: ebeland <ebeland@users.noreply.github.com>
+pkgname=sorcery-desktop-bin
+pkgver=0.1.1
+pkgrel=1
+pkgdesc="Editor-independent code linking via srcuri:// protocol"
+arch=('x86_64' 'aarch64')
+url="https://getsorcery.com"
+license=('MIT')
+depends=('webkit2gtk-4.1' 'gtk3' 'libayatana-appindicator')
+provides=('sorcery-desktop')
+conflicts=('sorcery-desktop')
+options=('!strip')
+
+source_x86_64=("https://github.com/ebeland/sorcery-desktop/releases/download/v${pkgver}/sorcery-desktop_${pkgver}_amd64.AppImage")
+source_aarch64=("https://github.com/ebeland/sorcery-desktop/releases/download/v${pkgver}/sorcery-desktop_${pkgver}_aarch64.AppImage")
+
+sha256sums_x86_64=('PLACEHOLDER_X86_64_SHA256')
+sha256sums_aarch64=('PLACEHOLDER_AARCH64_SHA256')
+
+package() {
+    install -Dm755 "${srcdir}/sorcery-desktop_${pkgver}_"*".AppImage" \
+        "${pkgdir}/opt/sorcery-desktop/sorcery-desktop.AppImage"
+
+    # Create wrapper script
+    install -dm755 "${pkgdir}/usr/bin"
+    cat > "${pkgdir}/usr/bin/sorcery-desktop" << 'EOF'
+#!/bin/bash
+exec /opt/sorcery-desktop/sorcery-desktop.AppImage "$@"
+EOF
+    chmod 755 "${pkgdir}/usr/bin/sorcery-desktop"
+
+    # Desktop file
+    install -Dm644 /dev/stdin "${pkgdir}/usr/share/applications/sorcery-desktop.desktop" << EOF
+[Desktop Entry]
+Name=Sorcery Desktop
+Comment=Editor-independent code linking via srcuri:// protocol
+Exec=/opt/sorcery-desktop/sorcery-desktop.AppImage %U
+Icon=sorcery-desktop
+Type=Application
+Categories=Development;Utility;
+MimeType=x-scheme-handler/srcuri;
+StartupNotify=true
+EOF
+
+    # URL handler registration
+    install -Dm644 /dev/stdin "${pkgdir}/usr/share/applications/srcuri.desktop" << EOF
+[Desktop Entry]
+Name=Sorcery URI Handler
+Exec=/opt/sorcery-desktop/sorcery-desktop.AppImage %U
+Type=Application
+NoDisplay=true
+MimeType=x-scheme-handler/srcuri;
+EOF
+}
+
+post_install() {
+    xdg-mime default srcuri.desktop x-scheme-handler/srcuri 2>/dev/null || true
+    update-desktop-database -q 2>/dev/null || true
+}
+
+post_upgrade() {
+    post_install
+}
