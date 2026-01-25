@@ -31,6 +31,23 @@
       --shadow: rgba(0, 0, 0, 0.4);
     }
 
+    /* Scrollbar styling - subtle visibility on dark background */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: var(--bg-primary);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #404040;
+      border-radius: 4px;
+      border: 1px solid #505050;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #505050;
+    }
+
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Roboto, 'Helvetica Neue', sans-serif;
       background: var(--bg-primary);
@@ -652,14 +669,23 @@
     <button class="tab active" data-tab="settings" onclick="switchTab('settings')">Settings</button>
     <button class="tab" data-tab="workspaces" onclick="switchTab('workspaces')">Workspaces</button>
     <button class="tab" data-tab="testbed" onclick="switchTab('testbed')">Editors</button>
-    <button class="tab" data-tab="debug" onclick="switchTab('debug')">Command Log</button>
+    <button class="tab" data-tab="debug" onclick="switchTab('debug')">Log</button>
   </div>
 
   <div class="tab-content">
     <!-- Settings Tab -->
     <div id="settings-pane" class="tab-pane active">
       <div style="max-width: 1000px; margin: 0 auto;">
-        <div id="basic-settings" class="section">
+        <!-- Settings sub-tabs -->
+        <div style="display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 1rem;">
+          <button class="settings-subtab active" data-subtab="general" onclick="switchSettingsSubtab('general')" style="padding: 0.5rem 1rem; background: none; border: none; border-bottom: 2px solid var(--primary); color: var(--text-primary); cursor: pointer; font-size: 0.875rem;">General</button>
+          <button class="settings-subtab" data-subtab="info" onclick="switchSettingsSubtab('info')" style="padding: 0.5rem 1rem; background: none; border: none; border-bottom: 2px solid transparent; color: var(--text-secondary); cursor: pointer; font-size: 0.875rem;">Info</button>
+          <button class="settings-subtab" data-subtab="protocol" onclick="switchSettingsSubtab('protocol')" style="padding: 0.5rem 1rem; background: none; border: none; border-bottom: 2px solid transparent; color: var(--text-secondary); cursor: pointer; font-size: 0.875rem;">Protocol</button>
+        </div>
+
+        <!-- General sub-tab -->
+        <div id="settings-subtab-general" class="settings-subtab-content">
+          <div class="section">
           <div class="form-group">
             <label for="default-editor">Default Editor</label>
             <select id="default-editor">
@@ -734,75 +760,69 @@
             <input type="number" id="max-file-size-mb" min="1" max="10000" value="50" style="width: 120px;">
             <p class="help-text">Refuse to open files larger than this size</p>
           </div>
+          </div>
         </div>
 
-        <div style="margin-top: 1rem;">
-          <a href="#" onclick="toggleAdvancedSettings(); return false;" style="color: var(--text-tertiary); font-size: 0.8125rem;" id="advanced-toggle-link">Advanced</a>
+        <!-- Info sub-tab -->
+        <div id="settings-subtab-info" class="settings-subtab-content" style="display: none;">
+          <div style="font-family: monospace; font-size: 0.875rem; background: var(--bg-elevated); padding: 1rem; border-radius: 6px;">
+            <div style="display: flex; gap: 0.5rem; margin-bottom: 0.75rem;">
+              <span style="color: var(--text-secondary); min-width: 6rem;">Version:</span>
+              <span id="app-version">Loading...</span>
+            </div>
+            <div style="display: flex; gap: 0.5rem; margin-bottom: 0.75rem;">
+              <span style="color: var(--text-secondary); min-width: 6rem;">Settings:</span>
+              <span id="settings-file-path" style="word-break: break-all;">Loading...</span>
+            </div>
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
+              <span style="color: var(--text-secondary); min-width: 6rem;">Crash Logs:</span>
+              <span id="logs-directory-path" style="word-break: break-all; flex: 1;">Loading...</span>
+              <a href="#" onclick="openLogsDirectory(); return false;" id="open-logs-link" style="color: var(--primary); white-space: nowrap;">Open</a>
+            </div>
+          </div>
         </div>
 
-        <div id="advanced-settings" style="display: none; margin-top: 1rem;">
-          <div class="section">
-            <h2>Settings File</h2>
-            <div style="font-family: monospace; font-size: 0.875rem;">
-              <div style="background: var(--bg-elevated); padding: 0.5rem; border-radius: 4px; word-break: break-all;" id="settings-file-path">Loading...</div>
+        <!-- Protocol sub-tab -->
+        <div id="settings-subtab-protocol" class="settings-subtab-content" style="display: none;">
+          <p class="help-text" style="margin-bottom: 1rem;">
+            The srcuri:// protocol must be registered with your OS to open links in editors.
+          </p>
+
+          <div id="protocol-status-content" style="font-family: monospace; font-size: 0.875rem;">
+            <div style="margin-bottom: 0.75rem;">
+              <strong style="color: var(--text-secondary);">Status:</strong>
+              <span id="protocol-registered" style="font-weight: 600;">Loading...</span>
+            </div>
+            <div style="margin-bottom: 0.75rem;">
+              <strong style="color: var(--text-secondary);">Platform:</strong>
+              <span id="protocol-platform">-</span>
+            </div>
+            <div style="margin-bottom: 0.75rem;">
+              <strong style="color: var(--text-secondary);">Current Executable:</strong>
+              <div id="protocol-current-exe" style="background: var(--bg-elevated); padding: 0.5rem; border-radius: 4px; margin-top: 0.25rem; word-break: break-all;">-</div>
+            </div>
+            <div style="margin-bottom: 0.75rem;">
+              <strong style="color: var(--text-secondary);">Registered Executable:</strong>
+              <div id="protocol-registered-exe" style="background: var(--bg-elevated); padding: 0.5rem; border-radius: 4px; margin-top: 0.25rem; word-break: break-all;">-</div>
+            </div>
+            <div style="margin-bottom: 0.75rem;">
+              <strong style="color: var(--text-secondary);">Executables Match:</strong>
+              <span id="protocol-match" style="font-weight: 600;">-</span>
+            </div>
+            <div style="margin-bottom: 0.75rem;">
+              <strong style="color: var(--text-secondary);">Details:</strong>
+              <div id="protocol-details" style="background: var(--bg-elevated); padding: 0.5rem; border-radius: 4px; margin-top: 0.25rem; color: var(--text-secondary); font-size: 0.8125rem;">-</div>
             </div>
           </div>
 
-          <div class="section">
-            <h2>Crash Logs</h2>
-            <p class="help-text" style="margin-bottom: 0.75rem;">
-              System crash reports are stored here. Look for files with "Sorcery" in the name.
-            </p>
-            <div style="font-family: monospace; font-size: 0.875rem; margin-bottom: 0.75rem;">
-              <div style="background: var(--bg-elevated); padding: 0.5rem; border-radius: 4px; word-break: break-all; display: flex; align-items: center; gap: 0.5rem;">
-                <span id="logs-directory-path" style="flex: 1;">Loading...</span>
-                <a href="#" onclick="openLogsDirectory(); return false;" id="open-logs-link" style="color: var(--primary); white-space: nowrap;">Open Folder</a>
-              </div>
-            </div>
+          <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+            <button class="button" onclick="loadProtocolStatus()">Refresh Status</button>
+            <button class="button" onclick="reregisterProtocol()" id="reregister-btn" style="background: var(--success);">Re-register Protocol</button>
           </div>
 
-          <div class="section">
-            <h2>Protocol Registration</h2>
-            <p class="help-text" style="margin-bottom: 1rem;">
-              The srcuri:// protocol must be registered with your OS to open links in editors.
-            </p>
-
-            <div id="protocol-status-content" style="font-family: monospace; font-size: 0.875rem;">
-              <div style="margin-bottom: 0.75rem;">
-                <strong style="color: var(--text-secondary);">Status:</strong>
-                <span id="protocol-registered" style="font-weight: 600;">Loading...</span>
-              </div>
-              <div style="margin-bottom: 0.75rem;">
-                <strong style="color: var(--text-secondary);">Platform:</strong>
-                <span id="protocol-platform">-</span>
-              </div>
-              <div style="margin-bottom: 0.75rem;">
-                <strong style="color: var(--text-secondary);">Current Executable:</strong>
-                <div id="protocol-current-exe" style="background: var(--bg-elevated); padding: 0.5rem; border-radius: 4px; margin-top: 0.25rem; word-break: break-all;">-</div>
-              </div>
-              <div style="margin-bottom: 0.75rem;">
-                <strong style="color: var(--text-secondary);">Registered Executable:</strong>
-                <div id="protocol-registered-exe" style="background: var(--bg-elevated); padding: 0.5rem; border-radius: 4px; margin-top: 0.25rem; word-break: break-all;">-</div>
-              </div>
-              <div style="margin-bottom: 0.75rem;">
-                <strong style="color: var(--text-secondary);">Executables Match:</strong>
-                <span id="protocol-match" style="font-weight: 600;">-</span>
-              </div>
-              <div style="margin-bottom: 0.75rem;">
-                <strong style="color: var(--text-secondary);">Details:</strong>
-                <div id="protocol-details" style="background: var(--bg-elevated); padding: 0.5rem; border-radius: 4px; margin-top: 0.25rem; color: var(--text-secondary); font-size: 0.8125rem;">-</div>
-              </div>
-            </div>
-
-            <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
-              <button class="button" onclick="loadProtocolStatus()">Refresh Status</button>
-              <button class="button" onclick="reregisterProtocol()" id="reregister-btn" style="background: var(--success);">Re-register Protocol</button>
-            </div>
-
-            <div id="protocol-status-message" class="status-message">
-              <span class="status-text" id="protocol-status-text"></span>
-              <button class="copy-btn" id="protocol-copy-btn" onclick="copyProtocolStatus()" style="display: none;">Copy</button>
-            </div>
+          <div id="protocol-status-message" class="status-message">
+            <span class="status-text" id="protocol-status-text"></span>
+            <button class="copy-btn" id="protocol-copy-btn" onclick="copyProtocolStatus()" style="display: none;">Copy</button>
           </div>
         </div>
 
@@ -913,6 +933,7 @@
         </div>
       </div>
     </div>
+
   </div>
 
   <script>
@@ -938,21 +959,39 @@
       }
     }
 
-    function toggleAdvancedSettings() {
-      const advanced = document.getElementById('advanced-settings');
-      const basic = document.getElementById('basic-settings');
-      const link = document.getElementById('advanced-toggle-link');
-      if (advanced.style.display === 'none') {
-        advanced.style.display = 'block';
-        basic.style.display = 'none';
-        link.textContent = 'Basic';
+    // Settings sub-tab switching
+    function switchSettingsSubtab(subtabName) {
+      document.querySelectorAll('.settings-subtab').forEach(btn => {
+        btn.classList.remove('active');
+        btn.style.borderBottomColor = 'transparent';
+        btn.style.color = 'var(--text-secondary)';
+      });
+      const activeBtn = document.querySelector(`.settings-subtab[data-subtab="${subtabName}"]`);
+      activeBtn.classList.add('active');
+      activeBtn.style.borderBottomColor = 'var(--primary)';
+      activeBtn.style.color = 'var(--text-primary)';
+
+      document.querySelectorAll('.settings-subtab-content').forEach(content => {
+        content.style.display = 'none';
+      });
+      document.getElementById(`settings-subtab-${subtabName}`).style.display = 'block';
+
+      // Load data for the sub-tab
+      if (subtabName === 'info') {
+        loadAppVersion();
         loadSettingsPath();
         loadLogsDirectory();
+      } else if (subtabName === 'protocol') {
         loadProtocolStatus();
-      } else {
-        advanced.style.display = 'none';
-        basic.style.display = 'block';
-        link.textContent = 'Advanced';
+      }
+    }
+
+    async function loadAppVersion() {
+      try {
+        const version = await window.__TAURI__.core.invoke('get_app_version');
+        document.getElementById('app-version').textContent = version;
+      } catch (e) {
+        document.getElementById('app-version').textContent = 'Error: ' + e;
       }
     }
 

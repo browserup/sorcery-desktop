@@ -49,6 +49,11 @@ pub fn get_settings_path(settings_manager: State<'_, Arc<SettingsManager>>) -> S
 }
 
 #[tauri::command]
+pub fn get_app_version() -> String {
+    env!("CARGO_PKG_VERSION").to_string()
+}
+
+#[tauri::command]
 pub async fn save_settings(
     settings_manager: State<'_, Arc<SettingsManager>>,
     settings: Settings,
