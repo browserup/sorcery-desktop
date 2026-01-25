@@ -205,6 +205,19 @@ impl PathMatcher {
 
             if ws_name.eq_ignore_case(workspace_name) {
                 if let Some(workspace_root) = &workspace.normalized_path {
+                    // Check if workspace root directory exists
+                    // If not, treat as WorkspaceNotFound so clone dialog can be offered
+                    if !Self::path_exists_and_valid(workspace_root).await {
+                        debug!(
+                            "Workspace '{}' directory no longer exists at {}",
+                            workspace_name,
+                            workspace_root.display()
+                        );
+                        return Err(WorkspaceLookupError::WorkspaceNotFound(
+                            workspace_name.to_string(),
+                        ));
+                    }
+
                     let full_path = workspace_root.join(relative_path);
 
                     if Self::path_exists_and_valid(&full_path).await {
@@ -618,6 +631,26 @@ mod tests {
         // So first "myproject" → path is "myproject/nested/file.rs" (doesn't exist as file)
         // This test documents the behavior - first match wins
         assert!(matches.len() <= 1);
+    }
+
+    #[tokio::test]
+    async fn deleted_workspace_returns_not_found() {
+        // Create a workspace, then delete its directory
+        let workspace_dir = TempDir::new().expect("workspace dir");
+        let workspace_path = workspace_dir.path().to_path_buf();
+
+        let matcher = build_matcher(&workspace_path, "deleted-ws").await;
+
+        // Delete the workspace directory
+        drop(workspace_dir);
+
+        // Should return WorkspaceNotFound, not PathNotFound
+        let result = matcher.find_workspace_path("deleted-ws", "some/file.rs").await;
+
+        assert!(matches!(
+            result,
+            Err(WorkspaceLookupError::WorkspaceNotFound(_))
+        ));
     }
 
     #[tokio::test]
