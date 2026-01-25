@@ -1,14 +1,15 @@
-.PHONY: help build build-release build-dmg build-linux install install-quick test-protocol clean dev
+.PHONY: help build build-release build-dmg build-linux install install-quick release test-protocol clean dev
 
 help:
 	@echo "Sorcery Desktop Development Makefile"
 	@echo ""
 	@echo "Available targets:"
-	@echo "  make build          - Build debug version"
+	@echo "  make build          - Build debug version (no signing)"
+	@echo "  make install        - Build and install to /Applications (macOS, no signing)"
+	@echo "  make release        - Build signed, install, register, then notarize (macOS)"
 	@echo "  make build-release  - Build release version"
 	@echo "  make build-dmg      - Build signed/notarized DMG for distribution (macOS)"
 	@echo "  make build-linux    - Build .deb/.rpm/.AppImage for distribution (Linux)"
-	@echo "  make install        - Build and install to /Applications (macOS)"
 	@echo "  make install-quick  - Install existing build (no rebuild)"
 	@echo "  make test-protocol  - Test srcuri:// protocol handler"
 	@echo "  make clean          - Clean build artifacts"
@@ -17,8 +18,8 @@ help:
 	@echo "Windows: Run scripts/build-windows-release.ps1 in PowerShell"
 
 build:
-	@echo "==> Building debug version (app bundle only)..."
-	cd src-tauri && cargo tauri build --debug --bundles app
+	@echo "==> Building debug version (no signing)..."
+	cd src-tauri && env -u APPLE_CERTIFICATE -u APPLE_CERTIFICATE_PASSWORD -u APPLE_ID -u APPLE_PASSWORD -u APPLE_TEAM_ID -u APPLE_SIGNING_IDENTITY -u TAURI_SIGNING_PRIVATE_KEY -u TAURI_SIGNING_PRIVATE_KEY_PASSWORD cargo tauri build --debug --bundles app --config '{"bundle":{"createUpdaterArtifacts":false}}'
 
 build-release:
 	@echo "==> Building release version..."
@@ -36,6 +37,16 @@ install: build
 	@echo ""
 	@echo "==> Installing to /Applications..."
 	@./scripts/quick-install-macos.sh
+
+release:
+	@echo "==> Building signed release (notarization deferred)..."
+	cd src-tauri && env -u APPLE_ID -u APPLE_PASSWORD -u APPLE_TEAM_ID cargo tauri build --bundles app
+	@echo ""
+	@echo "==> Installing to /Applications..."
+	@./scripts/quick-install-macos.sh release
+	@echo ""
+	@echo "==> Notarizing (this may take a few minutes)..."
+	@./scripts/notarize-macos.sh
 
 install-quick:
 	@./scripts/quick-install-macos.sh
