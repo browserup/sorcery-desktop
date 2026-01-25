@@ -4,7 +4,7 @@ use parking_lot::RwLock;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, SystemTime};
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 
 struct BinaryCache {
     path: Option<PathBuf>,
@@ -436,16 +436,58 @@ impl JetBrainsManager {
         {
             use std::process::Stdio;
 
-            // Use -n to always open a new instance so arguments are properly passed
-            // Without -n, if the app is already running, it just activates it and ignores args
-            let mut cmd = Command::new("open");
-            cmd.arg("-n").arg("-a").arg(binary).arg("--args");
+            // Call the native binary directly inside the .app bundle.
+            // This allows IntelliJ's socket-based IPC to route the file to the correct
+            // project window when multiple projects are open.
+            //
+            // Previous approach used `open -n -a <app> --args`:
+            //   let mut cmd = Command::new("open");
+            //   cmd.arg("-n").arg("-a").arg(binary).arg("--args");
+            // Problem: The -n flag forces a NEW application instance, bypassing IntelliJ's
+            // socket mechanism that routes files to the correct running project window.
+            // This caused files to open in the wrong workspace when multiple projects were open.
 
-            for arg in args {
-                cmd.arg(arg);
-            }
+            let inner_binary = binary.join("Contents/MacOS").join(&self.toolbox_id);
+            let executable = if inner_binary.exists() {
+                inner_binary
+            } else {
+                // Fallback: try common binary names (idea, webstorm, etc.)
+                let fallback = binary.join("Contents/MacOS").join(
+                    binary
+                        .file_stem()
+                        .and_then(|s| s.to_str())
+                        .unwrap_or(&self.toolbox_id)
+                        .to_lowercase()
+                        .replace(" ", ""),
+                );
+                if fallback.exists() {
+                    fallback
+                } else {
+                    // Last resort: find any executable in Contents/MacOS
+                    let macos_dir = binary.join("Contents/MacOS");
+                    std::fs::read_dir(&macos_dir)
+                        .ok()
+                        .and_then(|entries| {
+                            entries
+                                .filter_map(Result::ok)
+                                .find(|e| {
+                                    e.path().is_file()
+                                        && !e.file_name().to_string_lossy().starts_with('.')
+                                })
+                                .map(|e| e.path())
+                        })
+                        .unwrap_or(inner_binary)
+                }
+            };
 
-            cmd.stdin(Stdio::null())
+            info!(
+                "Launching {} via native binary: {:?} with args: {:?}",
+                self.display_name, executable, args
+            );
+
+            Command::new(&executable)
+                .args(args)
+                .stdin(Stdio::null())
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
                 .spawn()
@@ -456,19 +498,20 @@ impl JetBrainsManager {
         {
             use std::process::Stdio;
 
-            // Use cmd.exe with START to properly detach
-            let binary_str = binary.to_string_lossy();
-            let mut cmd = Command::new("cmd.exe");
-            cmd.arg("/c")
-                .arg("start")
-                .arg("\"\"") // Empty window title
-                .arg(&*binary_str);
+            // Call the binary directly (not via cmd.exe).
+            // This enables IntelliJ's socket-based IPC to route files to the correct
+            // project window, and avoids shell escaping issues with paths containing spaces.
+            //
+            // Previous approach used `cmd.exe /c start`:
+            //   Command::new("cmd.exe").arg("/c").arg("start").arg("\"\"").arg(binary)...
+            // Problems:
+            //   1. Shell interpretation risked injection if paths contained special chars
+            //   2. cmd.exe quoting with spaces is notoriously broken
+            //   3. Bypassed IntelliJ's socket IPC for routing to correct project window
 
-            for arg in args {
-                cmd.arg(arg);
-            }
-
-            cmd.stdin(Stdio::null())
+            Command::new(binary)
+                .args(args)
+                .stdin(Stdio::null())
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
                 .spawn()
@@ -574,7 +617,10 @@ impl EditorManager for JetBrainsManager {
 
         args.push(path.display().to_string());
 
-        debug!("Launching {} with args: {:?}", self.display_name, args);
+        info!(
+            "Launching {} binary={:?} args={:?}",
+            self.display_name, binary, args
+        );
 
         // Try to launch, with auto-retry on failure
         let launch_result = self.spawn_editor(&binary, &args);
