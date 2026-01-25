@@ -2,12 +2,12 @@ PackageIdentifier: ebeland.SorceryDesktop
 PackageVersion: 0.1.1
 PackageLocale: en-US
 Publisher: ebeland
-PublisherUrl: https://github.com/ebeland
-PublisherSupportUrl: https://github.com/ebeland/sorcery-desktop/issues
+PublisherUrl: https://github.com/browserup
+PublisherSupportUrl: https://github.com/browserup/sorcery-desktop/issues
 PackageName: Sorcery Desktop
 PackageUrl: https://getsorcery.com
 License: MIT
-LicenseUrl: https://github.com/ebeland/sorcery-desktop/blob/main/LICENSE
+LicenseUrl: https://github.com/browserup/sorcery-desktop/blob/main/LICENSE
 ShortDescription: Editor-independent code linking via srcuri:// protocol
 Description: |-
   Sorcery Desktop is a cross-platform hyperlinker for editors/IDEs.
@@ -20,6 +20,6 @@ Tags:
   - productivity
   - srcuri
   - code-navigation
-ReleaseNotesUrl: https://github.com/ebeland/sorcery-desktop/releases/tag/v0.1.1
+ReleaseNotesUrl: https://github.com/browserup/sorcery-desktop/releases/tag/v0.1.1
 ManifestType: defaultLocale
 ManifestVersion: 1.6.0

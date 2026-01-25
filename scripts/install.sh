@@ -4,7 +4,7 @@ set -euo pipefail
 # Sorcery Desktop Installer
 # Usage: curl -fsSL https://getsorcery.com/install.sh | sh
 
-REPO="ebeland/sorcery-desktop"
+REPO="browserup/sorcery-desktop"
 APP_NAME="Sorcery Desktop"
 
 # Colors for output
