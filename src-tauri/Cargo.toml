@@ -1,6 +1,6 @@
 [package]
 name = "sorcery-desktop"
-version = "0.1.0"
+version = "0.1.1"
 description = "Sorcery Desktop - Cross-platform editor hyperlink launcher"
 authors = ["Eric Beland"]
 license = "MIT"
