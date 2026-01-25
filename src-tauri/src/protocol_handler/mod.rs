@@ -191,6 +191,18 @@ impl ProtocolHandler {
         let request = SrcuriParser::parse(url).context("Failed to parse srcuri URL")?;
 
         match request {
+            SrcuriRequest::Ping => {
+                info!("Ping request received - Desktop is running");
+                Ok(HandleResult::Pong)
+            }
+            SrcuriRequest::Hello { version } => {
+                if let Some(ref v) = version {
+                    info!("Hello request received from extension version {}", v);
+                } else {
+                    info!("Hello request received from extension (no version)");
+                }
+                Ok(HandleResult::HelloAck { version })
+            }
             SrcuriRequest::ImplicitWorkspace {
                 workspace,
                 path,
@@ -687,4 +699,8 @@ pub enum HandleResult {
     OpenInBrowser {
         url: String,
     },
+    /// Extension ping: used to check if Desktop is installed
+    Pong,
+    /// Extension hello: extension registered itself with Desktop
+    HelloAck { version: Option<String> },
 }
