@@ -68,6 +68,12 @@ pub enum SrcuriRequest {
         workspace_override: Option<String>,
         fragment: Option<String>,
     },
+    /// Ping request: used by browser extension to check if Desktop is installed
+    /// srcuri://ping
+    Ping,
+    /// Hello request: sent by extension on install to register its version
+    /// srcuri://hello?version=1.0.0
+    Hello { version: Option<String> },
 }
 
 pub struct SrcuriParser;
@@ -199,6 +205,11 @@ impl SrcuriParser {
 
         // Mode detection by authority
         match authority.to_lowercase().as_str() {
+            "ping" => Ok(SrcuriRequest::Ping),
+            "hello" => {
+                let version = Self::parse_version_param(query_part);
+                Ok(SrcuriRequest::Hello { version })
+            }
             "wks" => Self::parse_explicit_workspace_mode(
                 path_after_authority,
                 fragment,
@@ -616,6 +627,20 @@ impl SrcuriParser {
             }
         }
         Ok(None)
+    }
+
+    /// Parse ?version= parameter (for hello ping)
+    fn parse_version_param(query_part: Option<&str>) -> Option<String> {
+        let q = query_part?;
+
+        for pair in q.split('&') {
+            if let Some((key, value)) = pair.split_once('=') {
+                if key == "version" && !value.is_empty() {
+                    return Some(value.to_string());
+                }
+            }
+        }
+        None
     }
 
     fn parse_path_with_location(path: &str) -> Result<(String, Option<usize>, Option<usize>)> {
@@ -1585,5 +1610,48 @@ mod tests {
 
         let result = SrcuriParser::parse("srcuri://WKS/repo/file.rs").expect("parse URL");
         assert!(matches!(result, SrcuriRequest::ExplicitWorkspace { .. }));
+    }
+
+    #[test]
+    fn test_ping_request() {
+        let result = SrcuriParser::parse("srcuri://ping").expect("parse URL");
+        assert_eq!(result, SrcuriRequest::Ping);
+    }
+
+    #[test]
+    fn test_ping_request_case_insensitive() {
+        let result = SrcuriParser::parse("srcuri://PING").expect("parse URL");
+        assert_eq!(result, SrcuriRequest::Ping);
+
+        let result = SrcuriParser::parse("srcuri://Ping").expect("parse URL");
+        assert_eq!(result, SrcuriRequest::Ping);
+    }
+
+    #[test]
+    fn test_hello_request_without_version() {
+        let result = SrcuriParser::parse("srcuri://hello").expect("parse URL");
+        assert_eq!(result, SrcuriRequest::Hello { version: None });
+    }
+
+    #[test]
+    fn test_hello_request_with_version() {
+        let result = SrcuriParser::parse("srcuri://hello?version=1.0.0").expect("parse URL");
+        assert_eq!(
+            result,
+            SrcuriRequest::Hello {
+                version: Some("1.0.0".to_string())
+            }
+        );
+    }
+
+    #[test]
+    fn test_hello_request_case_insensitive() {
+        let result = SrcuriParser::parse("srcuri://HELLO?version=2.0").expect("parse URL");
+        assert_eq!(
+            result,
+            SrcuriRequest::Hello {
+                version: Some("2.0".to_string())
+            }
+        );
     }
 }
