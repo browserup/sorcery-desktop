@@ -687,6 +687,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .invoke_handler(tauri::generate_handler![
             commands::get_settings,
             commands::get_settings_path,
+            commands::get_app_version,
             commands::save_settings,
             commands::get_all_workspaces,
             commands::promote_workspace,
