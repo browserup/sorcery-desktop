@@ -1,26 +1,37 @@
 # Sorcery
 
-Hyperlinks make it easy for devs to *view* source code in a browser, but don't make it easy to *edit* source.
 Hyperlinks for your editor (or IDE) that open on the right line. That's *Sorcery!*
 
-Sorcery Desktop is an open source tool, built on the open-source srcuri:// (pronounced Sorcery) protocol.
+# Sorcery enables:
+
+* Share editor links with other developers that open in their editor, on the correct line
+* Command-Click a file-path in your terminal--it opens in your editor/IDE
+* Create a link in repo A to a file in repo B that will open in your editor when you command-click it
+* Share a link to a file in a branch in slack or JIRA. When developers click it, it opens to that file with that branch checked out
+* Writing a blog on how to configure your /etc/hosts? Link: srcuri://ect/hosts  will open it in the user's editor
+Use it in your onboarding docs, too.
+
+
+## With Sorcery Extension
+
+* On github/gitlab? Command-click a file path, and it will open in your editor
+* Command-Click an error in Datadog and be on that file/line in your editor
+* Command-Click on stack trace lines in your browser in your dev env, and jump to the file/line in your editor
+* Command-click on source code lines in github/gitlab and jump to the file/line
+
+Sorcery Desktop is an open source tool, built on the open-source srcuri:// protocol
+
+    scuri:// pronounced Sorcery, gives you a URI to source code that opens in your editor
 
 Sorcery Desktop provides the local protocol handler component for srcuri:// links. 
 It routes srcuri:// protocol links to your editor or IDE of choice.
-
-Goal:
-* Make source code editor links possible, and everywhere
-
-Use-cases:
-* Open terminal links from file paths in the terminal, or from srcuri:// links
-* 
 
 
 What's it do:
 * Sorcery Desktop - Makes srcuri links open in your editor, right to the file/line
 * Sorcery Chrome Extension - Makes stack traces, and file paths in the browser command-clickable so they open
-in editor.
-
+in your editor (via srcuri protocol).
+* srcuri.com - Responds to the srcuri protocol syntax in URLs. It lets you create 
 
 
 ## Problem: Your co-worker shares links to source code--but they open in github, not your editor.
