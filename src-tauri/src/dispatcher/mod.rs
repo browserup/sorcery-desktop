@@ -3,10 +3,10 @@ use crate::git_command_log::GIT_COMMAND_LOG;
 use crate::path_validator::PathValidator;
 use crate::settings::{SettingsManager, WorkspaceConfig};
 use crate::tracker::ActiveEditorTracker;
-use anyhow::{Context, Result};
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
+use thiserror::Error;
 use tracing::{debug, info};
 
 pub struct EditorDispatcher {
@@ -15,6 +15,35 @@ pub struct EditorDispatcher {
     editor_registry: Arc<EditorRegistry>,
     tracker: Arc<ActiveEditorTracker>,
 }
+
+#[derive(Debug, Error)]
+pub enum EditorDispatchError {
+    #[error("Path validation failed for '{path}'")]
+    PathValidation {
+        path: String,
+        #[source]
+        source: anyhow::Error,
+    },
+    #[error("Editor '{editor_id}' not found in registry")]
+    EditorNotFound { editor_id: String },
+    #[error("Editor '{display_name}' does not support opening folders. Try using a different editor like VS Code or a JetBrains IDE.")]
+    EditorDoesNotSupportFolders {
+        editor_id: String,
+        display_name: String,
+    },
+    #[error("Editor '{editor_id}' is not installed")]
+    EditorNotInstalled { editor_id: String },
+    #[error("File is not in any configured workspace and opening non-workspace files is disabled. Enable 'Allow opening files outside of configured workspaces' in settings to open this file.")]
+    NonWorkspaceFilesDisabled,
+    #[error("Failed to open in {editor_id}: {source}")]
+    OpenFailed {
+        editor_id: String,
+        #[source]
+        source: crate::editors::EditorError,
+    },
+}
+
+type Result<T> = std::result::Result<T, EditorDispatchError>;
 
 impl EditorDispatcher {
     pub fn new(
@@ -49,7 +78,10 @@ impl EditorDispatcher {
             .path_validator
             .validate_any(path_str)
             .await
-            .context("Path validation failed")?;
+            .map_err(|source| EditorDispatchError::PathValidation {
+                path: path_str.to_string(),
+                source,
+            })?;
 
         let is_directory = validated_path.is_dir();
         info!(
@@ -63,6 +95,10 @@ impl EditorDispatcher {
             .get_workspace_for_path(&validated_path)
             .await;
         let workspace_root = workspace.as_ref().and_then(|w| w.normalized_path.clone());
+        info!(
+            "Workspace lookup for {:?}: workspace_root={:?}",
+            validated_path, workspace_root
+        );
 
         let editor_id = self
             .determine_editor(&validated_path, editor_hint, workspace.as_ref())
@@ -72,7 +108,9 @@ impl EditorDispatcher {
         let manager = self
             .editor_registry
             .get(&editor_id)
-            .ok_or_else(|| anyhow::anyhow!("Editor '{}' not found in registry", editor_id))?;
+            .ok_or_else(|| EditorDispatchError::EditorNotFound {
+                editor_id: editor_id.clone(),
+            })?;
 
         if is_directory && !manager.supports_folders() {
             let duration = start.elapsed();
@@ -80,6 +118,7 @@ impl EditorDispatcher {
                 &editor_id,
                 path_str,
                 line,
+                workspace_root.as_deref(),
                 false,
                 Some(&format!(
                     "Editor '{}' does not support opening folders",
@@ -87,10 +126,10 @@ impl EditorDispatcher {
                 )),
                 duration,
             );
-            return Err(anyhow::anyhow!(
-                "Editor '{}' does not support opening folders. Try using a different editor like VS Code or a JetBrains IDE.",
-                manager.display_name()
-            ));
+            return Err(EditorDispatchError::EditorDoesNotSupportFolders {
+                editor_id: editor_id.clone(),
+                display_name: manager.display_name().to_string(),
+            });
         }
 
         let is_installed = manager.is_installed().await;
@@ -102,11 +141,14 @@ impl EditorDispatcher {
                 &editor_id,
                 path_str,
                 line,
+                workspace_root.as_deref(),
                 false,
                 Some(&format!("Editor '{}' is not installed", editor_id)),
                 duration,
             );
-            return Err(anyhow::anyhow!("Editor '{}' is not installed", editor_id));
+            return Err(EditorDispatchError::EditorNotInstalled {
+                editor_id: editor_id.clone(),
+            });
         }
 
         let terminal_preference = self.settings_manager.get_preferred_terminal().await;
@@ -131,13 +173,22 @@ impl EditorDispatcher {
                     validated_path.display(),
                     editor_id
                 );
-                GIT_COMMAND_LOG.log_editor_launch(&editor_id, path_str, line, true, None, duration);
+                GIT_COMMAND_LOG.log_editor_launch(
+                    &editor_id,
+                    path_str,
+                    line,
+                    options.workspace_root.as_deref(),
+                    true,
+                    None,
+                    duration,
+                );
             }
             Err(e) => {
                 GIT_COMMAND_LOG.log_editor_launch(
                     &editor_id,
                     path_str,
                     line,
+                    options.workspace_root.as_deref(),
                     false,
                     Some(&e.to_string()),
                     duration,
@@ -145,7 +196,10 @@ impl EditorDispatcher {
             }
         }
 
-        result.map_err(|e| anyhow::anyhow!("Failed to open in {}: {}", editor_id, e))
+        result.map_err(|source| EditorDispatchError::OpenFailed {
+            editor_id: editor_id.clone(),
+            source,
+        })
     }
 
     async fn determine_editor(
@@ -178,10 +232,7 @@ impl EditorDispatcher {
         };
 
         if !in_workspace && !self.settings_manager.allows_non_workspace_files().await {
-            return Err(anyhow::anyhow!(
-                "File is not in any configured workspace and opening non-workspace files is disabled. \
-                Enable 'Allow opening files outside of configured workspaces' in settings to open this file."
-            ));
+            return Err(EditorDispatchError::NonWorkspaceFilesDisabled);
         }
 
         let default_editor = self.settings_manager.get_default_editor().await;

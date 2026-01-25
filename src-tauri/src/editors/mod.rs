@@ -10,4 +10,5 @@ mod vscode;
 #[allow(unused_imports)] // Only used by integration tests
 pub use null::NullEditor;
 pub use registry::EditorRegistry;
+pub use traits::EditorError;
 pub use traits::OpenOptions;
