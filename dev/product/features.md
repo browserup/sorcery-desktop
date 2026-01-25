@@ -24,8 +24,11 @@
 - [Settings](#settings)
 - [Git Integration](#git-integration)
 - [Sorcery UI](#sorcery-ui)
+- [Setup Wizard](#setup-wizard)
+- [Extension Protocol](#extension-protocol)
 - [Protocol Registration](#protocol-registration)
 - [System Integration](#system-integration)
+- [Installation](#installation)
 
 ---
 
@@ -276,6 +279,57 @@ Dark-themed UI components for user interactions.
 
 ---
 
+## Setup Wizard
+
+First-run experience that guides new users through initial configuration.
+
+### Wizard Steps
+
+| Step | Description |
+|------|-------------|
+| **Welcome** | Introduces Sorcery and explains its purpose |
+| **Default Editor** | Grid of detected editors; user selects preferred one |
+| **Workspaces Folder** | Auto-detected suggestions with repository counts |
+| **Chrome Extension** | Prompt to install browser extension (shown if Chrome detected) |
+| **Ready** | Summary of configuration and test link |
+
+### First-Run Detection
+
+- `setup_completed` flag in settings tracks wizard completion
+- Wizard shown automatically if flag is false
+- Normal operation proceeds after completion
+
+### Browser Detection
+
+Cross-platform detection for Chrome, Firefox, and Edge:
+- macOS: Checks /Applications and ~/Applications
+- Linux: Checks /usr/bin paths and snap directories
+- Windows: Checks registry and standard installation paths
+
+---
+
+## Extension Protocol
+
+Special protocol URLs for browser extension integration.
+
+### Ping
+
+```
+srcuri://ping
+```
+
+Used by the browser extension to check if Sorcery Desktop is installed and running. Returns immediately—no UI shown.
+
+### Hello
+
+```
+srcuri://hello?version=1.0.0
+```
+
+Sent by the extension on install to register its presence and version. The `version` parameter is optional.
+
+---
+
 ## Protocol Registration
 
 System integration for srcuri:// URL handling.
@@ -323,3 +377,43 @@ System integration for srcuri:// URL handling.
 | macOS | NSWorkspace APIs, LaunchServices, AppleScript |
 | Windows | GetForegroundWindow, Registry |
 | Linux | X11/Wayland detection, XDG compliance |
+
+---
+
+## Installation
+
+### Curl Installer
+
+One-line installation for macOS and Linux:
+
+```bash
+curl -fsSL https://getsorcery.com/install.sh | sh
+```
+
+The installer:
+- Detects OS (macOS/Linux) and architecture (x64/arm64)
+- Fetches the latest release from GitHub
+- Downloads the appropriate package (DMG, DEB, RPM, or AppImage)
+- Installs to the standard location
+- Launches the app
+- Prints next steps for extension installation
+
+### Platform Packages
+
+| Platform | Format | Notes |
+|----------|--------|-------|
+| macOS | DMG | Universal binary (arm64 + x64) |
+| Windows | MSI | x64 installer |
+| Linux (Debian/Ubuntu) | DEB | apt-compatible |
+| Linux (Fedora/RHEL) | RPM | dnf/yum-compatible |
+| Linux (Other) | AppImage | Universal Linux binary |
+
+### Package Managers
+
+| Manager | Platform | Command |
+|---------|----------|---------|
+| Homebrew | macOS | `brew install --cask ebeland/sorcery/sorcery-desktop` |
+| WinGet | Windows | `winget install ebeland.SorceryDesktop` |
+| AUR | Arch Linux | `yay -S sorcery-desktop-bin` |
+
+Package manager manifests are automatically updated on each release via GitHub Actions.
