@@ -111,6 +111,10 @@ impl DialogState {
         self.clone_dialog.lock().take()
     }
 
+    pub fn peek_clone_dialog(&self) -> Option<CloneDialogData> {
+        self.clone_dialog.lock().clone()
+    }
+
     pub fn update_clone_path(&self, new_path: &str) -> bool {
         let mut guard = self.clone_dialog.lock();
         if let Some(ref mut data) = *guard {

@@ -279,6 +279,7 @@
 
     let currentClonePath = '';
     let workspaceName = '';
+    let isCloning = false;
 
     async function init() {
       try {
@@ -326,14 +327,21 @@
     }
 
     async function clone() {
+      if (isCloning) return;
+      isCloning = true;
+
       const status = document.getElementById('status');
       const cloneBtn = document.getElementById('clone-btn');
       const cancelBtn = document.getElementById('cancel-btn');
 
+      // Show loading state immediately
       status.className = 'status loading';
       status.innerHTML = '<span class="spinner"></span>Cloning repository...';
       cloneBtn.disabled = true;
       cancelBtn.disabled = true;
+
+      // Force browser to paint before starting async work
+      await new Promise(resolve => requestAnimationFrame(resolve));
 
       try {
         await invoke('clone_and_open');
@@ -344,6 +352,7 @@
         status.textContent = 'Clone failed: ' + e;
         cloneBtn.disabled = false;
         cancelBtn.disabled = false;
+        isCloning = false;
       }
     }
 
@@ -353,9 +362,9 @@
     }
 
     function handleKeyPress(e) {
-      if (e.key === 'Enter' && !document.getElementById('clone-btn').disabled) {
+      if (e.key === 'Enter' && !isCloning && !document.getElementById('clone-btn').disabled) {
         clone();
-      } else if (e.key === 'Escape') {
+      } else if (e.key === 'Escape' && !isCloning) {
         cancel();
       }
     }

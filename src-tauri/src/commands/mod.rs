@@ -832,7 +832,7 @@ pub fn get_clone_dialog_data(
     dialog_state: State<'_, Arc<DialogState>>,
 ) -> Result<CloneDialogData, String> {
     dialog_state
-        .take_clone_dialog()
+        .peek_clone_dialog()
         .ok_or_else(|| "No clone dialog data available".to_string())
 }
 
