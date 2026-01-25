@@ -9,18 +9,20 @@
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     :root {
-      --primary: #6366f1;
-      --primary-hover: #4f46e5;
-      --primary-active: #4338ca;
-      --success: #10b981;
-      --bg-primary: #121212;
-      --bg-surface: #1e1e1e;
-      --bg-elevated: #2d2d2d;
-      --text-primary: #f5f5f5;
-      --text-secondary: #a0a0a0;
-      --text-tertiary: #6b6b6b;
-      --border: #333333;
-      --border-hover: #444444;
+      --primary: #9333ea;
+      --primary-hover: #a855f7;
+      --primary-active: #7c3aed;
+      --primary-gradient: linear-gradient(135deg, #9333ea, #c026d3);
+      --success: #22c55e;
+      --accent: #a78bfa;
+      --bg-primary: #0a0a0f;
+      --bg-surface: rgba(255, 255, 255, 0.03);
+      --bg-elevated: rgba(255, 255, 255, 0.06);
+      --text-primary: #ffffff;
+      --text-secondary: rgba(255, 255, 255, 0.6);
+      --text-tertiary: rgba(255, 255, 255, 0.4);
+      --border: rgba(255, 255, 255, 0.08);
+      --border-hover: rgba(255, 255, 255, 0.12);
       --shadow: rgba(0, 0, 0, 0.4);
     }
 
@@ -40,7 +42,8 @@
 
     .title-bar {
       height: 35px;
-      background: var(--bg-surface);
+      background: rgba(255, 255, 255, 0.02);
+      border-bottom: 1px solid var(--border);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -101,11 +104,11 @@
     }
 
     .progress-dot.active {
-      background: var(--primary);
+      background: var(--primary-gradient);
     }
 
     .progress-dot.completed {
-      background: var(--success);
+      background: var(--accent);
     }
 
     .button-group {
@@ -118,11 +121,11 @@
     }
 
     .button {
-      background: var(--primary);
+      background: var(--primary-gradient);
       color: white;
       border: none;
       padding: 0.625rem 1.25rem;
-      border-radius: 6px;
+      border-radius: 8px;
       cursor: pointer;
       font-size: 0.875rem;
       font-weight: 600;
@@ -130,11 +133,12 @@
     }
 
     .button:hover:not(:disabled) {
-      background: var(--primary-hover);
+      box-shadow: 0 4px 16px rgba(147, 51, 234, 0.4);
+      transform: translateY(-1px);
     }
 
     .button:active:not(:disabled) {
-      background: var(--primary-active);
+      transform: translateY(0);
     }
 
     .button:disabled {
@@ -144,11 +148,13 @@
 
     .button.secondary {
       background: var(--bg-elevated);
+      border: 1px solid var(--border);
       color: var(--text-primary);
     }
 
     .button.secondary:hover {
       background: var(--border-hover);
+      border-color: rgba(255, 255, 255, 0.2);
     }
 
     .editor-grid {
@@ -159,8 +165,8 @@
 
     .editor-option {
       background: var(--bg-surface);
-      border: 2px solid var(--border);
-      border-radius: 8px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
       padding: 1rem;
       cursor: pointer;
       transition: all 0.2s;
@@ -178,7 +184,7 @@
 
     .editor-option.selected {
       border-color: var(--primary);
-      background: rgba(99, 102, 241, 0.1);
+      background: rgba(147, 51, 234, 0.15);
     }
 
     .editor-option.not-installed {
@@ -235,7 +241,7 @@
     }
 
     .folder-option.selected {
-      background: rgba(99, 102, 241, 0.1);
+      background: rgba(147, 51, 234, 0.15);
       border: 1px solid var(--primary);
       margin: -1px;
       padding: calc(0.75rem + 1px);
@@ -342,9 +348,9 @@
       gap: 0.5rem;
       background: var(--bg-surface);
       border: 1px solid var(--border);
-      border-radius: 6px;
+      border-radius: 8px;
       padding: 0.75rem 1rem;
-      color: var(--primary);
+      color: var(--accent);
       font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
       font-size: 0.8125rem;
       cursor: pointer;
@@ -354,12 +360,23 @@
 
     .test-link:hover {
       background: var(--bg-elevated);
-      border-color: var(--primary);
+      border-color: var(--accent);
     }
 
     .welcome-icon {
-      font-size: 3rem;
-      margin-bottom: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .welcome-icon svg {
+      width: 80px;
+      height: 80px;
+    }
+
+    .step-header h1 {
+      background: linear-gradient(135deg, #fff, #a78bfa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
     }
 
     .extension-section {
@@ -402,7 +419,7 @@
     }
 
     .extension-note a {
-      color: var(--primary);
+      color: var(--accent);
       text-decoration: none;
     }
 
@@ -427,7 +444,20 @@
     <div class="step active" data-step="0">
       <div class="step-content">
         <div class="step-header">
-          <div class="welcome-icon">&#x2728;</div>
+          <div class="welcome-icon">
+            <svg viewBox="0 0 512 512" fill="none">
+              <polygon points="52,428 87,463 328,230 293,195" fill="#1a1a1a"/>
+              <polygon points="370,30 398,117 485,145 398,173 370,260 342,173 255,145 342,117" fill="url(#logoGradient)"/>
+              <polygon points="370,125 375,140 390,145 375,150 370,165 365,150 350,145 365,140" fill="white"/>
+              <defs>
+                <radialGradient id="logoGradient" cx="370" cy="145" r="115" gradientUnits="userSpaceOnUse">
+                  <stop offset="0%" stop-color="#9333ea"/>
+                  <stop offset="70%" stop-color="#c026d3"/>
+                  <stop offset="100%" stop-color="#f59e0b"/>
+                </radialGradient>
+              </defs>
+            </svg>
+          </div>
           <h1>Welcome to Sorcery</h1>
           <p>Sorcery connects your browser to your editor. Click any file path on the web and open it directly in your preferred editor.</p>
         </div>
