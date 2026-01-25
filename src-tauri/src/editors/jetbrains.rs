@@ -236,23 +236,23 @@ impl JetBrainsManager {
             PathBuf::from(&pf86).join("JetBrains\\GoLand\\bin\\goland64.exe"),
         ];
 
-        for candidate in candidates {
+        for candidate in &candidates {
             if candidate.exists() {
                 let candidate_str = candidate.to_string_lossy().to_lowercase();
                 if candidate_str.contains(&self.id)
                     || (self.id == "intellij" && candidate_str.contains("idea"))
                 {
                     debug!("Found {} standalone at {:?}", self.display_name, candidate);
-                    return Some(candidate);
+                    return Some(candidate.clone());
                 }
             }
         }
 
         // Fallback: return first existing for IntelliJ
         if self.id == "intellij" || self.id == "idea" {
-            for candidate in candidates {
+            for candidate in &candidates {
                 if candidate.exists() && candidate.to_string_lossy().contains("idea") {
-                    return Some(candidate);
+                    return Some(candidate.clone());
                 }
             }
         }
