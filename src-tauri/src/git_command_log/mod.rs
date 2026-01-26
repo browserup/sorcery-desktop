@@ -27,11 +27,17 @@ pub struct GitCommandLog {
     entries: Mutex<VecDeque<GitCommandLogEntry>>,
 }
 
-impl GitCommandLog {
-    pub fn new() -> Self {
+impl Default for GitCommandLog {
+    fn default() -> Self {
         Self {
             entries: Mutex::new(VecDeque::with_capacity(MAX_LOG_ENTRIES)),
         }
+    }
+}
+
+impl GitCommandLog {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     pub fn log_command(
@@ -63,7 +69,7 @@ impl GitCommandLog {
         let entry = GitCommandLogEntry {
             timestamp: Utc::now(),
             command: command.to_string(),
-            args: args.iter().map(|s| s.to_string()).collect(),
+            args: args.iter().map(ToString::to_string).collect(),
             working_dir: working_dir.to_string(),
             exit_code: output.status.code(),
             stdout: String::from_utf8_lossy(&output.stdout).to_string(),
@@ -105,7 +111,7 @@ impl GitCommandLog {
         let entry = GitCommandLogEntry {
             timestamp: Utc::now(),
             command: command.to_string(),
-            args: args.iter().map(|s| s.to_string()).collect(),
+            args: args.iter().map(ToString::to_string).collect(),
             working_dir: working_dir.to_string(),
             exit_code: None,
             stdout: String::new(),
@@ -118,6 +124,7 @@ impl GitCommandLog {
         entries.push_back(entry);
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn log_editor_launch(
         &self,
         editor: &str,

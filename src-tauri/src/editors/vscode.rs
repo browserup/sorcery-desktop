@@ -4,7 +4,9 @@ use parking_lot::RwLock;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, SystemTime};
-use tracing::{debug, warn};
+use tracing::debug;
+#[cfg(target_os = "macos")]
+use tracing::warn;
 
 struct BinaryCache {
     path: Option<PathBuf>,
@@ -239,7 +241,7 @@ impl EditorManager for VSCodeManager {
         debug!("Launching {} with args: {:?}", self.display_name, args);
 
         let result = Command::new(&binary)
-            .args(args.iter().map(|s| s.as_str()))
+            .args(args.iter().map(String::as_str))
             .output();
 
         match result {
@@ -273,7 +275,7 @@ impl EditorManager for VSCodeManager {
 
                 if cli_path.exists() {
                     let fallback_result = Command::new(&cli_path)
-                        .args(args.iter().map(|s| s.as_str()))
+                        .args(args.iter().map(String::as_str))
                         .output();
 
                     match fallback_result {

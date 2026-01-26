@@ -1,5 +1,6 @@
 // Prevents additional console window on Windows in release builds
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+#![allow(clippy::clone_on_ref_ptr)]
 
 mod browser_detection;
 mod commands;
@@ -39,9 +40,9 @@ fn hide_app() {
 }
 
 use dialog_state::DialogState;
-use ui_utils::{build_dialog, DialogConfig};
 #[cfg(target_os = "macos")]
 use ui_utils::set_dark_titlebar;
+use ui_utils::{build_dialog, DialogConfig};
 
 async fn handle_protocol_result(
     result: Result<protocol_handler::HandleResult, anyhow::Error>,
@@ -162,7 +163,7 @@ async fn handle_protocol_result(
                 ),
                 duration,
             );
-            let git_ref_str = git_ref.as_ref().map(|r| dialog_state::git_ref_display(r));
+            let git_ref_str = git_ref.as_ref().map(dialog_state::git_ref_display);
             dialog_state.set_clone_dialog(dialog_state::CloneDialogData {
                 workspace_name,
                 clone_path,
@@ -329,7 +330,7 @@ impl DeepLinkThrottle {
         let mut guard = self
             .last_allowed
             .lock()
-            .unwrap_or_else(|poison| poison.into_inner());
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
 
         if let Some(last) = *guard {
             if now.duration_since(last) < self.min_interval {
@@ -357,10 +358,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         settings_manager.clone(),
     ));
     let tracker = Arc::new(
-        tracker::ActiveEditorTracker::new(editor_registry.clone()).with_workspace_tracking(
-            settings_manager.clone(),
-            workspace_tracker.clone(),
-        ),
+        tracker::ActiveEditorTracker::new(editor_registry.clone())
+            .with_workspace_tracking(settings_manager.clone(), workspace_tracker.clone()),
     );
     let workspace_sync = Arc::new(settings::WorkspaceSync::new(settings_manager.clone()));
     let dispatcher = Arc::new(dispatcher::EditorDispatcher::new(

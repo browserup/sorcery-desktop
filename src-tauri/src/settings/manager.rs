@@ -29,7 +29,7 @@ impl SettingsManager {
         })
     }
 
-    /// Create a SettingsManager with a custom config path.
+    /// Create a `SettingsManager` with a custom config path.
     /// Use this in integration tests to avoid polluting the user's real settings.
     #[allow(dead_code)] // Used by integration tests, not main binary
     pub async fn new_with_path(config_path: PathBuf) -> Result<Self> {
@@ -216,17 +216,13 @@ impl SettingsManager {
     /// Use ?workspace= escape hatch in URLs to reference dot-containing workspace names.
     fn validate_workspace_names(settings: &Settings) {
         for workspace in &settings.workspaces {
-            let name = workspace
-                .name
-                .as_ref()
-                .map(|n| n.as_str())
-                .unwrap_or_else(|| {
-                    // Derive name from path (last component)
-                    std::path::Path::new(&workspace.path)
-                        .file_name()
-                        .and_then(|n| n.to_str())
-                        .unwrap_or("")
-                });
+            let name = workspace.name.as_deref().unwrap_or_else(|| {
+                // Derive name from path (last component)
+                std::path::Path::new(&workspace.path)
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("")
+            });
 
             if name.contains('.') {
                 warn!(

@@ -29,7 +29,10 @@ impl ProtocolHandler {
         workspace_tracker: Arc<ActiveWorkspaceTracker>,
     ) -> Self {
         Self {
-            matcher: PathMatcher::new(settings_manager.clone(), workspace_tracker.clone()),
+            matcher: PathMatcher::new(
+                Arc::clone(&settings_manager),
+                Arc::clone(&workspace_tracker),
+            ),
             settings_manager,
             dispatcher,
             workspace_tracker,
@@ -210,23 +213,8 @@ impl ProtocolHandler {
                 column,
                 git_ref,
                 remote,
-            } => {
-                if let Some(ref git_ref) = git_ref {
-                    self.handle_revision_path(
-                        &workspace,
-                        &path,
-                        git_ref,
-                        line,
-                        column,
-                        remote.as_deref(),
-                    )
-                    .await
-                } else {
-                    self.handle_workspace_path(&workspace, &path, line, column, remote.as_deref())
-                        .await
-                }
             }
-            SrcuriRequest::ExplicitWorkspace {
+            | SrcuriRequest::ExplicitWorkspace {
                 workspace,
                 path,
                 line,
@@ -254,7 +242,10 @@ impl ProtocolHandler {
                 line,
                 column,
                 workspace_hint,
-            } => self.handle_rel_path(&path, line, column, workspace_hint.as_deref()).await,
+            } => {
+                self.handle_rel_path(&path, line, column, workspace_hint.as_deref())
+                    .await
+            }
             SrcuriRequest::AnyPath {
                 path,
                 line,
@@ -431,7 +422,7 @@ impl ProtocolHandler {
                     .await
             }
             Err(WorkspaceLookupError::WorkspaceNotFound(_)) if remote.is_some() => {
-                let remote_url = remote.unwrap();
+                let remote_url = remote.expect("guard ensures Some");
                 let default_folder = self.settings_manager.get_default_workspaces_folder().await;
                 let repo_base = shellexpand::tilde(&default_folder);
                 let clone_path = std::path::PathBuf::from(repo_base.as_ref()).join(workspace);
@@ -523,7 +514,7 @@ impl ProtocolHandler {
         let full_path = match self.matcher.find_workspace_path(workspace, path).await {
             Ok(p) => p,
             Err(WorkspaceLookupError::WorkspaceNotFound(_)) if remote.is_some() => {
-                let remote_url = remote.unwrap();
+                let remote_url = remote.expect("guard ensures Some");
                 let default_folder = self.settings_manager.get_default_workspaces_folder().await;
                 let repo_base = shellexpand::tilde(&default_folder);
                 let clone_path = std::path::PathBuf::from(repo_base.as_ref()).join(workspace);
@@ -587,6 +578,7 @@ impl ProtocolHandler {
         })
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn handle_external_url(
         &self,
         provider: &str,
@@ -649,7 +641,9 @@ impl ProtocolHandler {
 
 #[derive(Debug)]
 pub enum HandleResult {
-    Opened { file_path: String },
+    Opened {
+        file_path: String,
+    },
     ShowChooser {
         matches: Vec<WorkspaceMatch>,
         line: Option<usize>,
@@ -702,5 +696,7 @@ pub enum HandleResult {
     /// Extension ping: used to check if Desktop is installed
     Pong,
     /// Extension hello: extension registered itself with Desktop
-    HelloAck { version: Option<String> },
+    HelloAck {
+        version: Option<String>,
+    },
 }

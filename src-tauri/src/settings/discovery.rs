@@ -3,7 +3,7 @@ use super::SettingsManager;
 use anyhow::Result;
 use serde::Serialize;
 use std::collections::HashSet;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 use tracing::{debug, info, warn};
@@ -26,10 +26,10 @@ impl WorkspaceSync {
         Self { settings_manager }
     }
 
-    /// Sync workspaces with the default_workspaces_folder.
-    /// - Adds new repos as auto_discovered workspaces
-    /// - Removes auto_discovered workspaces that no longer exist on disk
-    /// - Respects ignored_workspaces list
+    /// Sync workspaces with the `default_workspaces_folder`.
+    /// - Adds new repos as `auto_discovered` workspaces
+    /// - Removes `auto_discovered` workspaces that no longer exist on disk
+    /// - Respects `ignored_workspaces` list
     pub async fn sync(&self) -> Result<SyncResult> {
         let defaults_folder = self.settings_manager.get_default_workspaces_folder().await;
         let normalized_folder = self.get_normalized_workspaces_folder(&defaults_folder);
@@ -150,9 +150,9 @@ impl WorkspaceSync {
         Some(PathBuf::from(expanded.as_ref()))
     }
 
-    async fn scan_folder(&self, folder: &PathBuf) -> Vec<PathBuf> {
-        let folder_for_blocking = folder.clone();
-        let folder_for_error = folder.clone();
+    async fn scan_folder(&self, folder: &Path) -> Vec<PathBuf> {
+        let folder_for_blocking = folder.to_path_buf();
+        let folder_for_error = folder.to_path_buf();
         let scan_task = tokio::task::spawn_blocking(move || {
             let folder = folder_for_blocking;
             debug!("Scanning default_workspaces_folder: {:?}", folder);
@@ -171,7 +171,7 @@ impl WorkspaceSync {
             let mut repos = Vec::new();
             let mut scanned = 0;
 
-            for entry in entries.filter_map(|e| e.ok()) {
+            for entry in entries.filter_map(Result::ok) {
                 scanned += 1;
                 if scanned > MAX_ENTRIES_TO_SCAN {
                     warn!(

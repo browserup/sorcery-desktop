@@ -90,7 +90,7 @@ impl JetBrainsManager {
     fn find_any_toolbox_mac_app(&self, toolbox_root: &Path, app_name: &str) -> Option<PathBuf> {
         let products = std::fs::read_dir(toolbox_root).ok()?;
 
-        for product in products.filter_map(|e| e.ok()) {
+        for product in products.filter_map(Result::ok) {
             if !product.path().is_dir() {
                 continue;
             }
@@ -120,7 +120,7 @@ impl JetBrainsManager {
 
         let mut entries: Vec<_> = std::fs::read_dir(dir)
             .ok()?
-            .filter_map(|e| e.ok())
+            .filter_map(Result::ok)
             .filter(|e| e.path().is_dir())
             .filter_map(|e| {
                 let metadata = e.metadata().ok()?;
@@ -190,7 +190,7 @@ impl JetBrainsManager {
     fn find_any_toolbox_windows_exe(&self, toolbox_root: &Path) -> Option<PathBuf> {
         let products = std::fs::read_dir(toolbox_root).ok()?;
 
-        for product in products.filter_map(|e| e.ok()) {
+        for product in products.filter_map(Result::ok) {
             if !product.path().is_dir() {
                 continue;
             }
@@ -268,7 +268,7 @@ impl JetBrainsManager {
 
         let files: Vec<_> = std::fs::read_dir(bin_dir)
             .ok()?
-            .filter_map(|e| e.ok())
+            .filter_map(Result::ok)
             .filter(|e| {
                 e.path()
                     .to_string_lossy()
@@ -336,7 +336,7 @@ impl JetBrainsManager {
     fn find_any_toolbox_linux_script(&self, toolbox_root: &Path) -> Option<PathBuf> {
         let products = std::fs::read_dir(toolbox_root).ok()?;
 
-        for product in products.filter_map(|e| e.ok()) {
+        for product in products.filter_map(Result::ok) {
             if !product.path().is_dir() {
                 continue;
             }
@@ -367,7 +367,7 @@ impl JetBrainsManager {
 
         let files: Vec<_> = std::fs::read_dir(bin_dir)
             .ok()?
-            .filter_map(|e| e.ok())
+            .filter_map(Result::ok)
             .filter(|e| e.path().to_string_lossy().ends_with(".sh"))
             .collect();
 
@@ -642,7 +642,7 @@ impl EditorManager for JetBrainsManager {
                     .map_err(|e| EditorError::LaunchFailed(format!("Retry failed: {}", e)));
             }
 
-            return Err(EditorError::LaunchFailed(e.to_string()));
+            return Err(EditorError::LaunchFailed(e));
         }
 
         Ok(())

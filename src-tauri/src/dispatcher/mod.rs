@@ -74,14 +74,14 @@ impl EditorDispatcher {
             path_str, line, column, editor_hint
         );
 
-        let validated_path = self
-            .path_validator
-            .validate_any(path_str)
-            .await
-            .map_err(|source| EditorDispatchError::PathValidation {
-                path: path_str.to_string(),
-                source,
-            })?;
+        let validated_path =
+            self.path_validator
+                .validate_any(path_str)
+                .await
+                .map_err(|source| EditorDispatchError::PathValidation {
+                    path: path_str.to_string(),
+                    source,
+                })?;
 
         let is_directory = validated_path.is_dir();
         info!(
@@ -105,12 +105,11 @@ impl EditorDispatcher {
             .await?;
         info!("Determined editor: {}", editor_id);
 
-        let manager = self
-            .editor_registry
-            .get(&editor_id)
-            .ok_or_else(|| EditorDispatchError::EditorNotFound {
+        let manager = self.editor_registry.get(&editor_id).ok_or_else(|| {
+            EditorDispatchError::EditorNotFound {
                 editor_id: editor_id.clone(),
-            })?;
+            }
+        })?;
 
         if is_directory && !manager.supports_folders() {
             let duration = start.elapsed();

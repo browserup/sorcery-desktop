@@ -333,7 +333,8 @@ fn vimrc_present_detected() {
 #[test]
 fn gvimrc_present_detected() {
     let workspace = create_test_workspace();
-    std::fs::write(workspace.path().join(".gvimrc"), "set guifont=Monaco:h12").expect("write .gvimrc");
+    std::fs::write(workspace.path().join(".gvimrc"), "set guifont=Monaco:h12")
+        .expect("write .gvimrc");
 
     let result = scan_workspace_for_auto_tasks(workspace.path());
 
@@ -345,7 +346,8 @@ fn multiple_vim_rc_files_all_collected() {
     let workspace = create_test_workspace();
     std::fs::write(workspace.path().join(".exrc"), "set nocompatible").expect("write .exrc");
     std::fs::write(workspace.path().join(".vimrc"), "set number").expect("write .vimrc");
-    std::fs::write(workspace.path().join(".gvimrc"), "set guifont=Monaco:h12").expect("write .gvimrc");
+    std::fs::write(workspace.path().join(".gvimrc"), "set guifont=Monaco:h12")
+        .expect("write .gvimrc");
 
     let result = scan_workspace_for_auto_tasks(workspace.path());
 

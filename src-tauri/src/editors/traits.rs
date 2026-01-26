@@ -20,25 +20,13 @@ pub enum EditorError {
 
 pub type EditorResult<T> = Result<T, EditorError>;
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Default)]
 pub struct OpenOptions {
     pub line: Option<usize>,
     pub column: Option<usize>,
     pub new_window: bool,
     pub terminal_preference: Option<String>,
     pub workspace_root: Option<PathBuf>,
-}
-
-impl Default for OpenOptions {
-    fn default() -> Self {
-        Self {
-            line: None,
-            column: None,
-            new_window: false,
-            terminal_preference: None,
-            workspace_root: None,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -10,8 +10,8 @@ pub enum GitRef {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum SrcuriRequest {
-    /// Implicit workspace: authority IS the workspace name
-    /// srcuri://myrepo/path:42
+    /// Implicit workspace: authority IS the workspace name.
+    /// Example: `srcuri://myrepo/path:42`
     ImplicitWorkspace {
         workspace: String,
         path: String,
@@ -20,8 +20,8 @@ pub enum SrcuriRequest {
         git_ref: Option<GitRef>,
         remote: Option<String>,
     },
-    /// Explicit workspace: authority is "wks"
-    /// srcuri://wks/myrepo/path:42
+    /// Explicit workspace: authority is "wks".
+    /// Example: `srcuri://wks/myrepo/path:42`
     ExplicitWorkspace {
         workspace: String,
         path: String,
@@ -30,33 +30,31 @@ pub enum SrcuriRequest {
         git_ref: Option<GitRef>,
         remote: Option<String>,
     },
-    /// Relative mode: authority is "rel" - search for file
-    /// srcuri://rel/path/file.rs:42
+    /// Relative mode: authority is "rel" - search for file.
+    /// Example: `srcuri://rel/path/file.rs:42`
     RelativePath {
         path: String,
         line: Option<usize>,
         column: Option<usize>,
         workspace_hint: Option<String>,
     },
-    /// Any mode: authority is "any" - best-effort resolution
-    /// srcuri://any/path/file.rs:42
+    /// Any mode: authority is "any" - best-effort resolution.
+    /// Example: `srcuri://any/path/file.rs:42`
     AnyPath {
         path: String,
         line: Option<usize>,
         column: Option<usize>,
         workspace_hint: Option<String>,
     },
-    /// Absolute path: authority is "abs"
-    /// srcuri://abs/etc/hosts:1
-    /// srcuri://abs/C:/Windows/system.ini:1
-    /// srcuri://abs/UNC/server/share/path:1
+    /// Absolute path: authority is "abs".
+    /// Examples: `srcuri://abs/etc/hosts:1`, `srcuri://abs/C:/Windows/system.ini:1`
     AbsolutePath {
         full_path: String,
         line: Option<usize>,
         column: Option<usize>,
     },
-    /// External URL: authority is "ext"
-    /// srcuri://ext/https/github.com/owner/repo/blob/main/file.rs#L42
+    /// External URL: authority is "ext".
+    /// Example: `srcuri://ext/https/github.com/owner/repo/blob/main/file.rs#L42`
     ExternalUrl {
         provider: String,
         repo_name: String,
@@ -68,11 +66,11 @@ pub enum SrcuriRequest {
         workspace_override: Option<String>,
         fragment: Option<String>,
     },
-    /// Ping request: used by browser extension to check if Desktop is installed
-    /// srcuri://ping
+    /// Ping request: used by browser extension to check if Desktop is installed.
+    /// Example: `srcuri://ping`
     Ping,
-    /// Hello request: sent by extension on install to register its version
-    /// srcuri://hello?version=1.0.0
+    /// Hello request: sent by extension on install to register its version.
+    /// Example: `srcuri://hello?version=1.0.0`
     Hello { version: Option<String> },
 }
 
@@ -90,7 +88,9 @@ pub enum SrcuriParseError {
     InvalidWorkspaceName(String),
     #[error("Invalid commit SHA '{0}': must be 7-64 hexadecimal characters")]
     InvalidCommitSha(String),
-    #[error("Invalid branch name '{0}': may only contain letters, numbers, and - _ . / @ , ( ) + # =")]
+    #[error(
+        "Invalid branch name '{0}': may only contain letters, numbers, and - _ . / @ , ( ) + # ="
+    )]
     InvalidBranchName(String),
     #[error("Invalid tag name '{0}': may only contain letters, numbers, and - _ . / +")]
     InvalidTagName(String),
@@ -210,16 +210,19 @@ impl SrcuriParser {
                 let version = Self::parse_version_param(query_part);
                 Ok(SrcuriRequest::Hello { version })
             }
-            "wks" => Self::parse_explicit_workspace_mode(
-                path_after_authority,
-                fragment,
-                git_ref,
-                remote,
-            ),
+            "wks" => {
+                Self::parse_explicit_workspace_mode(path_after_authority, fragment, git_ref, remote)
+            }
             "rel" => Self::parse_rel_mode(path_after_authority, fragment, workspace_hint),
             "any" => Self::parse_any_mode(path_after_authority, fragment, workspace_hint),
             "abs" => Self::parse_abs_mode(path_after_authority, fragment),
-            "ext" => Self::parse_ext_mode(path_after_authority, query_part, fragment, git_ref, workspace_hint),
+            "ext" => Self::parse_ext_mode(
+                path_after_authority,
+                query_part,
+                fragment,
+                git_ref,
+                workspace_hint,
+            ),
             _ => Self::parse_implicit_workspace_mode(
                 authority,
                 path_after_authority,
@@ -239,8 +242,8 @@ impl SrcuriParser {
         }
     }
 
-    /// Parse implicit workspace: srcuri://myrepo/path:42
-    /// Authority IS the workspace name
+    /// Parse implicit workspace (e.g., `srcuri://myrepo/path:42`).
+    /// Authority IS the workspace name.
     fn parse_implicit_workspace_mode(
         authority: &str,
         path_part: &str,
@@ -255,7 +258,7 @@ impl SrcuriParser {
             )));
         }
 
-        let (file_path, mut line, column) = Self::parse_path_with_location(path_part)?;
+        let (file_path, mut line, column) = Self::parse_path_with_location(path_part);
 
         // If no line from colon syntax, try fragment as line number
         if line.is_none() {
@@ -272,8 +275,8 @@ impl SrcuriParser {
         })
     }
 
-    /// Parse explicit workspace: srcuri://workspace/myrepo/path:42
-    /// First path segment after "workspace" is the workspace name
+    /// Parse explicit workspace (e.g., `srcuri://workspace/myrepo/path:42`).
+    /// First path segment after "workspace" is the workspace name.
     fn parse_explicit_workspace_mode(
         path_part: &str,
         fragment: Option<&str>,
@@ -293,7 +296,7 @@ impl SrcuriParser {
             )));
         }
 
-        let (file_path, mut line, column) = Self::parse_path_with_location(relative_path)?;
+        let (file_path, mut line, column) = Self::parse_path_with_location(relative_path);
 
         if line.is_none() {
             line = Self::parse_fragment_line(fragment);
@@ -309,14 +312,15 @@ impl SrcuriParser {
         })
     }
 
-    /// Parse rel mode: srcuri://rel/path/file.rs:42
-    /// Searches all workspaces for matching path
+    /// Parse rel mode (e.g., `srcuri://rel/path/file.rs:42`).
+    /// Searches all workspaces for matching path.
+    #[allow(clippy::unnecessary_wraps)]
     fn parse_rel_mode(
         path_part: &str,
         fragment: Option<&str>,
         workspace_hint: Option<String>,
     ) -> Result<SrcuriRequest> {
-        let (file_path, mut line, column) = Self::parse_path_with_location(path_part)?;
+        let (file_path, mut line, column) = Self::parse_path_with_location(path_part);
 
         if line.is_none() {
             line = Self::parse_fragment_line(fragment);
@@ -330,14 +334,15 @@ impl SrcuriParser {
         })
     }
 
-    /// Parse any mode: srcuri://any/path/file.rs:42
-    /// Best-effort resolution in handler
+    /// Parse any mode (e.g., `srcuri://any/path/file.rs:42`).
+    /// Best-effort resolution in handler.
+    #[allow(clippy::unnecessary_wraps)]
     fn parse_any_mode(
         path_part: &str,
         fragment: Option<&str>,
         workspace_hint: Option<String>,
     ) -> Result<SrcuriRequest> {
-        let (file_path, mut line, column) = Self::parse_path_with_location(path_part)?;
+        let (file_path, mut line, column) = Self::parse_path_with_location(path_part);
 
         if line.is_none() {
             line = Self::parse_fragment_line(fragment);
@@ -351,10 +356,11 @@ impl SrcuriParser {
         })
     }
 
-    /// Parse absolute path mode: srcuri://abs/path
-    /// Handles POSIX, Windows drive letters, and UNC paths
+    /// Parse absolute path mode (e.g., `srcuri://abs/path`).
+    /// Handles POSIX, Windows drive letters, and UNC paths.
+    #[allow(clippy::unnecessary_wraps)]
     fn parse_abs_mode(path_part: &str, fragment: Option<&str>) -> Result<SrcuriRequest> {
-        let (file_path, mut line, column) = Self::parse_path_with_location(path_part)?;
+        let (file_path, mut line, column) = Self::parse_path_with_location(path_part);
 
         if line.is_none() {
             line = Self::parse_fragment_line(fragment);
@@ -370,10 +376,10 @@ impl SrcuriParser {
         })
     }
 
-    /// Convert abs-mode path to filesystem path
-    /// - /etc/hosts → /etc/hosts (POSIX - add leading /)
-    /// - C:/Windows/... → C:/Windows/... (Windows drive - keep as-is)
-    /// - UNC/server/share/path → //server/share/path (Windows UNC)
+    /// Convert abs-mode path to filesystem path.
+    /// - `/etc/hosts` → `/etc/hosts` (POSIX - add leading /)
+    /// - `C:/Windows/...` → `C:/Windows/...` (Windows drive - keep as-is)
+    /// - `UNC/server/share/path` → `//server/share/path` (Windows UNC)
     fn abs_path_to_filesystem(path: &str) -> String {
         // Check for UNC path: abs/UNC/server/share/...
         if path.starts_with("UNC/") || path.starts_with("unc/") {
@@ -395,8 +401,8 @@ impl SrcuriParser {
         }
     }
 
-    /// Parse external URL mode: srcuri://ext/https/github.com/owner/repo/...
-    /// Re-constructs the original URL and parses with srcuri-core
+    /// Parse external URL mode (e.g., `srcuri://ext/https/github.com/owner/repo/...`).
+    /// Re-constructs the original URL and parses with srcuri-core.
     fn parse_ext_mode(
         path_part: &str,
         query_part: Option<&str>,
@@ -422,8 +428,7 @@ impl SrcuriParser {
         let (fragment_line, fragment_column) = Self::parse_provider_fragment(fragment);
 
         // Map srcuri-core's ref_value to our GitRef enum, preserving incoming
-        let git_ref =
-            incoming_git_ref.or_else(|| target.ref_value.map(|value| GitRef::Branch(value)));
+        let git_ref = incoming_git_ref.or_else(|| target.ref_value.map(GitRef::Branch));
 
         Ok(SrcuriRequest::ExternalUrl {
             provider: target.remote,
@@ -434,14 +439,14 @@ impl SrcuriParser {
             column: fragment_column,
             git_ref,
             workspace_override,
-            fragment: fragment.map(|f| f.to_string()),
+            fragment: fragment.map(ToString::to_string),
         })
     }
 
-    /// Reconstruct external URL from ext-mode path
+    /// Reconstruct external URL from ext-mode path.
     /// Accepts two formats:
-    /// - https/github.com/owner/repo → https://github.com/owner/repo
-    /// - https://github.com/owner/repo → https://github.com/owner/repo (pass-through)
+    /// - `https/github.com/owner/repo` → `https://github.com/owner/repo`
+    /// - `https://github.com/owner/repo` → `https://github.com/owner/repo` (pass-through)
     fn reconstruct_external_url(path: &str) -> Result<String> {
         // Format 1: scheme already has :// (from srcuri.com)
         if let Some(rest) = path.strip_prefix("https://") {
@@ -643,7 +648,7 @@ impl SrcuriParser {
         None
     }
 
-    fn parse_path_with_location(path: &str) -> Result<(String, Option<usize>, Option<usize>)> {
+    fn parse_path_with_location(path: &str) -> (String, Option<usize>, Option<usize>) {
         let mut end = path.len();
         let mut line: Option<usize> = None;
         let mut column: Option<usize> = None;
@@ -678,7 +683,7 @@ impl SrcuriParser {
 
         let file_path = path[..end].to_string();
 
-        Ok((file_path, line, column))
+        (file_path, line, column)
     }
 
     fn find_non_drive_colon(path: &str, before: usize) -> Option<usize> {
@@ -715,11 +720,7 @@ impl SrcuriParser {
             return true;
         }
 
-        match bytes.get(colon_idx + 1) {
-            Some(b'\\') | Some(b'/') => true,
-            None => false,
-            _ => false,
-        }
+        matches!(bytes.get(colon_idx + 1), Some(b'\\') | Some(b'/'))
     }
 }
 
@@ -779,7 +780,8 @@ mod tests {
 
     #[test]
     fn test_implicit_workspace_with_line_and_column() {
-        let request = SrcuriParser::parse("srcuri://myproject/src/main.rs:42:7").expect("parse URL");
+        let request =
+            SrcuriParser::parse("srcuri://myproject/src/main.rs:42:7").expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::ImplicitWorkspace {
@@ -795,8 +797,8 @@ mod tests {
 
     #[test]
     fn test_implicit_workspace_with_git_ref() {
-        let request =
-            SrcuriParser::parse("srcuri://myrepo/src/file.rs:23?commit=abc123def").expect("parse URL");
+        let request = SrcuriParser::parse("srcuri://myrepo/src/file.rs:23?commit=abc123def")
+            .expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::ImplicitWorkspace {
@@ -896,8 +898,8 @@ mod tests {
 
     #[test]
     fn test_rel_mode_with_workspace_hint() {
-        let request =
-            SrcuriParser::parse("srcuri://rel/src/utils.py:10?workspaceHint=backend").expect("parse URL");
+        let request = SrcuriParser::parse("srcuri://rel/src/utils.py:10?workspaceHint=backend")
+            .expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::RelativePath {
@@ -955,8 +957,8 @@ mod tests {
 
     #[test]
     fn test_any_mode_with_workspace_hint() {
-        let request =
-            SrcuriParser::parse("srcuri://any/src/utils.py:10?workspaceHint=backend").expect("parse URL");
+        let request = SrcuriParser::parse("srcuri://any/src/utils.py:10?workspaceHint=backend")
+            .expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::AnyPath {
@@ -985,8 +987,8 @@ mod tests {
 
     #[test]
     fn test_abs_mode_posix_deep_path() {
-        let request =
-            SrcuriParser::parse("srcuri://abs/Users/alice/code/myproject/README.md:50").expect("parse URL");
+        let request = SrcuriParser::parse("srcuri://abs/Users/alice/code/myproject/README.md:50")
+            .expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::AbsolutePath {
@@ -999,8 +1001,8 @@ mod tests {
 
     #[test]
     fn test_abs_mode_windows_drive() {
-        let request =
-            SrcuriParser::parse("srcuri://abs/C:/Users/Carol/Dev/project/README.md:10").expect("parse URL");
+        let request = SrcuriParser::parse("srcuri://abs/C:/Users/Carol/Dev/project/README.md:10")
+            .expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::AbsolutePath {
@@ -1013,8 +1015,8 @@ mod tests {
 
     #[test]
     fn test_abs_mode_windows_unc() {
-        let request =
-            SrcuriParser::parse("srcuri://abs/UNC/server/share/docs/readme.txt:5").expect("parse URL");
+        let request = SrcuriParser::parse("srcuri://abs/UNC/server/share/docs/readme.txt:5")
+            .expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::AbsolutePath {
@@ -1027,7 +1029,8 @@ mod tests {
 
     #[test]
     fn test_abs_mode_with_column() {
-        let request = SrcuriParser::parse("srcuri://abs/home/user/file.txt:10:5").expect("parse URL");
+        let request =
+            SrcuriParser::parse("srcuri://abs/home/user/file.txt:10:5").expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::AbsolutePath {
@@ -1042,7 +1045,8 @@ mod tests {
     fn test_abs_mode_path_already_has_leading_slash() {
         // When path already starts with /, don't add another one
         // This can happen when temp directories generate URLs like srcuri://abs//private/var/...
-        let request = SrcuriParser::parse("srcuri://abs//private/var/folders/test.rs:1").expect("parse URL");
+        let request =
+            SrcuriParser::parse("srcuri://abs//private/var/folders/test.rs:1").expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::AbsolutePath {
@@ -1093,7 +1097,8 @@ mod tests {
 
     #[test]
     fn test_ext_mode_github_no_file() {
-        let request = SrcuriParser::parse("srcuri://ext/https/github.com/owner/repo").expect("parse URL");
+        let request =
+            SrcuriParser::parse("srcuri://ext/https/github.com/owner/repo").expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::ExternalUrl {
@@ -1257,8 +1262,8 @@ mod tests {
     #[test]
     fn test_ext_mode_srcuri_com_format() {
         // srcuri.com generates URLs with https:// instead of https/
-        let request =
-            SrcuriParser::parse("srcuri://ext/https://github.com/fcsonline/drill").expect("parse URL");
+        let request = SrcuriParser::parse("srcuri://ext/https://github.com/fcsonline/drill")
+            .expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::ExternalUrl {
@@ -1335,7 +1340,8 @@ mod tests {
 
     #[test]
     fn test_branch_param() {
-        let request = SrcuriParser::parse("srcuri://myproject/README.md:1?branch=main").expect("parse URL");
+        let request =
+            SrcuriParser::parse("srcuri://myproject/README.md:1?branch=main").expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::ImplicitWorkspace {
@@ -1351,7 +1357,8 @@ mod tests {
 
     #[test]
     fn test_tag_param() {
-        let request = SrcuriParser::parse("srcuri://myrepo/src/file.rs:10?tag=v1.0.0").expect("parse URL");
+        let request =
+            SrcuriParser::parse("srcuri://myrepo/src/file.rs:10?tag=v1.0.0").expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::ImplicitWorkspace {
@@ -1367,7 +1374,8 @@ mod tests {
 
     #[test]
     fn test_sha_param_alias() {
-        let request = SrcuriParser::parse("srcuri://myrepo/src/file.rs:23?sha=abc123def").expect("parse URL");
+        let request =
+            SrcuriParser::parse("srcuri://myrepo/src/file.rs:23?sha=abc123def").expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::ImplicitWorkspace {
@@ -1385,8 +1393,8 @@ mod tests {
 
     #[test]
     fn test_branch_with_plus_is_decoded() {
-        let request =
-            SrcuriParser::parse("srcuri://myrepo/file.rs:1?branch=feature%2Fc%2B%2B").expect("parse URL");
+        let request = SrcuriParser::parse("srcuri://myrepo/file.rs:1?branch=feature%2Fc%2B%2B")
+            .expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::ImplicitWorkspace {
@@ -1402,7 +1410,8 @@ mod tests {
 
     #[test]
     fn test_branch_with_hash_is_decoded() {
-        let request = SrcuriParser::parse("srcuri://myrepo/file.rs:1?branch=%23pr470").expect("parse URL");
+        let request =
+            SrcuriParser::parse("srcuri://myrepo/file.rs:1?branch=%23pr470").expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::ImplicitWorkspace {
@@ -1501,7 +1510,8 @@ mod tests {
 
     #[test]
     fn test_trailing_colon_abs_mode() {
-        let request = SrcuriParser::parse("srcuri://abs/Users/ebeland/file.txt:").expect("parse URL");
+        let request =
+            SrcuriParser::parse("srcuri://abs/Users/ebeland/file.txt:").expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::AbsolutePath {
@@ -1544,7 +1554,8 @@ mod tests {
 
     #[test]
     fn test_unknown_query_params_ignored() {
-        let request = SrcuriParser::parse("srcuri://myproject/file.rs?foo=bar&baz=qux").expect("parse URL");
+        let request =
+            SrcuriParser::parse("srcuri://myproject/file.rs?foo=bar&baz=qux").expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::ImplicitWorkspace {

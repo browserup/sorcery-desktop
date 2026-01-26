@@ -31,6 +31,7 @@ impl NeovimManager {
         sockets.first().cloned()
     }
 
+    #[cfg(unix)]
     fn search_dir_for_sockets(
         &self,
         dir: &Path,
@@ -38,24 +39,22 @@ impl NeovimManager {
         depth: usize,
         max_depth: usize,
     ) {
+        use std::os::unix::fs::FileTypeExt;
+
         if depth >= max_depth {
             return;
         }
 
         if let Ok(entries) = std::fs::read_dir(dir) {
-            for entry in entries.filter_map(|e| e.ok()) {
+            for entry in entries.filter_map(Result::ok) {
                 let path = entry.path();
                 if let Ok(metadata) = std::fs::metadata(&path) {
-                    #[cfg(unix)]
-                    {
-                        use std::os::unix::fs::FileTypeExt;
-                        if metadata.file_type().is_socket() {
-                            debug!("Found nvim socket at depth {}: {:?}", depth, path);
-                            sockets.push(path);
-                        } else if metadata.is_dir() {
-                            debug!("Searching subdirectory at depth {}: {:?}", depth, path);
-                            self.search_dir_for_sockets(&path, sockets, depth + 1, max_depth);
-                        }
+                    if metadata.file_type().is_socket() {
+                        debug!("Found nvim socket at depth {}: {:?}", depth, path);
+                        sockets.push(path);
+                    } else if metadata.is_dir() {
+                        debug!("Searching subdirectory at depth {}: {:?}", depth, path);
+                        self.search_dir_for_sockets(&path, sockets, depth + 1, max_depth);
                     }
                 }
             }
@@ -63,29 +62,29 @@ impl NeovimManager {
     }
 
     async fn gather_nvim_sockets(&self) -> Vec<PathBuf> {
-        use std::env;
+        #[cfg(unix)]
+        {
+            use std::env;
+            use std::os::unix::fs::FileTypeExt;
 
-        let mut sockets = Vec::new();
-        let mut dirs = vec![PathBuf::from("/tmp")];
+            let mut sockets = Vec::new();
+            let mut dirs = vec![PathBuf::from("/tmp")];
 
-        if let Ok(tmpdir) = env::var("TMPDIR") {
-            let tmpdir_path = PathBuf::from(&tmpdir);
-            dirs.push(tmpdir_path.clone());
-            debug!("Searching for nvim sockets in: /tmp and {}", tmpdir);
-        }
+            if let Ok(tmpdir) = env::var("TMPDIR") {
+                let tmpdir_path = PathBuf::from(&tmpdir);
+                dirs.push(tmpdir_path.clone());
+                debug!("Searching for nvim sockets in: /tmp and {}", tmpdir);
+            }
 
-        for dir in dirs {
-            debug!("Checking directory: {:?}", dir);
-            if let Ok(entries) = std::fs::read_dir(&dir) {
-                for entry in entries.filter_map(|e| e.ok()) {
-                    let path = entry.path();
-                    if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                        if name.contains("nvim") {
-                            debug!("Found nvim-related item: {:?}", path);
-                            if let Ok(metadata) = std::fs::metadata(&path) {
-                                #[cfg(unix)]
-                                {
-                                    use std::os::unix::fs::FileTypeExt;
+            for dir in dirs {
+                debug!("Checking directory: {:?}", dir);
+                if let Ok(entries) = std::fs::read_dir(&dir) {
+                    for entry in entries.filter_map(Result::ok) {
+                        let path = entry.path();
+                        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                            if name.contains("nvim") {
+                                debug!("Found nvim-related item: {:?}", path);
+                                if let Ok(metadata) = std::fs::metadata(&path) {
                                     if metadata.file_type().is_socket() {
                                         debug!("Found nvim socket: {:?}", path);
                                         sockets.push(path);
@@ -102,10 +101,15 @@ impl NeovimManager {
                     }
                 }
             }
+
+            debug!("Total nvim sockets found: {}", sockets.len());
+            sockets
         }
 
-        debug!("Total nvim sockets found: {}", sockets.len());
-        sockets
+        #[cfg(not(unix))]
+        {
+            Vec::new()
+        }
     }
 
     async fn get_nvim_cwd(&self, socket: &Path) -> Option<PathBuf> {

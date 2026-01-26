@@ -96,7 +96,7 @@ impl EditorManager for EmacsManager {
         {
             debug!("Trying to open Emacs.app on macOS");
             let mut cmd_args = vec!["-a", "Emacs", "--args"];
-            let args_str: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+            let args_str: Vec<&str> = args.iter().map(String::as_str).collect();
             cmd_args.extend(args_str);
 
             let result = Command::new("open")
@@ -115,7 +115,7 @@ impl EditorManager for EmacsManager {
 
             let emacsclient_args: Vec<&str> = vec!["-n"]
                 .into_iter()
-                .chain(args.iter().map(|s| s.as_str()))
+                .chain(args.iter().map(String::as_str))
                 .collect();
 
             let result = Command::new("emacsclient")
@@ -132,7 +132,7 @@ impl EditorManager for EmacsManager {
 
             debug!("emacsclient failed, trying emacs command");
 
-            let emacs_args: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+            let emacs_args: Vec<&str> = args.iter().map(String::as_str).collect();
 
             Command::new("emacs")
                 .args(&emacs_args)
@@ -150,7 +150,7 @@ impl EditorManager for EmacsManager {
         #[cfg(target_os = "windows")]
         {
             debug!("Trying runemacs on Windows");
-            let runemacs_args: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+            let runemacs_args: Vec<&str> = args.iter().map(String::as_str).collect();
 
             let result = Command::new("runemacs")
                 .args(&runemacs_args)
@@ -166,7 +166,7 @@ impl EditorManager for EmacsManager {
 
             debug!("runemacs failed, trying emacs command");
 
-            let emacs_args: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+            let emacs_args: Vec<&str> = args.iter().map(String::as_str).collect();
 
             Command::new("emacs")
                 .args(&emacs_args)
@@ -185,7 +185,7 @@ impl EditorManager for EmacsManager {
         {
             debug!("Trying emacsclient -c -n on Linux");
             let mut client_args = vec!["-c", "-n"];
-            let args_str: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+            let args_str: Vec<&str> = args.iter().map(String::as_str).collect();
             client_args.extend(args_str);
 
             let result = Command::new("emacsclient")
@@ -202,7 +202,7 @@ impl EditorManager for EmacsManager {
 
             debug!("emacsclient failed, trying emacs GUI");
 
-            let emacs_args: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+            let emacs_args: Vec<&str> = args.iter().map(String::as_str).collect();
 
             let result = Command::new("emacs")
                 .args(&emacs_args)
@@ -219,7 +219,7 @@ impl EditorManager for EmacsManager {
             debug!("Emacs GUI failed, trying gnome-terminal with emacs -nw");
 
             let mut terminal_args = vec!["--", "emacs", "-nw"];
-            let args_str: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+            let args_str: Vec<&str> = args.iter().map(String::as_str).collect();
             terminal_args.extend(args_str);
 
             Command::new("gnome-terminal")
