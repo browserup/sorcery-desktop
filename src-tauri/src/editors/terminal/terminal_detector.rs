@@ -4,7 +4,7 @@ use std::fs;
 use std::io::Write;
 #[cfg(target_os = "macos")]
 use std::os::unix::fs::PermissionsExt;
-#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[cfg(target_os = "macos")]
 use std::path::PathBuf;
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 use std::process::Command;
