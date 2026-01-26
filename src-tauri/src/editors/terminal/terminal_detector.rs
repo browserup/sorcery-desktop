@@ -8,7 +8,6 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 use std::process::Command;
-#[cfg(any(target_os = "macos", target_os = "linux"))]
 use tracing::debug;
 
 #[derive(Debug, Clone, PartialEq)]
