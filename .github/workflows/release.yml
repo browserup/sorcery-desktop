@@ -79,6 +79,10 @@ jobs:
             patchelf \
             xdg-utils
 
+      - name: Install macOS dependencies
+        if: startsWith(matrix.platform, 'macos')
+        run: brew install create-dmg
+
       - name: Import macOS certificate
         if: startsWith(matrix.platform, 'macos')
         env:
