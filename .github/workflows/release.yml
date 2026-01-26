@@ -50,9 +50,9 @@ jobs:
             args: ''
             rust_target: ''
             name: linux-x64
-          - platform: ubuntu-22.04
-            args: '--target aarch64-unknown-linux-gnu'
-            rust_target: aarch64-unknown-linux-gnu
+          - platform: ubuntu-24.04-arm
+            args: ''
+            rust_target: ''
             name: linux-arm64
           - platform: windows-latest
             args: ''
@@ -69,7 +69,7 @@ jobs:
           targets: ${{ matrix.rust_target }}
 
       - name: Install Linux dependencies
-        if: matrix.platform == 'ubuntu-22.04'
+        if: startsWith(matrix.platform, 'ubuntu')
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -77,31 +77,6 @@ jobs:
             libayatana-appindicator3-dev \
             librsvg2-dev \
             patchelf
-
-      - name: Install Linux ARM64 cross-compilation dependencies
-        if: matrix.name == 'linux-arm64'
-        run: |
-          # Add arm64 architecture and configure ports mirror for arm64 packages
-          sudo dpkg --add-architecture arm64
-
-          # Create sources list for arm64 using ports.ubuntu.com (official arm64 mirror)
-          sudo tee /etc/apt/sources.list.d/arm64.list << 'EOF'
-          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy main restricted universe multiverse
-          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-updates main restricted universe multiverse
-          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-security main restricted universe multiverse
-          EOF
-
-          # Restrict default sources to amd64 only
-          sudo sed -i 's/^deb /deb [arch=amd64] /' /etc/apt/sources.list
-
-          sudo apt-get update
-          sudo apt-get install -y \
-            gcc-aarch64-linux-gnu \
-            g++-aarch64-linux-gnu \
-            libc6-dev-arm64-cross \
-            libwebkit2gtk-4.1-dev:arm64 \
-            libayatana-appindicator3-dev:arm64 \
-            librsvg2-dev:arm64 || echo "Some ARM64 packages may not be available"
 
       - name: Import macOS certificate
         if: startsWith(matrix.platform, 'macos')
