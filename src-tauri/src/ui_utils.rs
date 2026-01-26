@@ -22,6 +22,7 @@ pub fn build_dialog(app_handle: &AppHandle, config: DialogConfig) -> Result<(), 
     .focused(true)
     .build()
     {
+        #[allow(unused_variables)]
         Ok(window) => {
             #[cfg(target_os = "macos")]
             set_dark_titlebar(&window);

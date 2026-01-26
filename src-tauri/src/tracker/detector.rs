@@ -1,4 +1,6 @@
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 use std::process::Command;
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 use tracing::debug;
 
 pub struct DetectionResult {

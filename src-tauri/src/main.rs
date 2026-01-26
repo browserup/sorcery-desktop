@@ -24,6 +24,7 @@ use tauri::{
     tray::TrayIconBuilder,
     AppHandle, Emitter, Listener, Manager,
 };
+#[cfg(target_os = "macos")]
 use tauri_plugin_deep_link::DeepLinkExt;
 use tracing_subscriber::EnvFilter;
 
@@ -482,6 +483,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .focused(true)
                 .build()
                 {
+                    #[allow(unused_variables)]
                     Ok(window) => {
                         #[cfg(target_os = "macos")]
                         set_dark_titlebar(&window);
@@ -505,6 +507,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let app_handle = app.handle().clone();
             let ph = protocol_handler_clone.clone();
+            #[cfg(target_os = "macos")]
             let ph_cold_start = protocol_handler_clone.clone();
 
             let throttle_for_listener = deep_link_throttle.clone();
@@ -644,6 +647,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 .focused(true)
                                 .build()
                                 {
+                                    #[allow(unused_variables)]
                                     Ok(window) => {
                                         #[cfg(target_os = "macos")]
                                         set_dark_titlebar(&window);

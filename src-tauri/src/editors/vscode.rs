@@ -17,6 +17,7 @@ pub struct VSCodeManager {
     id: String,
     display_name: String,
     cli_name: String,
+    #[cfg(target_os = "macos")]
     macos_app_name: String,
     #[cfg(target_os = "windows")]
     windows_exe_name: String,
@@ -28,16 +29,19 @@ impl VSCodeManager {
         id: &str,
         display_name: &str,
         cli_name: &str,
+        #[cfg_attr(not(target_os = "macos"), allow(unused_variables))]
         macos_app_name: &str,
-        _windows_exe_name: &str,
+        #[cfg_attr(not(target_os = "windows"), allow(unused_variables))]
+        windows_exe_name: &str,
     ) -> Self {
         Self {
             id: id.to_string(),
             display_name: display_name.to_string(),
             cli_name: cli_name.to_string(),
+            #[cfg(target_os = "macos")]
             macos_app_name: macos_app_name.to_string(),
             #[cfg(target_os = "windows")]
-            windows_exe_name: _windows_exe_name.to_string(),
+            windows_exe_name: windows_exe_name.to_string(),
             cache: RwLock::new(None),
         }
     }
