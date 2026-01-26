@@ -593,6 +593,7 @@ pub async fn test_protocol_url(
                 column,
             });
 
+            #[allow(unused_variables)]
             let window = tauri::WebviewWindowBuilder::new(
                 &app,
                 "workspace-chooser",
@@ -648,6 +649,7 @@ pub async fn test_protocol_url(
                 checkout_blocked_reason,
             });
 
+            #[allow(unused_variables)]
             let window = tauri::WebviewWindowBuilder::new(
                 &app,
                 "revision-handler",
@@ -698,6 +700,7 @@ pub async fn test_protocol_url(
                 git_ref_kind: git_ref.clone(),
             });
 
+            #[allow(unused_variables)]
             let window = tauri::WebviewWindowBuilder::new(
                 &app,
                 "clone-dialog",
@@ -740,6 +743,7 @@ pub async fn test_protocol_url(
                 editor_hint,
             });
 
+            #[allow(unused_variables)]
             let window = tauri::WebviewWindowBuilder::new(
                 &app,
                 "large-file-confirm",
@@ -794,6 +798,7 @@ pub async fn test_protocol_url(
                 editor_hint,
             });
 
+            #[allow(unused_variables)]
             let window = tauri::WebviewWindowBuilder::new(
                 &app,
                 "trust-warning",

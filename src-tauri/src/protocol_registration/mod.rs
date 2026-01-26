@@ -46,6 +46,7 @@ impl ProtocolRegistration {
 
     /// Check if the protocol handler is registered
     #[cfg(target_os = "linux")]
+    #[allow(dead_code)]
     pub fn is_registered() -> bool {
         Self::is_registered_linux()
     }
@@ -108,7 +109,6 @@ impl ProtocolRegistration {
     #[cfg(target_os = "linux")]
     fn get_status_linux() -> ProtocolRegistrationStatus {
         use std::fs;
-        use std::process::Command;
 
         let current_exe = std::env::current_exe()
             .ok()
@@ -172,7 +172,6 @@ impl ProtocolRegistration {
 
     #[cfg(target_os = "linux")]
     fn register_linux() -> Result<()> {
-        use std::fs;
         use std::process::Command;
 
         tracing::info!("Registering srcuri:// protocol handler for Linux");

@@ -1,13 +1,14 @@
-#[cfg(unix)]
+#[cfg(target_os = "macos")]
 use std::fs;
-#[cfg(unix)]
+#[cfg(target_os = "macos")]
 use std::io::Write;
-#[cfg(unix)]
+#[cfg(target_os = "macos")]
 use std::os::unix::fs::PermissionsExt;
-#[cfg(unix)]
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 use std::path::PathBuf;
-#[cfg(unix)]
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 use std::process::Command;
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 use tracing::debug;
 
 #[derive(Debug, Clone, PartialEq)]
