@@ -81,7 +81,19 @@ jobs:
       - name: Install Linux ARM64 cross-compilation dependencies
         if: matrix.name == 'linux-arm64'
         run: |
+          # Add arm64 architecture and configure ports mirror for arm64 packages
           sudo dpkg --add-architecture arm64
+
+          # Create sources list for arm64 using ports.ubuntu.com (official arm64 mirror)
+          sudo tee /etc/apt/sources.list.d/arm64.list << 'EOF'
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy main restricted universe multiverse
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-updates main restricted universe multiverse
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports jammy-security main restricted universe multiverse
+          EOF
+
+          # Restrict default sources to amd64 only
+          sudo sed -i 's/^deb /deb [arch=amd64] /' /etc/apt/sources.list
+
           sudo apt-get update
           sudo apt-get install -y \
             gcc-aarch64-linux-gnu \
