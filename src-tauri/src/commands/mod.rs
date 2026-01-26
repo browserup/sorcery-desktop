@@ -1,7 +1,6 @@
 use crate::dialog_state::DialogState;
 pub use crate::dialog_state::{
-    CloneDialogData, LargeFileDialogData, RevisionDialogData, TrustDialogData,
-    WorkspaceChooserData,
+    CloneDialogData, LargeFileDialogData, RevisionDialogData, TrustDialogData, WorkspaceChooserData,
 };
 use crate::dispatcher::EditorDispatcher;
 use crate::editors::EditorRegistry;
@@ -9,9 +8,9 @@ use crate::git_command_log::{GitCommandLogEntry, GIT_COMMAND_LOG};
 use crate::protocol_handler::{GitHandler, WorkingTreeStatus};
 use crate::settings::{Settings, SettingsManager, WorkspaceSync};
 use crate::tracker::ActiveEditorTracker;
-use crate::workspace_mru::ActiveWorkspaceTracker;
 #[cfg(target_os = "macos")]
 use crate::ui_utils::set_dark_titlebar;
+use crate::workspace_mru::ActiveWorkspaceTracker;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -427,6 +426,7 @@ pub async fn workspace_chosen(
 }
 
 #[tauri::command]
+#[allow(clippy::unnecessary_wraps)]
 pub fn workspace_chooser_cancelled(
     _dialog_state: State<'_, Arc<DialogState>>,
 ) -> Result<(), String> {
@@ -500,6 +500,7 @@ pub async fn open_file_at_revision(
 }
 
 #[tauri::command]
+#[allow(clippy::unnecessary_wraps)]
 pub fn revision_dialog_cancelled(_dialog_state: State<'_, Arc<DialogState>>) -> Result<(), String> {
     Ok(())
 }
@@ -548,6 +549,7 @@ pub async fn create_worktree_and_open(
 }
 
 #[tauri::command]
+#[allow(clippy::unnecessary_wraps)]
 pub fn get_git_command_history() -> Result<Vec<GitCommandLogEntry>, String> {
     Ok(GIT_COMMAND_LOG.get_entries())
 }
@@ -684,7 +686,7 @@ pub async fn test_protocol_url(
                 ),
                 duration,
             );
-            let git_ref_str = git_ref.as_ref().map(|r| git_ref_display(r));
+            let git_ref_str = git_ref.as_ref().map(git_ref_display);
             dialog_state.set_clone_dialog(CloneDialogData {
                 workspace_name,
                 clone_path,
@@ -915,6 +917,7 @@ pub fn update_clone_path(
 }
 
 #[tauri::command]
+#[allow(clippy::unnecessary_wraps)]
 pub fn clone_cancelled(_dialog_state: State<'_, Arc<DialogState>>) -> Result<(), String> {
     Ok(())
 }
@@ -943,11 +946,13 @@ pub async fn large_file_confirmed(
 }
 
 #[tauri::command]
+#[allow(clippy::unnecessary_wraps)]
 pub fn large_file_cancelled() -> Result<(), String> {
     Ok(())
 }
 
 #[tauri::command]
+#[allow(clippy::unnecessary_wraps)]
 pub fn get_protocol_registration_status(
 ) -> Result<crate::protocol_registration::ProtocolRegistrationStatus, String> {
     Ok(crate::protocol_registration::ProtocolRegistration::get_status())
@@ -1072,6 +1077,7 @@ pub async fn trust_confirmed(
 }
 
 #[tauri::command]
+#[allow(clippy::unnecessary_wraps)]
 pub fn trust_cancelled() -> Result<(), String> {
     tracing::info!("Trust dialog cancelled");
     Ok(())
@@ -1118,15 +1124,15 @@ pub async fn get_setup_data(
     }
 
     // Sort: installed first, then alphabetically by display name
-    editors.sort_by(|a, b| {
-        match (a.is_installed, b.is_installed) {
-            (true, false) => std::cmp::Ordering::Less,
-            (false, true) => std::cmp::Ordering::Greater,
-            _ => a.display_name.cmp(&b.display_name),
-        }
+    editors.sort_by(|a, b| match (a.is_installed, b.is_installed) {
+        (true, false) => std::cmp::Ordering::Less,
+        (false, true) => std::cmp::Ordering::Greater,
+        _ => a.display_name.cmp(&b.display_name),
     });
 
-    let detected_folder = detect_source_folder().await.unwrap_or_else(|_| "~/code".to_string());
+    let detected_folder = detect_source_folder()
+        .await
+        .unwrap_or_else(|_| "~/code".to_string());
 
     let mut folder_suggestions = Vec::new();
     let home_dir = dirs::home_dir().ok_or_else(|| "Could not find home directory".to_string())?;
@@ -1151,17 +1157,23 @@ pub async fn get_setup_data(
     // Include current setting if different
     let current_folder = settings.defaults.default_workspaces_folder.clone();
     let expanded_current = shellexpand::tilde(&current_folder).to_string();
-    if !folder_suggestions.iter().any(|f| f.path == expanded_current) {
+    if !folder_suggestions
+        .iter()
+        .any(|f| f.path == expanded_current)
+    {
         let path = PathBuf::from(&expanded_current);
         let repo_count = if path.is_dir() {
             count_git_repos(&path).unwrap_or(0)
         } else {
             0
         };
-        folder_suggestions.insert(0, FolderSuggestion {
-            path: expanded_current.clone(),
-            repo_count,
-        });
+        folder_suggestions.insert(
+            0,
+            FolderSuggestion {
+                path: expanded_current.clone(),
+                repo_count,
+            },
+        );
     }
 
     let best_folder = folder_suggestions

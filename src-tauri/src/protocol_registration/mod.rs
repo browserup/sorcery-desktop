@@ -36,7 +36,7 @@ impl ProtocolRegistration {
             registered_executable: None,
             current_executable: std::env::current_exe()
                 .ok()
-                .and_then(|p| p.to_str().map(|s| s.to_string()))
+                .and_then(|p| p.to_str().map(ToString::to_string))
                 .unwrap_or_else(|| "unknown".to_string()),
             executables_match: false,
             platform: "unsupported".to_string(),
@@ -112,7 +112,7 @@ impl ProtocolRegistration {
 
         let current_exe = std::env::current_exe()
             .ok()
-            .and_then(|p| p.to_str().map(|s| s.to_string()))
+            .and_then(|p| p.to_str().map(ToString::to_string))
             .unwrap_or_else(|| "unknown".to_string());
 
         let is_registered = Self::is_registered_linux();
@@ -273,7 +273,7 @@ StartupWMClass=sorcery-desktop
 
         let current_exe = std::env::current_exe()
             .ok()
-            .and_then(|p| p.to_str().map(|s| s.to_string()))
+            .and_then(|p| p.to_str().map(ToString::to_string))
             .unwrap_or_else(|| "unknown".to_string());
 
         let mut is_registered = false;
@@ -308,8 +308,10 @@ StartupWMClass=sorcery-desktop
                             .output()
                             .ok()
                             .and_then(|o| String::from_utf8(o.stdout).ok())
-                            .map(|s| s.trim().to_string())
-                            .unwrap_or_else(|| "sorcery-desktop".to_string());
+                            .map_or_else(
+                                || "sorcery-desktop".to_string(),
+                                |s| s.trim().to_string(),
+                            );
                         let exe_path = format!("{}/Contents/MacOS/{}", app_path, exe_name);
                         registered_exe = Some(exe_path);
                         details = format!("App bundle: {}", app_path);
@@ -370,7 +372,7 @@ StartupWMClass=sorcery-desktop
 
         let current_exe = std::env::current_exe()
             .ok()
-            .and_then(|p| p.to_str().map(|s| s.to_string()))
+            .and_then(|p| p.to_str().map(ToString::to_string))
             .unwrap_or_else(|| "unknown".to_string());
 
         let mut is_registered = false;

@@ -94,7 +94,7 @@ impl EditorManager for MicroManager {
             debug!("Using terminal: {:?}", terminal);
             terminal
                 .launch_editor("micro", &micro_args)
-                .map_err(|e| EditorError::LaunchFailed(e))?;
+                .map_err(EditorError::LaunchFailed)?;
         } else {
             return Err(EditorError::Other(
                 "No terminal emulator found. Please install iTerm2, Alacritty, or another terminal.".to_string()

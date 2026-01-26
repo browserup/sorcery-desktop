@@ -110,7 +110,7 @@ impl GitHandler {
             );
         }
 
-        Ok(String::from_utf8(output.stdout).context("Git log output is not valid UTF-8")?)
+        String::from_utf8(output.stdout).context("Git log output is not valid UTF-8")
     }
 
     pub fn get_current_ref(workspace_path: &Path) -> Result<String> {
@@ -379,10 +379,8 @@ impl GitHandler {
             cmd.arg("--no-checkout");
         }
 
-        if let Some(reference) = git_ref {
-            if let GitRef::Branch(name) | GitRef::Tag(name) = reference {
-                cmd.args(["--branch", name]);
-            }
+        if let Some(GitRef::Branch(name) | GitRef::Tag(name)) = git_ref {
+            cmd.args(["--branch", name]);
         }
 
         cmd.arg(&url);
@@ -425,16 +423,7 @@ impl GitHandler {
 
     /// Sanitize a branch/ref name for use as a directory name
     fn sanitize_ref_name(ref_name: &str) -> String {
-        ref_name
-            .replace('/', "-")
-            .replace('\\', "-")
-            .replace(':', "-")
-            .replace('*', "-")
-            .replace('?', "-")
-            .replace('"', "-")
-            .replace('<', "-")
-            .replace('>', "-")
-            .replace('|', "-")
+        ref_name.replace(['/', '\\', ':', '*', '?', '"', '<', '>', '|'], "-")
     }
 
     /// Resolve a ref to its commit hash
@@ -459,7 +448,7 @@ impl GitHandler {
         }
 
         let mut entries: Vec<_> = std::fs::read_dir(project_dir)?
-            .filter_map(|e| e.ok())
+            .filter_map(Result::ok)
             .filter(|e| e.path().is_dir())
             .filter_map(|e| {
                 let metadata = e.metadata().ok()?;

@@ -12,4 +12,3 @@ pub struct WorkspaceActivity {
 pub struct WorkspaceMruData {
     pub workspaces: HashMap<PathBuf, WorkspaceActivity>,
 }
-

@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Settings {
     #[serde(default)]
     pub defaults: DefaultEditorConfig,
@@ -11,17 +11,8 @@ pub struct Settings {
     pub workspaces: Vec<WorkspaceConfig>,
 }
 
-impl Default for Settings {
-    fn default() -> Self {
-        Self {
-            defaults: DefaultEditorConfig::default(),
-            workspaces: Vec::new(),
-        }
-    }
-}
-
 impl Settings {
-    /// Create settings with auto-detected default_workspaces_folder.
+    /// Create settings with auto-detected `default_workspaces_folder`.
     /// Only use on first run - scans filesystem to find best candidate.
     pub fn with_detected_workspaces_folder() -> Self {
         Self {
@@ -80,7 +71,7 @@ fn count_git_repos(dir: &std::path::Path) -> usize {
     std::fs::read_dir(dir)
         .map(|entries| {
             entries
-                .filter_map(|e| e.ok())
+                .filter_map(Result::ok)
                 .filter(|e| e.path().join(".git").exists())
                 .count()
         })
@@ -116,9 +107,7 @@ fn detect_repo_base_dir() -> String {
         }
     }
 
-    best_candidate
-        .map(|(name, _)| format!("~/{}", name))
-        .unwrap_or_else(|| "~/code".to_string())
+    best_candidate.map_or_else(|| "~/code".to_string(), |(name, _)| format!("~/{}", name))
 }
 
 fn default_auto_switch_clean_branches() -> bool {

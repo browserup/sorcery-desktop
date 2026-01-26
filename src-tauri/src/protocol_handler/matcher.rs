@@ -177,10 +177,15 @@ impl PathMatcher {
                             "Path not found in '{}', retrying with stripped git diff prefix: '{}'",
                             workspace_name, stripped
                         );
-                        return self.find_workspace_path_inner(workspace_name, stripped).await;
+                        return self
+                            .find_workspace_path_inner(workspace_name, stripped)
+                            .await;
                     }
                 }
-                Err(WorkspaceLookupError::PathNotFound(ws, relative_path.to_string()))
+                Err(WorkspaceLookupError::PathNotFound(
+                    ws,
+                    relative_path.to_string(),
+                ))
             }
             Err(e) => Err(e),
         }
@@ -256,9 +261,10 @@ impl PathMatcher {
         let user_metadata = tokio::fs::metadata(&user_path).await.ok();
         let user_path_valid = user_metadata
             .as_ref()
-            .map(|meta| meta.is_file() || meta.is_dir())
-            .unwrap_or(false);
-        let user_is_dir = user_metadata.as_ref().map(|m| m.is_dir()).unwrap_or(false);
+            .is_some_and(|meta| meta.is_file() || meta.is_dir());
+        let user_is_dir = user_metadata
+            .as_ref()
+            .is_some_and(std::fs::Metadata::is_dir);
 
         for workspace in &workspaces {
             let ws_name = workspace.name.as_deref().unwrap_or_else(|| {
@@ -340,7 +346,7 @@ impl PathMatcher {
         Ok(matches)
     }
 
-    pub async fn sort_by_recent_usage(&self, matches: &mut Vec<WorkspaceMatch>) {
+    pub async fn sort_by_recent_usage(&self, matches: &mut [WorkspaceMatch]) {
         const MAX_REFLOG_CHECKS: usize = 5;
 
         for ws_match in matches.iter_mut() {
@@ -368,7 +374,7 @@ impl PathMatcher {
         for (i, result) in results.into_iter().enumerate() {
             if let Ok(Some(reflog_time)) = result {
                 let current = matches[i].last_active;
-                if current.map_or(true, |t| reflog_time > t) {
+                if current.is_none_or(|t| reflog_time > t) {
                     matches[i].last_active = Some(reflog_time);
                 }
             }
@@ -379,7 +385,7 @@ impl PathMatcher {
         debug!("Sorted {} matches by workspace MRU", matches.len());
     }
 
-    fn sort_matches(matches: &mut Vec<WorkspaceMatch>) {
+    fn sort_matches(matches: &mut [WorkspaceMatch]) {
         matches.sort_by(|a, b| match (a.last_active, b.last_active) {
             (Some(time_a), Some(time_b)) => time_b.cmp(&time_a),
             (Some(_), None) => std::cmp::Ordering::Less,
@@ -434,7 +440,8 @@ mod tests {
     async fn full_path_match_detects_direct_path() {
         let workspace_dir = TempDir::new().expect("workspace dir");
         let file_path = workspace_dir.path().join("src").join("lib.rs");
-        std::fs::create_dir_all(file_path.parent().expect("file has parent")).expect("create test dir");
+        std::fs::create_dir_all(file_path.parent().expect("file has parent"))
+            .expect("create test dir");
         std::fs::write(&file_path, "fn test_match() {}").expect("write test file");
 
         let matcher = build_matcher(
@@ -457,7 +464,8 @@ mod tests {
     async fn full_path_match_detects_windows_like_alias() {
         let workspace_dir = TempDir::new().expect("workspace dir");
         let file_path = workspace_dir.path().join("src").join("main.rs");
-        std::fs::create_dir_all(file_path.parent().expect("file has parent")).expect("create test dir");
+        std::fs::create_dir_all(file_path.parent().expect("file has parent"))
+            .expect("create test dir");
         std::fs::write(&file_path, "fn main() {}").expect("write test file");
 
         let matcher = build_matcher(&workspace_dir.path().to_path_buf(), "my-workspace").await;
@@ -477,7 +485,8 @@ mod tests {
     async fn partial_match_strips_git_diff_a_prefix() {
         let workspace_dir = TempDir::new().expect("workspace dir");
         let file_path = workspace_dir.path().join("src").join("lib.rs");
-        std::fs::create_dir_all(file_path.parent().expect("file has parent")).expect("create test dir");
+        std::fs::create_dir_all(file_path.parent().expect("file has parent"))
+            .expect("create test dir");
         std::fs::write(&file_path, "fn test() {}").expect("write test file");
 
         let matcher = build_matcher(&workspace_dir.path().to_path_buf(), "test-ws").await;
@@ -512,7 +521,8 @@ mod tests {
     async fn partial_match_preserves_real_a_directory() {
         let workspace_dir = TempDir::new().expect("workspace dir");
         let file_path = workspace_dir.path().join("a").join("file.rs");
-        std::fs::create_dir_all(file_path.parent().expect("file has parent")).expect("create test dir");
+        std::fs::create_dir_all(file_path.parent().expect("file has parent"))
+            .expect("create test dir");
         std::fs::write(&file_path, "fn a() {}").expect("write test file");
 
         let matcher = build_matcher(&workspace_dir.path().to_path_buf(), "test-ws").await;
@@ -530,7 +540,8 @@ mod tests {
     async fn workspace_path_strips_git_diff_prefix() {
         let workspace_dir = TempDir::new().expect("workspace dir");
         let file_path = workspace_dir.path().join("src").join("main.rs");
-        std::fs::create_dir_all(file_path.parent().expect("file has parent")).expect("create test dir");
+        std::fs::create_dir_all(file_path.parent().expect("file has parent"))
+            .expect("create test dir");
         std::fs::write(&file_path, "fn main() {}").expect("write test file");
 
         let matcher = build_matcher(&workspace_dir.path().to_path_buf(), "myproject").await;
@@ -557,7 +568,8 @@ mod tests {
     async fn partial_match_finds_workspace_in_middle_of_path() {
         let workspace_dir = TempDir::new().expect("workspace dir");
         let file_path = workspace_dir.path().join("src").join("main.rs");
-        std::fs::create_dir_all(file_path.parent().expect("file has parent")).expect("create test dir");
+        std::fs::create_dir_all(file_path.parent().expect("file has parent"))
+            .expect("create test dir");
         std::fs::write(&file_path, "fn main() {}").expect("write test file");
 
         let matcher = build_matcher(&workspace_dir.path().to_path_buf(), "myproject").await;
@@ -595,7 +607,8 @@ mod tests {
     async fn partial_match_workspace_must_be_full_segment() {
         let workspace_dir = TempDir::new().expect("workspace dir");
         let file_path = workspace_dir.path().join("src").join("main.rs");
-        std::fs::create_dir_all(file_path.parent().expect("file has parent")).expect("create test dir");
+        std::fs::create_dir_all(file_path.parent().expect("file has parent"))
+            .expect("create test dir");
         std::fs::write(&file_path, "fn main() {}").expect("write test file");
 
         let matcher = build_matcher(&workspace_dir.path().to_path_buf(), "api").await;
@@ -614,7 +627,8 @@ mod tests {
         let workspace_dir = TempDir::new().expect("workspace dir");
         // Create nested path that has workspace name twice
         let file_path = workspace_dir.path().join("nested").join("file.rs");
-        std::fs::create_dir_all(file_path.parent().expect("file has parent")).expect("create test dir");
+        std::fs::create_dir_all(file_path.parent().expect("file has parent"))
+            .expect("create test dir");
         std::fs::write(&file_path, "fn test() {}").expect("write test file");
 
         let matcher = build_matcher(&workspace_dir.path().to_path_buf(), "myproject").await;
@@ -645,7 +659,9 @@ mod tests {
         drop(workspace_dir);
 
         // Should return WorkspaceNotFound, not PathNotFound
-        let result = matcher.find_workspace_path("deleted-ws", "some/file.rs").await;
+        let result = matcher
+            .find_workspace_path("deleted-ws", "some/file.rs")
+            .await;
 
         assert!(matches!(
             result,

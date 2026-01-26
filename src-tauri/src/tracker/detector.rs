@@ -20,7 +20,7 @@ pub async fn detect_active_editor() -> DetectionResult {
 #[cfg(target_os = "macos")]
 async fn detect_active_editor_macos() -> DetectionResult {
     let (app_name, window_title) = get_frontmost_app_info_native();
-    let app_name_lower = app_name.as_deref().map(|s| s.to_lowercase());
+    let app_name_lower = app_name.as_deref().map(str::to_lowercase);
 
     debug!(
         "Detected frontmost app: {:?}, title: {:?}",
@@ -29,7 +29,9 @@ async fn detect_active_editor_macos() -> DetectionResult {
 
     let editor_id = if let Some(ref name) = app_name_lower {
         if name == "electron" {
-            detect_vscodium_via_ps().await.or_else(|| map_app_name_to_editor(name))
+            detect_vscodium_via_ps()
+                .await
+                .or_else(|| map_app_name_to_editor(name))
         } else if name.contains("iterm") || name.contains("terminal") {
             detect_terminal_editor()
                 .await
@@ -222,7 +224,9 @@ async fn detect_active_editor_linux() -> DetectionResult {
     let window_title = get_active_window_title_x11();
     let title_lower = window_title.as_ref().map(|t| t.to_lowercase());
 
-    let editor_id = title_lower.as_ref().and_then(|t| map_window_title_to_editor(t));
+    let editor_id = title_lower
+        .as_ref()
+        .and_then(|t| map_window_title_to_editor(t));
 
     DetectionResult {
         editor_id,

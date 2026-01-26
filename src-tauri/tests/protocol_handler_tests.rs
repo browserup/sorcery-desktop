@@ -287,10 +287,7 @@ async fn test_workspace_mode_is_case_insensitive() {
 
     match result {
         Ok(_) => {}
-        Err(e) => panic!(
-            "Workspace mode should be case-insensitive. Error: {}",
-            e
-        ),
+        Err(e) => panic!("Workspace mode should be case-insensitive. Error: {}", e),
     }
 }
 
@@ -315,10 +312,7 @@ async fn test_rel_mode_finds_workspace_in_path() {
 
     match result {
         Ok(_) => {}
-        Err(e) => panic!(
-            "Rel mode should find workspace name in path. Error: {}",
-            e
-        ),
+        Err(e) => panic!("Rel mode should find workspace name in path. Error: {}", e),
     }
 }
 
@@ -380,10 +374,7 @@ async fn test_rel_mode_multiple_matches_shows_chooser() {
         Ok(sorcery_desktop::protocol_handler::HandleResult::ShowChooser { matches, .. }) => {
             assert_eq!(matches.len(), 2, "Should have 2 matches for chooser");
         }
-        Ok(other) => panic!(
-            "Expected ShowChooser for multiple matches, got {:?}",
-            other
-        ),
+        Ok(other) => panic!("Expected ShowChooser for multiple matches, got {:?}", other),
         Err(e) => panic!("Unexpected error: {}", e),
     }
 }
@@ -410,10 +401,7 @@ async fn test_rel_mode_single_match_opens_directly() {
                 "Should open the unique file"
             );
         }
-        Ok(other) => panic!(
-            "Expected Opened for single match, got {:?}",
-            other
-        ),
+        Ok(other) => panic!("Expected Opened for single match, got {:?}", other),
         Err(e) => panic!("Unexpected error: {}", e),
     }
 }

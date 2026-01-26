@@ -34,12 +34,12 @@ impl TerminalApp {
             "gnome-terminal" | "gnome" => Some(Self::GnomeTerminal),
             "konsole" => Some(Self::Konsole),
             "xterm" => Some(Self::Xterm),
-            "auto" | "" => None,
             _ => None,
         }
     }
 
     #[cfg(target_os = "macos")]
+    #[allow(clippy::unnecessary_wraps)]
     pub fn detect_installed_with_preference(preferred: Option<&str>) -> Option<Self> {
         // If user has a preference, check if it's installed first
         if let Some(pref) = preferred {

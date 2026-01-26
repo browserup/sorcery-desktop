@@ -29,7 +29,10 @@ pub fn scan_workspace_for_auto_tasks(workspace_path: &Path) -> TrustScanResult {
     let tasks_file = workspace_path.join(".vscode").join("tasks.json");
 
     if !tasks_file.exists() {
-        debug!("No .vscode/tasks.json found in {}", workspace_path.display());
+        debug!(
+            "No .vscode/tasks.json found in {}",
+            workspace_path.display()
+        );
         return TrustScanResult {
             has_auto_tasks: false,
             task_labels: Vec::new(),
@@ -156,9 +159,7 @@ pub fn needs_trust_check(workspace_path: &Path, is_trusted: bool) -> Option<Trus
 
     let result = scan_workspace_for_auto_tasks(workspace_path);
 
-    if result.has_auto_tasks
-        || !result.vim_local_rc_files.is_empty()
-        || result.scan_error.is_some()
+    if result.has_auto_tasks || !result.vim_local_rc_files.is_empty() || result.scan_error.is_some()
     {
         Some(result)
     } else {

@@ -24,7 +24,7 @@ pub fn head_reflog_time(repo_path: &Path) -> Option<SystemTime> {
         }
     };
 
-    if log.len() == 0 {
+    if log.is_empty() {
         debug!("HEAD reflog is empty");
         return None;
     }

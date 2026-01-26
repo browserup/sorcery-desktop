@@ -51,7 +51,8 @@ pub fn set_dark_titlebar(window: &tauri::WebviewWindow) {
                 unsafe {
                     let ns_window: &NSWindow = &*(ns_window_ptr as *const NSWindow);
 
-                    if let Some(appearance) = NSAppearance::appearanceNamed(NSAppearanceNameDarkAqua)
+                    if let Some(appearance) =
+                        NSAppearance::appearanceNamed(NSAppearanceNameDarkAqua)
                     {
                         ns_window.setAppearance(Some(&appearance));
                     }
