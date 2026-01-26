@@ -25,6 +25,7 @@ pub enum TerminalApp {
 }
 
 impl TerminalApp {
+    #[allow(dead_code)]
     pub fn from_string(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "iterm2" | "iterm" => Some(Self::ITerm2),
