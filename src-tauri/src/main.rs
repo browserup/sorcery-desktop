@@ -1,6 +1,5 @@
 // Prevents additional console window on Windows in release builds
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-#![allow(clippy::clone_on_ref_ptr)]
 
 mod browser_detection;
 mod commands;
@@ -13,6 +12,7 @@ mod protocol_handler;
 mod protocol_registration;
 mod settings;
 mod tracker;
+mod tray_state;
 mod trust_check;
 mod ui_utils;
 mod workspace_mru;
@@ -20,6 +20,7 @@ mod workspace_mru;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tauri::{
+    image::Image,
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
     AppHandle, Emitter, Listener, Manager,
@@ -29,6 +30,15 @@ use tauri_plugin_deep_link::DeepLinkExt;
 use tracing_subscriber::EnvFilter;
 
 use crate::git_command_log::GIT_COMMAND_LOG;
+use crate::tray_state::TrayState;
+
+fn load_png_as_image(bytes: &[u8]) -> Image<'static> {
+    let img = image::load_from_memory_with_format(bytes, image::ImageFormat::Png)
+        .expect("Failed to decode PNG icon");
+    let rgba = img.to_rgba8();
+    let (width, height) = rgba.dimensions();
+    Image::new_owned(rgba.into_raw(), width, height)
+}
 
 #[cfg(target_os = "macos")]
 fn hide_app() {
@@ -57,6 +67,10 @@ async fn handle_protocol_result(
         Ok(protocol_handler::HandleResult::Opened { file_path }) => {
             tracing::info!("Request: file opened successfully: {}", file_path);
             GIT_COMMAND_LOG.log_request(url, true, "opened", &file_path, duration);
+
+            let tray_state = app_handle.state::<Arc<TrayState>>();
+            tray_state.flash();
+
             #[cfg(target_os = "macos")]
             hide_app();
         }
@@ -229,6 +243,8 @@ async fn handle_protocol_result(
             workspace_name,
             task_labels,
             vim_local_rc_files,
+            dangerous_files,
+            dangerous_settings,
             scan_error,
             pending_file_path,
             line,
@@ -237,19 +253,23 @@ async fn handle_protocol_result(
         }) => {
             let task_count = task_labels.len();
             let vim_rc_count = vim_local_rc_files.len();
+            let dangerous_files_count = dangerous_files.len();
+            let dangerous_settings_count = dangerous_settings.len();
             tracing::info!(
-                "Request: showing trust dialog for workspace '{}' ({} auto-run tasks, {} vim rc files)",
+                "Request: showing trust dialog for workspace '{}' ({} auto-run tasks, {} vim rc files, {} dangerous files, {} dangerous settings)",
                 workspace_name,
                 task_count,
-                vim_rc_count
+                vim_rc_count,
+                dangerous_files_count,
+                dangerous_settings_count
             );
             GIT_COMMAND_LOG.log_request(
                 url,
                 true,
                 "trust_dialog",
                 &format!(
-                    "Workspace '{}' has {} auto-run tasks and {} vim rc files, requesting trust confirmation",
-                    workspace_name, task_count, vim_rc_count
+                    "Workspace '{}' has {} auto-run tasks, {} vim rc files, {} dangerous files, {} dangerous settings, requesting trust confirmation",
+                    workspace_name, task_count, vim_rc_count, dangerous_files_count, dangerous_settings_count
                 ),
                 duration,
             );
@@ -258,6 +278,20 @@ async fn handle_protocol_result(
                 workspace_name,
                 task_labels,
                 vim_local_rc_files,
+                dangerous_files: dangerous_files
+                    .into_iter()
+                    .map(|f| dialog_state::DangerousFileData {
+                        path: f.path,
+                        reason: f.reason.to_string(),
+                    })
+                    .collect(),
+                dangerous_settings: dangerous_settings
+                    .into_iter()
+                    .map(|s| dialog_state::DangerousSettingData {
+                        key: s.key,
+                        reason: s.reason.to_string(),
+                    })
+                    .collect(),
                 scan_error,
                 pending_file_path,
                 line,
@@ -353,31 +387,40 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!("Starting Sorcery Desktop...");
 
     let settings_manager = Arc::new(settings::SettingsManager::new().await?);
-    let path_validator = Arc::new(path_validator::PathValidator::new(settings_manager.clone()));
+    let path_validator = Arc::new(path_validator::PathValidator::new(Arc::clone(
+        &settings_manager,
+    )));
     let editor_registry = Arc::new(editors::EditorRegistry::new());
-    let workspace_tracker = Arc::new(workspace_mru::ActiveWorkspaceTracker::new(
-        settings_manager.clone(),
-    ));
+    let workspace_tracker = Arc::new(workspace_mru::ActiveWorkspaceTracker::new(Arc::clone(
+        &settings_manager,
+    )));
     let tracker = Arc::new(
-        tracker::ActiveEditorTracker::new(editor_registry.clone())
-            .with_workspace_tracking(settings_manager.clone(), workspace_tracker.clone()),
+        tracker::ActiveEditorTracker::new(Arc::clone(&editor_registry)).with_workspace_tracking(
+            Arc::clone(&settings_manager),
+            Arc::clone(&workspace_tracker),
+        ),
     );
-    let workspace_sync = Arc::new(settings::WorkspaceSync::new(settings_manager.clone()));
+    let workspace_sync = Arc::new(settings::WorkspaceSync::new(Arc::clone(&settings_manager)));
     let dispatcher = Arc::new(dispatcher::EditorDispatcher::new(
-        settings_manager.clone(),
-        path_validator.clone(),
-        editor_registry.clone(),
-        tracker.clone(),
+        Arc::clone(&settings_manager),
+        Arc::clone(&path_validator),
+        Arc::clone(&editor_registry),
+        Arc::clone(&tracker),
     ));
     let protocol_handler = Arc::new(protocol_handler::ProtocolHandler::new(
-        settings_manager.clone(),
-        dispatcher.clone(),
-        workspace_tracker.clone(),
+        Arc::clone(&settings_manager),
+        Arc::clone(&dispatcher),
+        Arc::clone(&workspace_tracker),
     ));
     let dialog_state = Arc::new(DialogState::new());
     let deep_link_throttle = Arc::new(DeepLinkThrottle::new(Duration::from_millis(
         MIN_DEEP_LINK_INTERVAL_MS,
     )));
+
+    // Load tray icons for animation
+    let normal_icon = load_png_as_image(include_bytes!("../icons/32x32.png"));
+    let active_icon = load_png_as_image(include_bytes!("../icons/32x32_active.png"));
+    let tray_state = Arc::new(TrayState::new(normal_icon, active_icon));
 
     settings_manager.load().await?;
     tracing::info!("Settings loaded");
@@ -393,7 +436,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     workspace_tracker.load().await?;
     tracing::info!("Workspace MRU data loaded");
 
-    let tracker_handle = tracker.clone();
+    let tracker_handle = Arc::clone(&tracker);
     tokio::spawn(async move {
         tracing::info!("Starting active editor tracker...");
         tracker_handle.start_polling().await;
@@ -448,13 +491,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
-    let protocol_handler_clone = protocol_handler.clone();
-    let deep_link_throttle_for_setup = deep_link_throttle.clone();
+    let protocol_handler_clone = Arc::clone(&protocol_handler);
+    let deep_link_throttle_for_setup = Arc::clone(&deep_link_throttle);
+    let tray_state_for_setup = Arc::clone(&tray_state);
     let setup_needed = settings_manager.is_setup_needed().await;
 
     tauri::Builder::default()
         .setup(move |app| {
-            let deep_link_throttle = deep_link_throttle_for_setup.clone();
+            let deep_link_throttle = Arc::clone(&deep_link_throttle_for_setup);
             tracing::info!("Setting up Tauri app...");
 
             // Show setup wizard if this is first run
@@ -506,11 +550,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
 
             let app_handle = app.handle().clone();
-            let ph = protocol_handler_clone.clone();
+            let ph = Arc::clone(&protocol_handler_clone);
             #[cfg(target_os = "macos")]
-            let ph_cold_start = protocol_handler_clone.clone();
+            let ph_cold_start = Arc::clone(&protocol_handler_clone);
 
-            let throttle_for_listener = deep_link_throttle.clone();
+            let throttle_for_listener = Arc::clone(&deep_link_throttle);
             app.handle().listen("deep-link://new-url", move |event| {
                 let payload = event.payload();
                 let event_time = std::time::SystemTime::now()
@@ -550,7 +594,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 hide_app();
 
                 let app_handle = app_handle.clone();
-                let ph = ph.clone();
+                let ph = Arc::clone(&ph);
 
                 tauri::async_runtime::spawn(async move {
                     tracing::debug!("Spawned async task for URL: {}", url);
@@ -571,7 +615,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             // On macOS, URLs used to launch the app are delivered before the event listener is ready
             #[cfg(target_os = "macos")]
             {
-                let throttle_for_cold_start = deep_link_throttle.clone();
+                let throttle_for_cold_start = Arc::clone(&deep_link_throttle);
                 let deep_link = app.deep_link();
                 if let Ok(Some(urls)) = deep_link.get_current() {
                     if let Some(url) = urls.first() {
@@ -585,7 +629,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         } else {
                             hide_app();
                             let app_handle = app.handle().clone();
-                            let ph = ph_cold_start.clone();
+                            let ph = Arc::clone(&ph_cold_start);
                             tauri::async_runtime::spawn(async move {
                                 let start = std::time::Instant::now();
                                 let result = ph.handle_url(&url_str).await;
@@ -604,7 +648,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let menu = Menu::with_items(app, &[&settings_item, &quit_item])?;
 
             // Create system tray icon
-            let _tray = TrayIconBuilder::new()
+            let tray = TrayIconBuilder::new()
                 .menu(&menu)
                 .tooltip("Sorcery Desktop - Editor Link Handler")
                 .icon(
@@ -671,6 +715,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 })
                 .build(app)?;
 
+            tray_state_for_setup.set_tray_icon(tray);
+
             Ok(())
         })
         .manage(settings_manager)
@@ -682,8 +728,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .manage(protocol_handler)
         .manage(workspace_sync)
         .manage(dialog_state)
+        .manage(tray_state)
         .plugin(tauri_plugin_single_instance::init({
-            let throttle = deep_link_throttle.clone();
+            let throttle = Arc::clone(&deep_link_throttle);
             move |app, args, _cwd| {
                 tracing::debug!("Single-instance callback triggered, args: {:?}", args);
 
