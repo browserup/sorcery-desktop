@@ -51,8 +51,32 @@ impl ActiveWorkspaceTracker {
             .await
             .context("Failed to read workspace MRU file")?;
 
-        let data: WorkspaceMruData =
-            serde_yaml::from_str(&contents).context("Failed to parse YAML workspace MRU data")?;
+        let data: WorkspaceMruData = match serde_yaml::from_str(&contents) {
+            Ok(data) => data,
+            Err(e) => {
+                warn!(
+                    "Failed to parse workspace MRU data: {}. File contents ({} bytes): {:?}",
+                    e,
+                    contents.len(),
+                    if contents.len() > 200 {
+                        format!("{}...[truncated]", &contents[..200])
+                    } else {
+                        contents.clone()
+                    }
+                );
+
+                // Backup corrupted file for debugging
+                let backup_path = self.mru_path.with_extension("yaml.corrupted");
+                if let Err(backup_err) = tokio::fs::rename(&self.mru_path, &backup_path).await {
+                    warn!("Failed to backup corrupted file: {}", backup_err);
+                } else {
+                    warn!("Corrupted file backed up to {:?}", backup_path);
+                }
+
+                info!("Starting fresh with empty workspace MRU data");
+                return Ok(());
+            }
+        };
 
         let mut current = self.mru_data.write().await;
         *current = data;
@@ -67,9 +91,15 @@ impl ActiveWorkspaceTracker {
         let yaml_string =
             serde_yaml::to_string(&data).context("Failed to serialize workspace MRU data")?;
 
-        tokio::fs::write(&self.mru_path, yaml_string)
+        // Atomic write: write to temp file, then rename
+        let temp_path = self.mru_path.with_extension("yaml.tmp");
+        tokio::fs::write(&temp_path, &yaml_string)
             .await
-            .context("Failed to write workspace MRU file")?;
+            .context("Failed to write temporary workspace MRU file")?;
+
+        tokio::fs::rename(&temp_path, &self.mru_path)
+            .await
+            .context("Failed to rename temporary workspace MRU file")?;
 
         debug!("Workspace MRU data saved to {:?}", self.mru_path);
         Ok(())

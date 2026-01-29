@@ -254,9 +254,15 @@ impl SettingsManager {
         let yaml_string =
             serde_yaml::to_string(settings).context("Failed to serialize settings to YAML")?;
 
-        tokio::fs::write(&self.config_path, yaml_string)
+        // Atomic write: write to temp file, then rename
+        let temp_path = self.config_path.with_extension("yaml.tmp");
+        tokio::fs::write(&temp_path, &yaml_string)
             .await
-            .context("Failed to write settings file")?;
+            .context("Failed to write temporary settings file")?;
+
+        tokio::fs::rename(&temp_path, &self.config_path)
+            .await
+            .context("Failed to rename temporary settings file")?;
 
         Ok(())
     }

@@ -83,9 +83,15 @@ impl ActiveEditorTracker {
         let yaml_string =
             serde_yaml::to_string(&data).context("Failed to serialize last_seen data to YAML")?;
 
-        tokio::fs::write(&self.last_seen_path, yaml_string)
+        // Atomic write: write to temp file, then rename
+        let temp_path = self.last_seen_path.with_extension("yaml.tmp");
+        tokio::fs::write(&temp_path, &yaml_string)
             .await
-            .context("Failed to write last_seen file")?;
+            .context("Failed to write temporary last_seen file")?;
+
+        tokio::fs::rename(&temp_path, &self.last_seen_path)
+            .await
+            .context("Failed to rename temporary last_seen file")?;
 
         debug!("Last seen data saved to {:?}", self.last_seen_path);
         Ok(())
