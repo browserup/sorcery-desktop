@@ -3,6 +3,25 @@ use crate::git_command_log::run_git_command;
 use anyhow::{bail, Context, Result};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum CloneError {
+    #[error("Target path already exists: {0}")]
+    TargetExists(PathBuf),
+
+    #[error("Failed to create parent directory: {0}")]
+    CreateDir(#[source] std::io::Error),
+
+    #[error("Failed to execute git clone: {0}")]
+    Execute(#[source] std::io::Error),
+
+    #[error("Clone failed: {0}")]
+    CommandFailed(String),
+
+    #[error("Failed to checkout commit '{commit}': {message}")]
+    CheckoutFailed { commit: String, message: String },
+}
 const MAX_FILE_SIZE_BYTES: u64 = 10 * 1024 * 1024; // 10MB
 
 #[derive(Debug, Clone, Serialize)]
@@ -348,15 +367,15 @@ impl GitHandler {
         remote_url: &str,
         target_path: &Path,
         git_ref: Option<&GitRef>,
-    ) -> Result<()> {
+    ) -> Result<(), CloneError> {
         use std::process::Command;
 
         if target_path.exists() {
-            bail!("Target path already exists: {}", target_path.display());
+            return Err(CloneError::TargetExists(target_path.to_path_buf()));
         }
 
         if let Some(parent) = target_path.parent() {
-            std::fs::create_dir_all(parent).context("Failed to create parent directory")?;
+            std::fs::create_dir_all(parent).map_err(CloneError::CreateDir)?;
         }
 
         // Ensure https:// prefix for git clone compatibility when needed
@@ -386,26 +405,28 @@ impl GitHandler {
         cmd.arg(&url);
         cmd.arg(target_path);
 
-        let output = cmd.output().context("Failed to execute git clone")?;
+        let output = cmd.output().map_err(CloneError::Execute)?;
 
         if !output.status.success() {
-            bail!(
-                "Failed to clone repository: {}",
-                String::from_utf8_lossy(&output.stderr)
-            );
+            return Err(CloneError::CommandFailed(
+                String::from_utf8_lossy(&output.stderr).trim().to_string(),
+            ));
         }
 
         if let Some(GitRef::Commit(commit)) = git_ref {
             tracing::info!("Checking out commit {} after clone", commit);
             let target_str = target_path.to_string_lossy();
-            let checkout = run_git_command(&target_str, &["checkout", commit])
-                .context("Failed to execute git checkout for commit")?;
+            let checkout = run_git_command(&target_str, &["checkout", commit]).map_err(|e| {
+                CloneError::CheckoutFailed {
+                    commit: commit.clone(),
+                    message: e.to_string(),
+                }
+            })?;
             if !checkout.status.success() {
-                bail!(
-                    "Failed to checkout commit '{}': {}",
-                    commit,
-                    String::from_utf8_lossy(&checkout.stderr)
-                );
+                return Err(CloneError::CheckoutFailed {
+                    commit: commit.clone(),
+                    message: String::from_utf8_lossy(&checkout.stderr).trim().to_string(),
+                });
             }
         }
 
