@@ -29,10 +29,8 @@ impl VSCodeManager {
         id: &str,
         display_name: &str,
         cli_name: &str,
-        #[cfg_attr(not(target_os = "macos"), allow(unused_variables))]
-        macos_app_name: &str,
-        #[cfg_attr(not(target_os = "windows"), allow(unused_variables))]
-        windows_exe_name: &str,
+        #[cfg_attr(not(target_os = "macos"), allow(unused_variables))] macos_app_name: &str,
+        #[cfg_attr(not(target_os = "windows"), allow(unused_variables))] windows_exe_name: &str,
     ) -> Self {
         Self {
             id: id.to_string(),
