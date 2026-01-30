@@ -2,6 +2,17 @@
 
 Sorcery Desktop handles external URLs (`srcuri://`) that can open files in local editors. This document describes the security measures in place.
 
+## Core Principle: No Code Execution
+
+Sorcery never executes code from workspaces. Unlike language servers or IDE plugins that may auto-load addons or extensions (e.g., the Ruby LSP addon vulnerability), Sorcery:
+
+- Does not interpret or execute any files from workspaces
+- Does not load configuration or plugins from workspace directories
+- Does not run scripts based on file patterns
+- Does not evaluate any data as code
+
+When opening workspaces with risky editor configurations (`.vscode/tasks.json` with auto-run tasks, `.exrc`/`.vimrc`), Sorcery displays a trust dialog before proceeding. The dialog warns about potential risks but Sorcery itself never executes these files.
+
 ## Threat Model
 
 **Primary threats:**
@@ -44,6 +55,16 @@ All file paths are validated before being passed to editors:
 
 Editors are launched via Rust's `Command` API with arguments passed directly, never through a shell. This prevents command injection even if a malicious character bypasses validation.
 
+### Symlink Resolution
+
+All paths are canonicalized (symlinks fully resolved) before validation:
+
+- Symlinks are resolved via `std::fs::canonicalize()` before bounds checking
+- The `starts_with(workspace_root)` check uses the canonical (resolved) path
+- Symlinks pointing outside the workspace are rejected after resolution
+
+This prevents attacks where a symlink like `/project/tmp -> /malicious/` is used to escape workspace boundaries. The resolved path `/malicious/file.rs` would fail the workspace containment check.
+
 ## URL Parsing (`protocol_handler/parser.rs`)
 
 ### Git Reference Validation
@@ -77,6 +98,18 @@ Reserved authorities (`wks`, `rel`, `abs`, `ext`) are case-insensitive and canno
 - Dialog data comes from validated backend state
 - User-provided data (workspace names, paths) originates from local settings file
 - No external data is rendered without backend validation
+
+## Security Testing
+
+The codebase includes security-focused tests:
+
+- **Parser tests** (`protocol_handler/parser.rs`): Validate rejection of shell metacharacters, path traversal, and malformed inputs
+- **Path validator tests** (`path_validator/mod.rs`): Test blocked patterns, symlink handling, and platform-specific cases
+
+Integration tests cover end-to-end attack vectors:
+- Malicious srcuri:// URLs through validation to editor launch
+- Symlink escape attempts
+- Path traversal in git references
 
 ## Reporting Vulnerabilities
 

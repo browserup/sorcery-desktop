@@ -303,6 +303,18 @@
         <div class="task-list" id="vim-list">Loading...</div>
       </div>
 
+      <div class="info-box" id="dangerous-files-section" style="display: none;">
+        <div class="info-label">Auto-executed files found</div>
+        <p class="section-description">This workspace contains files that editors or language servers may automatically load and execute.</p>
+        <div class="task-list" id="dangerous-files-list">Loading...</div>
+      </div>
+
+      <div class="info-box" id="dangerous-settings-section" style="display: none;">
+        <div class="info-label">Dangerous extension settings found</div>
+        <p class="section-description">This workspace contains VS Code settings that can execute shell commands or run arbitrary code.</p>
+        <div class="task-list" id="dangerous-settings-list">Loading...</div>
+      </div>
+
       <div class="links-section">
         <a href="https://www.jamf.com/blog/threat-actors-expand-abuse-of-visual-studio-code/" target="_blank" rel="noopener">Learn about the interview scam</a>
         <a href="https://code.visualstudio.com/docs/reference/tasks-appendix" target="_blank" rel="noopener" id="vscode-runon-link" style="display: none;">What does runOn: folderOpen mean?</a>
@@ -336,6 +348,8 @@
 
         const hasVscodeTasks = dialogData.task_labels && dialogData.task_labels.length > 0;
         const hasVimRcFiles = dialogData.vim_local_rc_files && dialogData.vim_local_rc_files.length > 0;
+        const hasDangerousFiles = dialogData.dangerous_files && dialogData.dangerous_files.length > 0;
+        const hasDangerousSettings = dialogData.dangerous_settings && dialogData.dangerous_settings.length > 0;
         const hasScanError = !!dialogData.scan_error;
 
         if (hasVscodeTasks || hasScanError) {
@@ -373,6 +387,26 @@
 
           document.getElementById('vim-trojan-link').style.display = 'block';
           document.getElementById('vim-exrc-link').style.display = 'block';
+        }
+
+        if (hasDangerousFiles) {
+          const filesSection = document.getElementById('dangerous-files-section');
+          filesSection.style.display = 'block';
+
+          const filesList = document.getElementById('dangerous-files-list');
+          filesList.innerHTML = dialogData.dangerous_files
+            .map(f => `<div class="task-item">${escapeHtml(f.path)} <span style="color: var(--text-secondary);">(${escapeHtml(f.reason)})</span></div>`)
+            .join('');
+        }
+
+        if (hasDangerousSettings) {
+          const settingsSection = document.getElementById('dangerous-settings-section');
+          settingsSection.style.display = 'block';
+
+          const settingsList = document.getElementById('dangerous-settings-list');
+          settingsList.innerHTML = dialogData.dangerous_settings
+            .map(s => `<div class="task-item">${escapeHtml(s.key)} <span style="color: var(--text-secondary);">(${escapeHtml(s.reason)})</span></div>`)
+            .join('');
         }
 
         document.getElementById('cancel-btn').focus();

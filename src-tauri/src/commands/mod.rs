@@ -1,6 +1,7 @@
 use crate::dialog_state::DialogState;
 pub use crate::dialog_state::{
-    CloneDialogData, LargeFileDialogData, RevisionDialogData, TrustDialogData, WorkspaceChooserData,
+    CloneDialogData, DangerousFileData, DangerousSettingData, LargeFileDialogData,
+    RevisionDialogData, TrustDialogData, WorkspaceChooserData,
 };
 use crate::dispatcher::EditorDispatcher;
 use crate::editors::EditorRegistry;
@@ -768,6 +769,8 @@ pub async fn test_protocol_url(
             workspace_name,
             task_labels,
             vim_local_rc_files,
+            dangerous_files,
+            dangerous_settings,
             scan_error,
             pending_file_path,
             line,
@@ -776,13 +779,15 @@ pub async fn test_protocol_url(
         }) => {
             let task_count = task_labels.len();
             let vim_rc_count = vim_local_rc_files.len();
+            let dangerous_files_count = dangerous_files.len();
+            let dangerous_settings_count = dangerous_settings.len();
             GIT_COMMAND_LOG.log_request(
                 &url,
                 true,
                 "trust_dialog",
                 &format!(
-                    "Workspace '{}' has {} auto-run tasks and {} vim rc files, requesting trust confirmation",
-                    workspace_name, task_count, vim_rc_count
+                    "Workspace '{}' has {} auto-run tasks, {} vim rc files, {} dangerous files, {} dangerous settings, requesting trust confirmation",
+                    workspace_name, task_count, vim_rc_count, dangerous_files_count, dangerous_settings_count
                 ),
                 duration,
             );
@@ -791,6 +796,20 @@ pub async fn test_protocol_url(
                 workspace_name,
                 task_labels,
                 vim_local_rc_files,
+                dangerous_files: dangerous_files
+                    .into_iter()
+                    .map(|f| DangerousFileData {
+                        path: f.path,
+                        reason: f.reason.to_string(),
+                    })
+                    .collect(),
+                dangerous_settings: dangerous_settings
+                    .into_iter()
+                    .map(|s| DangerousSettingData {
+                        key: s.key,
+                        reason: s.reason.to_string(),
+                    })
+                    .collect(),
                 scan_error,
                 pending_file_path,
                 line,

@@ -56,11 +56,25 @@ pub struct LargeFileDialogData {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DangerousFileData {
+    pub path: String,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DangerousSettingData {
+    pub key: String,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TrustDialogData {
     pub workspace_path: String,
     pub workspace_name: String,
     pub task_labels: Vec<String>,
     pub vim_local_rc_files: Vec<String>,
+    pub dangerous_files: Vec<DangerousFileData>,
+    pub dangerous_settings: Vec<DangerousSettingData>,
     pub scan_error: Option<String>,
     pub pending_file_path: String,
     pub line: Option<usize>,
