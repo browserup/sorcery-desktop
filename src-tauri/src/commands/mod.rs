@@ -10,7 +10,7 @@ use crate::protocol_handler::{GitHandler, WorkingTreeStatus};
 use crate::settings::{Settings, SettingsManager, WorkspaceSync};
 use crate::tracker::ActiveEditorTracker;
 #[cfg(target_os = "macos")]
-use crate::ui_utils::set_dark_titlebar;
+use crate::ui_utils::{activate_app, set_dark_titlebar};
 use crate::workspace_mru::ActiveWorkspaceTracker;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -594,6 +594,9 @@ pub async fn test_protocol_url(
                 column,
             });
 
+            #[cfg(target_os = "macos")]
+            activate_app();
+
             #[allow(unused_variables)]
             let window = tauri::WebviewWindowBuilder::new(
                 &app,
@@ -650,6 +653,9 @@ pub async fn test_protocol_url(
                 checkout_blocked_reason,
             });
 
+            #[cfg(target_os = "macos")]
+            activate_app();
+
             #[allow(unused_variables)]
             let window = tauri::WebviewWindowBuilder::new(
                 &app,
@@ -701,6 +707,9 @@ pub async fn test_protocol_url(
                 git_ref_kind: git_ref.clone(),
             });
 
+            #[cfg(target_os = "macos")]
+            activate_app();
+
             #[allow(unused_variables)]
             let window = tauri::WebviewWindowBuilder::new(
                 &app,
@@ -743,6 +752,9 @@ pub async fn test_protocol_url(
                 column,
                 editor_hint,
             });
+
+            #[cfg(target_os = "macos")]
+            activate_app();
 
             #[allow(unused_variables)]
             let window = tauri::WebviewWindowBuilder::new(
@@ -816,6 +828,9 @@ pub async fn test_protocol_url(
                 column,
                 editor_hint,
             });
+
+            #[cfg(target_os = "macos")]
+            activate_app();
 
             #[allow(unused_variables)]
             let window = tauri::WebviewWindowBuilder::new(

@@ -9,6 +9,9 @@ pub struct DialogConfig {
 }
 
 pub fn build_dialog(app_handle: &AppHandle, config: DialogConfig) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    activate_app();
+
     match tauri::WebviewWindowBuilder::new(
         app_handle,
         config.id,
@@ -33,6 +36,18 @@ pub fn build_dialog(app_handle: &AppHandle, config: DialogConfig) -> Result<(), 
             tracing::error!("{}", msg);
             Err(msg)
         }
+    }
+}
+
+#[cfg(target_os = "macos")]
+pub fn activate_app() {
+    use objc2::MainThreadMarker;
+    use objc2_app_kit::NSApplication;
+
+    if let Some(mtm) = MainThreadMarker::new() {
+        let ns_app = NSApplication::sharedApplication(mtm);
+        #[allow(deprecated)]
+        ns_app.activateIgnoringOtherApps(true);
     }
 }
 

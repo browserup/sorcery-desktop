@@ -52,7 +52,7 @@ fn hide_app() {
 
 use dialog_state::DialogState;
 #[cfg(target_os = "macos")]
-use ui_utils::set_dark_titlebar;
+use ui_utils::{activate_app, set_dark_titlebar};
 use ui_utils::{build_dialog, DialogConfig};
 
 async fn handle_protocol_result(
@@ -505,15 +505,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             if setup_needed {
                 tracing::info!("First run detected, showing setup wizard");
                 #[cfg(target_os = "macos")]
-                {
-                    use objc2::MainThreadMarker;
-                    use objc2_app_kit::NSApplication;
-                    if let Some(mtm) = MainThreadMarker::new() {
-                        let ns_app = NSApplication::sharedApplication(mtm);
-                        #[allow(deprecated)]
-                        ns_app.activateIgnoringOtherApps(true);
-                    }
-                }
+                activate_app();
 
                 match tauri::WebviewWindowBuilder::new(
                     app,
@@ -659,21 +651,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .on_menu_event(|app, event| {
                     match event.id().as_ref() {
                         "settings" => {
-                            // Activate the app to bring it to the foreground
                             #[cfg(target_os = "macos")]
-                            {
-                                use objc2::MainThreadMarker;
-                                use objc2_app_kit::NSApplication;
-                                if let Some(mtm) = MainThreadMarker::new() {
-                                    let ns_app = NSApplication::sharedApplication(mtm);
-                                    #[allow(deprecated)]
-                                    ns_app.activateIgnoringOtherApps(true);
-                                } else {
-                                    tracing::warn!(
-                                        "Skipping app activation: menu event not on main thread"
-                                    );
-                                }
-                            }
+                            activate_app();
 
                             if let Some(window) = app.get_webview_window("settings") {
                                 let _ = window.show();
@@ -760,19 +739,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             // Only activate the app if user explicitly launched it (not via URL)
             if !handled_url {
                 #[cfg(target_os = "macos")]
-                {
-                    use objc2::MainThreadMarker;
-                    use objc2_app_kit::NSApplication;
-                    if let Some(mtm) = MainThreadMarker::new() {
-                        let ns_app = NSApplication::sharedApplication(mtm);
-                        #[allow(deprecated)]
-                        ns_app.activateIgnoringOtherApps(true);
-                    } else {
-                        tracing::warn!(
-                            "Skipping app activation: single-instance callback not on main thread"
-                        );
-                    }
-                }
+                activate_app();
             }
         }
         }))
