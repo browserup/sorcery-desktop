@@ -517,6 +517,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .center()
                 .resizable(false)
                 .focused(true)
+                .accept_first_mouse(true)
                 .build()
                 {
                     #[allow(unused_variables)]
@@ -668,6 +669,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 .center()
                                 .resizable(true)
                                 .focused(true)
+                                .accept_first_mouse(true)
                                 .build()
                                 {
                                     #[allow(unused_variables)]

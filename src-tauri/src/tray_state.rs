@@ -4,7 +4,7 @@ use std::time::Duration;
 use tauri::image::Image;
 use tauri::tray::TrayIcon;
 
-const FLASH_DURATION_MS: u64 = 600;
+const FLASH_DURATION_MS: u64 = 900;
 
 struct TrayInner {
     tray_icon: Option<TrayIcon>,

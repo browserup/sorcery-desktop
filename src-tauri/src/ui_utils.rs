@@ -23,6 +23,7 @@ pub fn build_dialog(app_handle: &AppHandle, config: DialogConfig) -> Result<(), 
     .resizable(false)
     .always_on_top(true)
     .focused(true)
+    .accept_first_mouse(true)
     .build()
     {
         #[allow(unused_variables)]

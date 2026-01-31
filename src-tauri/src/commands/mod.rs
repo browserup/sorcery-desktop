@@ -609,6 +609,7 @@ pub async fn test_protocol_url(
             .resizable(false)
             .always_on_top(true)
             .focused(true)
+            .accept_first_mouse(true)
             .build()
             .map_err(|e| e.to_string())?;
 
@@ -668,6 +669,7 @@ pub async fn test_protocol_url(
             .resizable(false)
             .always_on_top(true)
             .focused(true)
+            .accept_first_mouse(true)
             .build()
             .map_err(|e| e.to_string())?;
 
@@ -722,6 +724,7 @@ pub async fn test_protocol_url(
             .resizable(false)
             .always_on_top(true)
             .focused(true)
+            .accept_first_mouse(true)
             .build()
             .map_err(|e| e.to_string())?;
 
@@ -768,6 +771,7 @@ pub async fn test_protocol_url(
             .resizable(false)
             .always_on_top(true)
             .focused(true)
+            .accept_first_mouse(true)
             .build()
             .map_err(|e| e.to_string())?;
 
@@ -844,6 +848,7 @@ pub async fn test_protocol_url(
             .resizable(false)
             .always_on_top(true)
             .focused(true)
+            .accept_first_mouse(true)
             .build()
             .map_err(|e| e.to_string())?;
 
@@ -899,18 +904,39 @@ pub fn get_clone_dialog_data(
 
 #[tauri::command]
 pub async fn clone_and_open(
+    app: tauri::AppHandle,
     dispatcher: State<'_, Arc<EditorDispatcher>>,
     settings_manager: State<'_, Arc<SettingsManager>>,
     dialog_state: State<'_, Arc<DialogState>>,
 ) -> Result<(), String> {
+    use tauri::Emitter;
+
     let data = dialog_state
         .take_clone_dialog()
         .ok_or_else(|| "No clone dialog data available".to_string())?;
 
     let target_path = PathBuf::from(&data.clone_path);
+    let remote_url = data.remote_url.clone();
+    let git_ref_kind = data.git_ref_kind.clone();
 
-    GitHandler::clone_repo(&data.remote_url, &target_path, data.git_ref_kind.as_ref())
-        .map_err(|e| e.to_string())?;
+    // Run clone in a blocking task since it does I/O
+    let app_handle = app.clone();
+    let clone_result = tokio::task::spawn_blocking(move || {
+        GitHandler::clone_repo_with_progress(
+            &remote_url,
+            &target_path,
+            git_ref_kind.as_ref(),
+            |output| {
+                let _ = app_handle.emit("clone-progress", output);
+            },
+        )
+    })
+    .await
+    .map_err(|e| format!("Clone task failed: {}", e))?;
+
+    clone_result.map_err(|e| e.to_string())?;
+
+    let target_path = PathBuf::from(&data.clone_path);
 
     // Add new workspace to settings
     let mut settings = settings_manager.get().await;
