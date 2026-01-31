@@ -210,6 +210,66 @@
       color: #f87171;
     }
 
+    .output-panel {
+      display: none;
+      margin-top: 0.5rem;
+    }
+
+    .output-panel.visible {
+      display: block;
+    }
+
+    .output-toggle {
+      display: flex;
+      align-items: center;
+      gap: 0.375rem;
+      background: none;
+      border: none;
+      color: var(--text-secondary);
+      font-size: 0.75rem;
+      cursor: pointer;
+      padding: 0.25rem 0;
+    }
+
+    .output-toggle:hover {
+      color: var(--text-primary);
+    }
+
+    .output-toggle svg {
+      width: 12px;
+      height: 12px;
+      transition: transform 0.2s;
+    }
+
+    .output-toggle.expanded svg {
+      transform: rotate(90deg);
+    }
+
+    .output-content {
+      display: none;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 0.5rem;
+      margin-top: 0.375rem;
+      max-height: 120px;
+      overflow-y: auto;
+    }
+
+    .output-content.visible {
+      display: block;
+    }
+
+    .output-content pre {
+      margin: 0;
+      font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+      font-size: 0.6875rem;
+      line-height: 1.4;
+      color: var(--text-secondary);
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
     .spinner {
       display: inline-block;
       width: 12px;
@@ -266,6 +326,18 @@
 
     <div id="status" class="status"></div>
 
+    <div id="output-panel" class="output-panel">
+      <button class="output-toggle" id="output-toggle" onclick="toggleOutput()">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+        </svg>
+        <span>Output</span>
+      </button>
+      <div class="output-content" id="output-content">
+        <pre id="output-text"></pre>
+      </div>
+    </div>
+
     <div class="button-group">
       <button class="button secondary" id="cancel-btn" onclick="cancel()">Cancel</button>
       <button class="button" id="clone-btn" onclick="clone()">Clone & Open</button>
@@ -275,10 +347,15 @@
   <script>
     const { invoke } = window.__TAURI__.core;
     const { getCurrentWindow } = window.__TAURI__.window;
+    const { listen } = window.__TAURI__.event;
 
     let currentClonePath = '';
     let workspaceName = '';
     let isCloning = false;
+    let outputExpanded = false;
+    let outputLines = [];
+    let unlisten = null;
+    const MAX_OUTPUT_LINES = 100;
 
     async function init() {
       try {
@@ -326,6 +403,37 @@
       }
     }
 
+    function appendOutput(text) {
+      // Split by newlines in case multiple lines come in
+      const lines = text.split('\n').filter(l => l.trim());
+      for (const line of lines) {
+        outputLines.push(line);
+        if (outputLines.length > MAX_OUTPUT_LINES) {
+          outputLines.shift();
+        }
+      }
+
+      const outputText = document.getElementById('output-text');
+      outputText.textContent = outputLines.join('\n');
+
+      // Auto-scroll to bottom
+      const outputContent = document.getElementById('output-content');
+      outputContent.scrollTop = outputContent.scrollHeight;
+    }
+
+    function toggleOutput() {
+      outputExpanded = !outputExpanded;
+      const toggle = document.getElementById('output-toggle');
+      const content = document.getElementById('output-content');
+
+      toggle.classList.toggle('expanded', outputExpanded);
+      content.classList.toggle('visible', outputExpanded);
+    }
+
+    function showOutputPanel() {
+      document.getElementById('output-panel').classList.add('visible');
+    }
+
     async function clone() {
       if (isCloning) return;
       isCloning = true;
@@ -333,6 +441,16 @@
       const status = document.getElementById('status');
       const cloneBtn = document.getElementById('clone-btn');
       const cancelBtn = document.getElementById('cancel-btn');
+
+      // Reset output
+      outputLines = [];
+      document.getElementById('output-text').textContent = '';
+
+      // Set up event listener for clone progress
+      unlisten = await listen('clone-progress', (event) => {
+        showOutputPanel();
+        appendOutput(event.payload);
+      });
 
       // Show loading state immediately
       status.className = 'status loading';
@@ -345,18 +463,26 @@
 
       try {
         await invoke('clone_and_open');
+        if (unlisten) unlisten();
         getCurrentWindow().close();
       } catch (e) {
         console.error('Failed to clone:', e);
+        if (unlisten) unlisten();
         status.className = 'status error';
         status.textContent = 'Clone failed: ' + e;
         cloneBtn.disabled = false;
         cancelBtn.disabled = false;
         isCloning = false;
+
+        // Auto-expand output on error to help debugging
+        if (!outputExpanded && outputLines.length > 0) {
+          toggleOutput();
+        }
       }
     }
 
     function cancel() {
+      if (unlisten) unlisten();
       invoke('clone_cancelled').catch(() => {});
       getCurrentWindow().close();
     }

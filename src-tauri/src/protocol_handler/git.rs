@@ -24,6 +24,35 @@ pub enum CloneError {
 }
 const MAX_FILE_SIZE_BYTES: u64 = 10 * 1024 * 1024; // 10MB
 
+fn strip_ansi_codes(s: &str) -> String {
+    let mut result = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+
+    while let Some(c) = chars.next() {
+        if c == '\x1b' {
+            // Skip escape sequence: ESC [ ... final_byte
+            if chars.peek() == Some(&'[') {
+                chars.next();
+                // Skip until we hit a letter (the final byte of the sequence)
+                while let Some(&next) = chars.peek() {
+                    chars.next();
+                    if next.is_ascii_alphabetic() {
+                        break;
+                    }
+                }
+            }
+        } else if c == '\r' {
+            // Git uses \r for progress updates; treat as newline for our display
+            if !result.ends_with('\n') && !result.is_empty() {
+                result.push('\n');
+            }
+        } else {
+            result.push(c);
+        }
+    }
+    result.trim().to_string()
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct WorkingTreeStatus {
     pub is_clean: bool,
@@ -363,12 +392,26 @@ impl GitHandler {
         path.join(".git").exists()
     }
 
+    #[allow(dead_code)] // Public API for callers that don't need progress updates
     pub fn clone_repo(
         remote_url: &str,
         target_path: &Path,
         git_ref: Option<&GitRef>,
     ) -> Result<(), CloneError> {
-        use std::process::Command;
+        Self::clone_repo_with_progress(remote_url, target_path, git_ref, |_| {})
+    }
+
+    pub fn clone_repo_with_progress<F>(
+        remote_url: &str,
+        target_path: &Path,
+        git_ref: Option<&GitRef>,
+        mut on_output: F,
+    ) -> Result<(), CloneError>
+    where
+        F: FnMut(&str),
+    {
+        use std::io::{BufRead, BufReader};
+        use std::process::{Command, Stdio};
 
         if target_path.exists() {
             return Err(CloneError::TargetExists(target_path.to_path_buf()));
@@ -393,6 +436,7 @@ impl GitHandler {
 
         let mut cmd = Command::new("git");
         cmd.arg("clone");
+        cmd.arg("--progress"); // Force progress output even when not a tty
 
         if let Some(GitRef::Commit(_)) = git_ref {
             cmd.arg("--no-checkout");
@@ -405,16 +449,35 @@ impl GitHandler {
         cmd.arg(&url);
         cmd.arg(target_path);
 
-        let output = cmd.output().map_err(CloneError::Execute)?;
+        // Capture stderr for progress (git writes progress to stderr)
+        cmd.stdout(Stdio::piped());
+        cmd.stderr(Stdio::piped());
 
-        if !output.status.success() {
+        let mut child = cmd.spawn().map_err(CloneError::Execute)?;
+
+        // Read stderr in a streaming fashion
+        // Git progress output uses \r for in-place updates, we normalize these
+        if let Some(stderr) = child.stderr.take() {
+            let reader = BufReader::new(stderr);
+            for line in reader.lines().map_while(Result::ok) {
+                let cleaned = strip_ansi_codes(&line);
+                if !cleaned.is_empty() {
+                    on_output(&cleaned);
+                }
+            }
+        }
+
+        let status = child.wait().map_err(CloneError::Execute)?;
+
+        if !status.success() {
             return Err(CloneError::CommandFailed(
-                String::from_utf8_lossy(&output.stderr).trim().to_string(),
+                "Clone process exited with error".to_string(),
             ));
         }
 
         if let Some(GitRef::Commit(commit)) = git_ref {
             tracing::info!("Checking out commit {} after clone", commit);
+            on_output(&format!("Checking out commit {}...", commit));
             let target_str = target_path.to_string_lossy();
             let checkout = run_git_command(&target_str, &["checkout", commit]).map_err(|e| {
                 CloneError::CheckoutFailed {
