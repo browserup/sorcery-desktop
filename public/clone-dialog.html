@@ -275,7 +275,6 @@
   <script>
     const { invoke } = window.__TAURI__.core;
     const { getCurrentWindow } = window.__TAURI__.window;
-    const { open } = window.__TAURI__.dialog;
 
     let currentClonePath = '';
     let workspaceName = '';
@@ -306,6 +305,7 @@
 
     async function changeLocation() {
       try {
+        const { open } = window.__TAURI__.dialog;
         const parentDir = currentClonePath.substring(0, currentClonePath.lastIndexOf('/'));
 
         const selected = await open({

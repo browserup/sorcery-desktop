@@ -578,7 +578,6 @@
   <script>
     const { invoke } = window.__TAURI__.core;
     const { getCurrentWindow } = window.__TAURI__.window;
-    const { open } = window.__TAURI__.dialog;
 
     let currentStep = 0;
     let setupData = null;
@@ -718,6 +717,7 @@
     async function browseFolder(event) {
       event.stopPropagation();
       try {
+        const { open } = window.__TAURI__.dialog;
         const selected = await open({
           directory: true,
           multiple: false,
