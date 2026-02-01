@@ -64,7 +64,11 @@ fn extract_at_line_suffix(input: &str) -> Option<(&str, Option<u32>)> {
 
     let lower = base.to_ascii_lowercase();
     if let Some(idx) = lower.rfind("%40") {
-        if marker.map_or(true, |(best, _)| idx > best) {
+        let should_replace = match marker {
+            None => true,
+            Some((best, _)) => idx > best,
+        };
+        if should_replace {
             marker = Some((idx, 3));
         }
     }

@@ -723,7 +723,11 @@ impl SrcuriParser {
 
         let lower = tail.to_ascii_lowercase();
         if let Some(idx) = lower.rfind("%40") {
-            if best_idx.map_or(true, |(best, _)| idx > best) {
+            let should_replace = match best_idx {
+                None => true,
+                Some((best, _)) => idx > best,
+            };
+            if should_replace {
                 best_idx = Some((idx, 3));
             }
         }

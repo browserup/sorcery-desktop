@@ -20,7 +20,7 @@ impl SrcuriTarget {
         }
 
         if let Some(line) = self.line {
-            url.push_str(&format!(":{}", line));
+            url.push_str(&format!("@L{}", line));
         }
 
         let mut query_parts = Vec::new();
