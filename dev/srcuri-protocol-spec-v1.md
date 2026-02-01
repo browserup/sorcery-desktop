@@ -600,7 +600,7 @@ srcuri://myproject/file.rs@l42       → Line 42
 srcuri://myproject/file.rs%40L42     → Line 42 (encoded @)
 srcuri://myproject/file.rs@L         → No line specified (open at top)
 srcuri://myproject/file.rs           → No line specified (open at top)
-srcuri://myproject/file.rs:abc       → Invalid, ignored (opens at top)
+srcuri://myproject/file.rs@Labc      → Invalid, ignored (opens at top)
 ```
 
 ### Column Numbers

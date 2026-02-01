@@ -349,7 +349,7 @@ workspaces:
 The srcuri protocol (also known as the "Sorcery protocol") uses this format:
 
 ```
-srcuri://<authority>/<path>:<line>:<column>?editor=<editor-id>
+srcuri://<authority>/<path>@L<line>[C<column>]?editor=<editor-id>
 ```
 
 - `authority`: Workspace name (default) or reserved token (`wks`, `rel`, `any`, `abs`, `ext`)

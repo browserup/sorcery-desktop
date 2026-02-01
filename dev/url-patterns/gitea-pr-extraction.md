@@ -183,7 +183,7 @@ const workspace = 'foo';         // From repo name
 const filePath = 'README.md';    // From DOM extraction
 const lineNumber = 3;            // From URL fragment
 
-const srcuriUrl = `srcuri://${workspace}/${filePath}:${lineNumber}`;
+const srcuriUrl = `srcuri://${workspace}/${filePath}@L${lineNumber}`;
 // => "srcuri://foo/README.md@L3"
 ```
 
@@ -234,7 +234,7 @@ function extractGiteaPRFileInfo(url) {
     side,
     workspace: repo, // Simplified - would need workspace mapping
     srcuriUrl: lineNum
-      ? `srcuri://${repo}/${filePath}:${lineNum}`
+      ? `srcuri://${repo}/${filePath}@L${lineNum}`
       : `srcuri://${repo}/${filePath}`
   };
 }

@@ -50,7 +50,7 @@ The conversion process typically follows:
    - Git remote matching
    - Repository name matching
    - User-configured mapping
-4. **Construct srcuri URL**: `srcuri://{workspace}/{path}:{line}[?commit={sha}]`
+4. **Construct srcuri URL**: `srcuri://{workspace}/{path}@L{line}[?commit={sha}]`
 
 ## Current Platforms
 
