@@ -136,27 +136,27 @@ echo ""
 
 # Test absolute path with line and column
 test_protocol_url "Absolute path (VSCode)" \
-    "srcuri://$TEST_FILE:5:10" \
+    "srcuri://$TEST_FILE@L5C10" \
     "code"
 
 # Test with VSCodium
 test_protocol_url "Absolute path (VSCodium)" \
-    "srcuri://$TEST_FILE:3:5" \
+    "srcuri://$TEST_FILE@L3C5" \
     "codium"
 
 # Test with Sublime Text
 test_protocol_url "Absolute path (Sublime)" \
-    "srcuri://$TEST_FILE:7:1" \
+    "srcuri://$TEST_FILE@L7C1" \
     "sublime_text"
 
 # Test with Vim (line only)
 test_protocol_url "Absolute path (Vim)" \
-    "srcuri://$TEST_FILE:4" \
+    "srcuri://$TEST_FILE@L4" \
     "vim"
 
 # Test with IntelliJ IDEA
 test_protocol_url "Absolute path (IntelliJ)" \
-    "srcuri://$TEST_FILE:8:15" \
+    "srcuri://$TEST_FILE@L8C15" \
     "idea"
 
 echo ""

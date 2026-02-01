@@ -234,7 +234,7 @@ examples:
       commit: "78c0ae44e9e7f5d60ec6716962f3b0af532203bb"
       file_from_dom: "more/free-programming-playgrounds.md"
       line_from_dom: 125
-    srcuri_url: "srcuri://free-programming-books/more/free-programming-playgrounds.md:125?rev=78c0ae44"
+    srcuri_url: "srcuri://free-programming-books/more/free-programming-playgrounds.md@L125?rev=78c0ae44"
     notes: "File path and line number extracted from DOM"
 
   - sourcegraph_url: "https://sourcegraph.com/github.com/torvalds/linux@master/-/blob/kernel/sched/core.c#L100-L120"
@@ -246,7 +246,7 @@ examples:
       path: "kernel/sched/core.c"
       line_start: 100
       line_end: 120
-    srcuri_url: "srcuri://linux/kernel/sched/core.c:100"
+    srcuri_url: "srcuri://linux/kernel/sched/core.c@L100"
     notes: "Direct file blob view with line range"
 
   - sourcegraph_url: "https://sourcegraph.com/github.com/golang/go@v1.21.0/-/blob/src/net/http/server.go#L50"
@@ -257,7 +257,7 @@ examples:
       revision: "v1.21.0"
       path: "src/net/http/server.go"
       line: 50
-    srcuri_url: "srcuri://go/src/net/http/server.go:50?rev=v1.21.0"
+    srcuri_url: "srcuri://go/src/net/http/server.go@L50?rev=v1.21.0"
     notes: "Tagged version"
 
 # Implementation notes for Chrome extension
@@ -407,7 +407,7 @@ extraction_examples:
     example_click: "User clicks gutterElement with text '3'"
     line_number: 3
     page_url: "https://sourcegraph.com/github.com/EbookFoundation/free-programming-books@78c0ae44/-/blob/LICENSE"
-    srcuri_url: "srcuri://free-programming-books/LICENSE:3?rev=78c0ae44"
+    srcuri_url: "srcuri://free-programming-books/LICENSE@L3?rev=78c0ae44"
     notes: |
       - Line numbers are simple text content in gutterElement divs
       - No special data attributes, just sequential rendering
@@ -444,4 +444,4 @@ extraction_examples:
       line: 125
       kind: "added"
       commit: "78c0ae44"
-    srcuri_url: "srcuri://free-programming-books/more/free-programming-playgrounds.md:125?rev=78c0ae44"
+    srcuri_url: "srcuri://free-programming-books/more/free-programming-playgrounds.md@L125?rev=78c0ae44"

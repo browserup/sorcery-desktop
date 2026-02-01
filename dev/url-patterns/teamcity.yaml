@@ -176,7 +176,7 @@ examples:
 
   - teamcity_url: "https://teamcity.jetbrains.com/buildConfiguration/bt134/5416383"
     build_log_error: "src/main/Foo.java:42: error: cannot find symbol"
-    srcuri_url: "srcuri://myproject/src/main/Foo.java:42"
+    srcuri_url: "srcuri://myproject/src/main/Foo.java@L42"
     notes: "Parse build log to extract file paths and line numbers"
 
 # Implementation notes for Chrome extension
@@ -261,4 +261,4 @@ extraction_examples:
     extracted_file: "/path/to/src/main/java/com/example/Foo.java"
     extracted_line: 42
     relative_path: "src/main/java/com/example/Foo.java"
-    srcuri_url: "srcuri://myproject/src/main/java/com/example/Foo.java:42"
+    srcuri_url: "srcuri://myproject/src/main/java/com/example/Foo.java@L42"

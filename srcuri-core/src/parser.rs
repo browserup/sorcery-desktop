@@ -3,10 +3,10 @@ use url::Url;
 
 /// Parse a remote URL in various formats:
 /// - Full URL: `https://github.com/owner/repo/blob/main/file.rs#L42`
-/// - Path-style: `github.com/owner/repo/blob/main/file.rs:42`
+/// - Path-style: `github.com/owner/repo/blob/main/file.rs@L42` (legacy `:42` accepted)
 /// - With https:// in path: `https://github.com/owner/repo/...`
 pub fn parse_remote_url(remote_url: &str) -> Result<SrcuriTarget, ParseError> {
-    // Extract line number from :N suffix if present (for path-style URLs)
+    // Extract line number from @L or :N suffix if present (for path-style URLs)
     let (url_part, path_line) = extract_path_line_suffix(remote_url);
 
     // Normalize to full URL
@@ -37,6 +37,9 @@ pub fn parse_remote_url(remote_url: &str) -> Result<SrcuriTarget, ParseError> {
 /// Extract :N line suffix from end of path-style URL
 /// Returns (url_without_suffix, optional_line)
 pub fn extract_path_line_suffix(input: &str) -> (&str, Option<u32>) {
+    if let Some((trimmed, line)) = extract_at_line_suffix(input) {
+        return (trimmed, line);
+    }
     // Look for :N at the end (but not :// which is protocol)
     if let Some(colon_pos) = input.rfind(':') {
         // Make sure it's not the :// in https://
@@ -50,6 +53,76 @@ pub fn extract_path_line_suffix(input: &str) -> (&str, Option<u32>) {
         }
     }
     (input, None)
+}
+
+fn extract_at_line_suffix(input: &str) -> Option<(&str, Option<u32>)> {
+    let search_end = input.find('#').unwrap_or(input.len());
+    let base = &input[..search_end];
+    let last_slash = base.rfind('/').unwrap_or(0);
+
+    let mut marker: Option<(usize, usize)> = base.rfind('@').map(|idx| (idx, 1));
+
+    let lower = base.to_ascii_lowercase();
+    if let Some(idx) = lower.rfind("%40") {
+        if marker.map_or(true, |(best, _)| idx > best) {
+            marker = Some((idx, 3));
+        }
+    }
+
+    let (idx, len) = marker?;
+    if idx < last_slash {
+        return None;
+    }
+
+    let suffix = &base[idx + len..];
+    let mut chars = suffix.chars();
+    let first = chars.next()?;
+    if first != 'L' && first != 'l' {
+        return None;
+    }
+
+    let rest = chars.as_str();
+    if rest.is_empty() {
+        return Some((&input[..idx], None));
+    }
+
+    let mut digit_end = 0usize;
+    for (pos, ch) in rest.char_indices() {
+        if ch.is_ascii_digit() {
+            digit_end = pos + ch.len_utf8();
+        } else {
+            break;
+        }
+    }
+
+    if digit_end > 0 {
+        let line_str = &rest[..digit_end];
+        let remainder = &rest[digit_end..];
+        let line = line_str.parse::<u32>().ok();
+        if remainder.is_empty() {
+            return Some((&input[..idx], line));
+        }
+        let mut rem_chars = remainder.chars();
+        let marker_ch = rem_chars.next().unwrap_or_default();
+        if marker_ch == 'C' || marker_ch == 'c' || marker_ch == ':' {
+            let col_tail = rem_chars.as_str();
+            if col_tail.is_empty() || col_tail.chars().all(|c| c.is_ascii_digit()) {
+                return Some((&input[..idx], line));
+            }
+        }
+        return None;
+    }
+
+    let mut rem_chars = rest.chars();
+    let marker_ch = rem_chars.next().unwrap_or_default();
+    if marker_ch == 'C' || marker_ch == 'c' {
+        let col_tail = rem_chars.as_str();
+        if col_tail.is_empty() || col_tail.chars().all(|c| c.is_ascii_digit()) {
+            return Some((&input[..idx], None));
+        }
+    }
+
+    None
 }
 
 /// Normalize various URL formats to a full https:// URL
@@ -974,6 +1047,21 @@ mod tests {
     #[test]
     fn path_style_with_colon_line() {
         let result = parse_remote_url("github.com/owner/repo/blob/main/file.rs:42").unwrap();
+        assert_eq!(result.line, Some(42));
+        assert_eq!(result.file_path, Some("file.rs".to_string()));
+    }
+
+    #[test]
+    fn path_style_with_at_line() {
+        let result = parse_remote_url("github.com/owner/repo/blob/main/file.rs@L42").unwrap();
+        assert_eq!(result.line, Some(42));
+        assert_eq!(result.file_path, Some("file.rs".to_string()));
+    }
+
+    #[test]
+    fn path_style_with_encoded_at_line() {
+        let result =
+            parse_remote_url("github.com/owner/repo/blob/main/file.rs%40L42").unwrap();
         assert_eq!(result.line, Some(42));
         assert_eq!(result.file_path, Some("file.rs".to_string()));
     }

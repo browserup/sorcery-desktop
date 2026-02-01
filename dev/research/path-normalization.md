@@ -66,7 +66,7 @@ We will add a setting in our syntax for:
 
 workspaceHint=
 
-srcuri://README.md:50?workspaceHint=browserup
+srcuri://README.md@L50?workspaceHint=browserup
 
 This is for when the workspace may or may not be a repo name. It isn't part of the path, as that would imply we
 know it is a workspace. Instead, it is given as a hint--so it if matches a workspace name, we will try pre-pending

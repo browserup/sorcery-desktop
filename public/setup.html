@@ -565,7 +565,7 @@
           <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
           </svg>
-          <span id="test-link-text">srcuri://sorcery-desktop/README.md:1</span>
+          <span id="test-link-text">srcuri://sorcery-desktop/README.md@L1</span>
         </a>
       </div>
       <div class="button-group">
@@ -832,7 +832,7 @@
       e.preventDefault();
       try {
         await invoke('test_protocol_url', {
-          url: 'srcuri://sorcery-desktop/README.md:1'
+          url: 'srcuri://sorcery-desktop/README.md@L1'
         });
       } catch (e) {
         console.error('Failed to test link:', e);

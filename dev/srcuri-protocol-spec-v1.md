@@ -25,7 +25,7 @@ This workflow is slow, error-prone, and breaks the developer's flow.
 The `srcuri://` (Sorcery) protocol is an editor-agnostic deep linking mechanism that enables code references to open directly in the developer's local editor:
 
 ```
-srcuri://myrepo/src/main.rs:42
+srcuri://myrepo/src/main.rs@L42
 ```
 
 When clicked, this link:
@@ -81,8 +81,11 @@ The `srcuri://` protocol is designed with several key principles:
 The srcuri protocol uses standard URI format:
 
 ```
-srcuri://<authority>/<path>[:<line>[:<col>]][?<query>][#<fragment>]
+srcuri://<authority>/<path>[<line-suffix>][?<query>][#<fragment>]
 ```
+
+**Line suffix** (preferred): `@L<line>[C<column>]`  
+**Legacy line suffix**: `:line[:column]` (accepted for compatibility)
 
 The **authority** field determines the link mode:
 - If authority is a **reserved token** (`wks`, `rel`, `any`, `abs`, `ext`) → explicit mode
@@ -106,12 +109,12 @@ The protocol supports five distinct link modes, determined by the authority comp
 
 | Mode | Authority | Format                                         | Example |
 |------|-----------|------------------------------------------------|---------|
-| **Workspace (implicit)** | `<workspace>` | `srcuri://<workspace>/<path>:<line>`           | `srcuri://myrepo/src/main.rs:42` |
-| **Workspace (explicit)** | `wks` | `srcuri://wks/<workspace>/<path>:<line>` | `srcuri://wks/myrepo/src/main.rs:42` |
-| **Relative (search)** | `rel` | `srcuri://rel/<path>:<line>`                   | `srcuri://rel/main.rs:42` |
-| **Any (best-effort)** | `any` | `srcuri://any/<path>:<line>`                   | `srcuri://any/src/main.rs:42` |
-| **Absolute** | `abs` | `srcuri://abs/<path>:<line>`                   | `srcuri://abs/etc/hosts:1` |
-| **External** | `ext` | `srcuri://ext/<scheme>/<host>/<path>`          | `srcuri://ext/https/github.com/user/repo/...` |
+| **Workspace (implicit)** | `<workspace>` | `srcuri://<workspace>/<path>@L<line>`           | `srcuri://myrepo/src/main.rs@L42` |
+| **Workspace (explicit)** | `wks` | `srcuri://wks/<workspace>/<path>@L<line>` | `srcuri://wks/myrepo/src/main.rs@L42` |
+| **Relative (search)** | `rel` | `srcuri://rel/<path>@L<line>`                   | `srcuri://rel/main.rs@L42` |
+| **Any (best-effort)** | `any` | `srcuri://any/<path>@L<line>`                   | `srcuri://any/src/main.rs@L42` |
+| **Absolute** | `abs` | `srcuri://abs/<path>@L<line>`                   | `srcuri://abs/etc/hosts@L1` |
+| **External** | `ext` | `srcuri://ext/<scheme>/<host>/<path>`           | `srcuri://ext/https/github.com/user/repo/...` |
 
 ### Reserved Authority Tokens
 
@@ -145,7 +148,7 @@ Parse srcuri:// link:
    (authority is treated as workspace name)
 
 5. If query contains git parameters → Add revision behavior
-   Example: srcuri://myrepo/file.rs:10?commit=abc123
+   Example: srcuri://myrepo/file.rs@L10?commit=abc123
 ```
 
 **Visual Decision Tree:**
@@ -185,7 +188,7 @@ srcuri://...
 
 **Syntax:**
 ```
-srcuri://<workspace>/<path>:<line>:<column>
+srcuri://<workspace>/<path>@L<line>[C<column>]
 ```
 
 **Description:** References a file relative to a named workspace. The authority IS the workspace name. This is the **recommended canonical format** for team collaboration.
@@ -223,22 +226,22 @@ This strict behavior ensures predictable, intentional navigation. Use Relative M
 **Examples:**
 
 ```
-srcuri://myproject/README.md:1
+srcuri://myproject/README.md@L1
 Opens README.md at line 1 in the 'myproject' workspace
 
-srcuri://backend-api/src/handlers/auth.rs:42:10
+srcuri://backend-api/src/handlers/auth.rs@L42C10
 Opens auth.rs in 'backend-api' workspace at line 42, column 10
 
-srcuri://infra/terraform/aws/main.tf:150
+srcuri://infra/terraform/aws/main.tf@L150
 Opens main.tf at line 150 in 'infra' workspace
 
-srcuri://docs/content/guides/getting-started.md:25
+srcuri://docs/content/guides/getting-started.md@L25
 Opens getting-started.md at line 25 in 'docs' workspace
 ```
 
 **srcuri.com Equivalent:**
 ```
-srcuri://myrepo/src/main.rs:42  →  https://srcuri.com/myrepo/src/main.rs:42
+srcuri://myrepo/src/main.rs@L42  →  https://srcuri.com/myrepo/src/main.rs@L42
 ```
 
 **Workspace Naming Conventions:**
@@ -260,7 +263,7 @@ srcuri://myrepo/src/main.rs:42  →  https://srcuri.com/myrepo/src/main.rs:42
 
 **Syntax:**
 ```
-srcuri://wks/<workspace>/<path>:<line>:<column>
+srcuri://wks/<workspace>/<path>@L<line>[C<column>]
 ```
 
 **Description:** Same as implicit workspace mode, but with the explicit `wks` authority. Useful when clarity is preferred over brevity.
@@ -268,10 +271,10 @@ srcuri://wks/<workspace>/<path>:<line>:<column>
 **Examples:**
 
 ```
-srcuri://wks/myrepo/src/main.rs:42
+srcuri://wks/myrepo/src/main.rs@L42
 Opens main.rs at line 42 in workspace 'myrepo'
 
-srcuri://wks/backend/api/routes.py:100:5
+srcuri://wks/backend/api/routes.py@L100C5
 Opens routes.py at line 100, column 5 in workspace 'backend'
 ```
 
@@ -286,7 +289,7 @@ Opens routes.py at line 100, column 5 in workspace 'backend'
 
 **Syntax:**
 ```
-srcuri://rel/<path>:<line>:<column>[?workspaceHint=<name>]
+srcuri://rel/<path>@L<line>[C<column>][?workspaceHint=<name>]
 ```
 
 **Description:** References a file by name or partial path, without specifying a workspace. The protocol handler searches all configured workspaces for matching files.
@@ -317,7 +320,7 @@ Configuration:
   myproject → /home/alice/code/myproject
 
 Input:
-  srcuri://rel/D:/Code/myproject/src/main.rs:42
+  srcuri://rel/D:/Code/myproject/src/main.rs@L42
 
 Detection:
   - Path segments: ["D:", "Code", "myproject", "src", "main.rs"]
@@ -325,7 +328,7 @@ Detection:
   - Relative path: "src/main.rs" (segments after match)
 
 Resolution:
-  → /home/alice/code/myproject/src/main.rs:42
+  → /home/alice/code/myproject/src/main.rs (line 42)
 ```
 
 This matching is:
@@ -343,40 +346,40 @@ This matching is:
 **Examples:**
 
 ```
-srcuri://rel/README.md:1
+srcuri://rel/README.md@L1
 Searches for README.md in all workspaces, opens at line 1
 
-srcuri://rel/main.rs:50:5
+srcuri://rel/main.rs@L50C5
 Finds main.rs (if unique), opens at line 50, column 5
 
-srcuri://rel/src/utils.py:10
+srcuri://rel/src/utils.py@L10
 Searches for src/utils.py path in all workspaces
 
-srcuri://rel/AuthController.java:200?workspaceHint=backend
+srcuri://rel/AuthController.java@L200?workspaceHint=backend
 Searches for AuthController.java, preferring the 'backend' workspace
 ```
 
 **srcuri.com Equivalent:**
 ```
-srcuri://rel/README.md:1  →  https://srcuri.com/rel/README.md:1
+srcuri://rel/README.md@L1  →  https://srcuri.com/rel/README.md@L1
 ```
 
 **Matching Behavior:**
 
 ```
 Single Match:
-srcuri://rel/package.json:1
+srcuri://rel/package.json@L1
 → Opens ~/code/myapp/package.json immediately
 
 Multiple Matches:
-srcuri://rel/main.rs:10
+srcuri://rel/main.rs@L10
 → Shows chooser with:
   - ~/code/backend/src/main.rs
   - ~/code/frontend/src/main.rs
   - ~/code/tools/cli/src/main.rs
 
 No Matches:
-srcuri://rel/nonexistent.txt:1
+srcuri://rel/nonexistent.txt@L1
 → Shows error: "File not found in any configured workspace"
 ```
 
@@ -395,7 +398,7 @@ srcuri://rel/nonexistent.txt:1
 
 **Syntax:**
 ```
-srcuri://any/<path>:<line>:<column>[?workspaceHint=<name>]
+srcuri://any/<path>@L<line>[C<column>][?workspaceHint=<name>]
 ```
 
 **Description:** Best-effort resolution for sources that do not know whether a path is workspace-relative, search-relative, or absolute. Intended for terminals and log output. Do not emit this format when a more specific mode is known.
@@ -416,7 +419,7 @@ srcuri://any/<path>:<line>:<column>[?workspaceHint=<name>]
 
 **Syntax:**
 ```
-srcuri://abs/<path-without-leading-slash>:<line>:<column>
+srcuri://abs/<path-without-leading-slash>@L<line>[C<column>]
 ```
 
 **Description:** Uses a full filesystem path to reference a file. The `abs` authority indicates an absolute path. For POSIX paths, a leading `/` is **implied**.
@@ -434,38 +437,38 @@ srcuri://abs/<path-without-leading-slash>:<line>:<column>
 **Examples:**
 
 ```
-srcuri://abs/etc/hosts:1
+srcuri://abs/etc/hosts@L1
 Opens /etc/hosts at line 1
 
-srcuri://abs/Users/alice/projects/myapp/src/main.rs:100:5
+srcuri://abs/Users/alice/projects/myapp/src/main.rs@L100C5
 Opens /Users/alice/projects/myapp/src/main.rs at line 100, column 5 (macOS)
 
-srcuri://abs/home/bob/code/server/app.py:42
+srcuri://abs/home/bob/code/server/app.py@L42
 Opens /home/bob/code/server/app.py at line 42 (Linux)
 
-srcuri://abs/C:/Users/Carol/Dev/project/README.md:10
+srcuri://abs/C:/Users/Carol/Dev/project/README.md@L10
 Opens C:/Users/Carol/Dev/project/README.md at line 10 (Windows)
 
-srcuri://abs/UNC/fileserver/share/docs/readme.txt:5
+srcuri://abs/UNC/fileserver/share/docs/readme.txt@L5
 Opens //fileserver/share/docs/readme.txt at line 5 (Windows UNC)
 ```
 
 **srcuri.com Equivalent:**
 ```
-srcuri://abs/etc/hosts:1  →  https://srcuri.com/abs/etc/hosts:1
+srcuri://abs/etc/hosts@L1  →  https://srcuri.com/abs/etc/hosts@L1
 ```
 
 **Windows Path Handling:**
 
 Windows drive paths are represented directly after `abs/`:
 ```
-srcuri://abs/C:/Windows/System32/drivers/etc/hosts:21
-srcuri://abs/D:/repo/project/src/main.rs:10
+srcuri://abs/C:/Windows/System32/drivers/etc/hosts@L21
+srcuri://abs/D:/repo/project/src/main.rs@L10
 ```
 
 UNC paths use an explicit `UNC/` marker:
 ```
-srcuri://abs/UNC/server/share/path/to/file.txt:5
+srcuri://abs/UNC/server/share/path/to/file.txt@L5
 ```
 
 **Limitations:**
@@ -531,7 +534,7 @@ See the [External URL Specification](srcuri-provider-passthrough-v1.md) for comp
 
 **Syntax:**
 ```
-srcuri://<workspace>/<path>:<line>?<git-param>=<value>
+srcuri://<workspace>/<path>@L<line>?<git-param>=<value>
 ```
 
 **Description:** References a file at a specific git revision (commit, branch, or tag). Applies to workspace mode links. Provides git-aware features like temporary file viewing or branch checkout.
@@ -551,16 +554,16 @@ srcuri://<workspace>/<path>:<line>?<git-param>=<value>
 **Examples:**
 
 ```
-srcuri://myrepo/src/file.rs:23?commit=abc123def456
+srcuri://myrepo/src/file.rs@L23?commit=abc123def456
 Opens file.rs at line 23 from commit abc123def456
 
-srcuri://backend/api/routes.py:100?branch=feature-auth
+srcuri://backend/api/routes.py@L100?branch=feature-auth
 References routes.py on the feature-auth branch
 
-srcuri://docs/README.md:1?tag=v1.0.0
+srcuri://docs/README.md@L1?tag=v1.0.0
 Opens README.md from the v1.0.0 tagged release
 
-srcuri://infra/config.yml:50?sha=7f8a9b2c
+srcuri://infra/config.yml@L50?sha=7f8a9b2c
 References config.yml at commit 7f8a9b2c
 ```
 
@@ -576,34 +579,46 @@ When a revision path is opened, the protocol handler:
 
 ### Line Numbers
 
-- **Format**: Integer following the path, separated by `:`
+- **Formats**:
+  - `@Lline` (preferred for URL stability)
+  - `@L` (empty line marker; treated as no line)
+  - `:line` (legacy)
+- **Case**: `@L` is case-insensitive on input; emit uppercase `@L` in new links
 - **Indexing**: 1-indexed (first line is line 1)
 - **Range**: No upper limit (limited only by file size)
 - **Optional**: Yes (omit to open file without jumping to a line)
 - **Invalid Values**: Non-numeric values are ignored
+- **Empty line marker**: `@L` (and `@l`) is accepted and means "no line specified". This enables formulaic link construction without conditional logic (e.g., terminal linkifiers).
+- **Encoding**: `%40L` is accepted when `@` is URL-encoded.
 
 **Examples:**
 ```
-srcuri://myproject/file.rs:1       → Line 1
-srcuri://myproject/file.rs:42      → Line 42
-srcuri://myproject/file.rs:10000   → Line 10000
-srcuri://myproject/file.rs         → No line specified (open at top)
-srcuri://myproject/file.rs:abc     → Invalid, ignored (opens at top)
+srcuri://myproject/file.rs@L1        → Line 1
+srcuri://myproject/file.rs@L42       → Line 42
+srcuri://myproject/file.rs@L10000    → Line 10000
+srcuri://myproject/file.rs@l42       → Line 42
+srcuri://myproject/file.rs%40L42     → Line 42 (encoded @)
+srcuri://myproject/file.rs@L         → No line specified (open at top)
+srcuri://myproject/file.rs           → No line specified (open at top)
+srcuri://myproject/file.rs:abc       → Invalid, ignored (opens at top)
 ```
 
 ### Column Numbers
 
-- **Format**: Integer following line number, separated by `:`
+- **Formats**:
+  - `C<column>` following `@L<line>` (preferred)
+  - `:<column>` following `@L<line>` or legacy `:line`
+- **Case**: `C` is case-insensitive on input; emit uppercase `C` in new links
 - **Indexing**: 1-indexed (first column is column 1)
-- **Range**: 0-120 (values above 120 invalidate the entire line:column suffix)
+- **Range**: 0-120 (values above 120 ignore the column)
 - **Optional**: Yes (requires line number if specified)
 
 **Examples:**
 ```
-srcuri://myproject/file.rs:42:10   → Line 42, column 10
-srcuri://myproject/file.rs:42:1    → Line 42, column 1
-srcuri://myproject/file.rs:42:120  → Line 42, column 120 (max valid)
-srcuri://myproject/file.rs:42:121  → Invalid, entire suffix rejected
+srcuri://myproject/file.rs@L42C10   → Line 42, column 10
+srcuri://myproject/file.rs@L42@L10   → Line 42, column 10
+srcuri://myproject/file.rs@L42C120  → Line 42, column 120 (max valid)
+srcuri://myproject/file.rs@L42C121  → Line 42, column ignored
 ```
 
 ### Line/Column Parsing Rules
@@ -611,9 +626,13 @@ srcuri://myproject/file.rs:42:121  → Invalid, entire suffix rejected
 Line and column numbers are extracted from the **final path segment** using right-to-left parsing:
 
 1. Let `tail` be the final path segment (after the last `/`) excluding any query/fragment
-2. If `tail` ends with `:<digits>` then parse `line = digits`
-3. If it ends with `:<digits>:<digits>` then parse `line`, `col`
-4. Remove the `:line[:col]` suffix from the path
+2. If `tail` ends with `@L<digits>` (or `%40L<digits>`) then parse `line = digits`
+3. If `tail` ends with `@L<digits>C<digits>` (or `%40L<digits>C<digits>`) then parse `line`, `col`
+4. If `tail` ends with `@L<digits>:<digits>` (or `%40L<digits>:<digits>`) then parse `line`, `col`
+5. If `tail` ends with `@L`, `@LC`, `%40L`, or `%40LC` then treat as "no line specified" and remove the suffix
+6. Otherwise, if `tail` ends with `:<digits>` then parse `line = digits`
+7. If it ends with `:<digits>:<digits>` then parse `line`, `col`
+8. Remove the parsed suffix from the path
 
 **Windows Note:** Drive letters like `C:` appear in earlier segments (e.g., `abs/C:/Windows/...`). The line/col parser applies only to the final segment, so `C:` does not conflict.
 
@@ -626,6 +645,22 @@ Result: path="file.rs", line=42, column=10
 Input: "file.rs:42"
 Split: ["file.rs", "42"]
 Result: path="file.rs", line=42, column=None
+
+Input: "file.rs@L42"
+Split: ["file.rs", "L42"]
+Result: path="file.rs", line=42, column=None
+
+Input: "file.rs@L42C10"
+Split: ["file.rs", "L42C10"]
+Result: path="file.rs", line=42, column=10
+
+Input: "file.rs@L42:10"
+Split: ["file.rs", "L42:10"]
+Result: path="file.rs", line=42, column=10
+
+Input: "file.rs@L"
+Split: ["file.rs", "L"]
+Result: path="file.rs", line=None, column=None
 
 Input: "file:with:colons.txt:10:5"
 Split: ["file:with:colons.txt", "10", "5"]
@@ -654,7 +689,7 @@ Opens the myapp folder
 
 Line and column numbers are **silently ignored** when opening folders:
 ```
-srcuri://myproject/src:42:10
+srcuri://myproject/src@L42C10
 → Opens /path/to/myproject/src folder (line 42, column 10 ignored)
 ```
 
@@ -680,8 +715,8 @@ This ensures:
 Windows absolute paths include a drive letter followed by a colon. In `abs` mode:
 
 ```
-srcuri://abs/C:/Users/Carol/Dev/project/README.md:10
-srcuri://abs/D:/repos/myapp/src/main.rs:42
+srcuri://abs/C:/Users/Carol/Dev/project/README.md@L10
+srcuri://abs/D:/repos/myapp/src/main.rs@L42
 ```
 
 The drive letter colon is distinguished from line/column colons by:
@@ -693,7 +728,7 @@ The drive letter colon is distinguished from line/column colons by:
 Windows UNC paths (network shares) use the `UNC/` marker:
 
 ```
-srcuri://abs/UNC/server/share/path/to/file.txt:5
+srcuri://abs/UNC/server/share/path/to/file.txt@L5
 → //server/share/path/to/file.txt
 ```
 
@@ -702,7 +737,7 @@ srcuri://abs/UNC/server/share/path/to/file.txt:5
 Workspace paths are inherently cross-platform since they don't include filesystem-specific roots:
 
 ```
-srcuri://myproject/src/main.rs:42
+srcuri://myproject/src/main.rs@L42
 ```
 
 This works identically on Windows, macOS, and Linux—each user's workspace configuration maps `myproject` to their local path.
@@ -720,8 +755,8 @@ Query parameters extend the base URL format to provide additional functionality.
 References a specific git commit by its SHA hash.
 
 ```
-srcuri://myrepo/src/main.rs:42?commit=abc123def456
-srcuri://myrepo/README.md:1?sha=7f8a9b2c1e5d4f3a
+srcuri://myrepo/src/main.rs@L42?commit=abc123def456
+srcuri://myrepo/README.md@L1?sha=7f8a9b2c1e5d4f3a
 ```
 
 **Notes:**
@@ -735,8 +770,8 @@ srcuri://myrepo/README.md:1?sha=7f8a9b2c1e5d4f3a
 References the current state of a git branch.
 
 ```
-srcuri://myrepo/src/auth.rs:100?branch=main
-srcuri://myrepo/config.yml:10?branch=feature-oauth
+srcuri://myrepo/src/auth.rs@L100?branch=main
+srcuri://myrepo/config.yml@L10?branch=feature-oauth
 ```
 
 **URL Encoding for Special Characters:**
@@ -754,8 +789,8 @@ Branch names containing URL-special characters are automatically encoded/decoded
 References a git tag (typically a release version).
 
 ```
-srcuri://myrepo/CHANGELOG.md:1?tag=v1.0.0
-srcuri://myrepo/src/api.rs:50?tag=release-2.3.1
+srcuri://myrepo/CHANGELOG.md@L1?tag=v1.0.0
+srcuri://myrepo/src/api.rs@L50?tag=release-2.3.1
 ```
 
 ### Remote Parameter (Clone-on-Demand)
@@ -765,9 +800,9 @@ srcuri://myrepo/src/api.rs:50?tag=release-2.3.1
 Enables sharing links to repositories the recipient may not have cloned locally.
 
 ```
-srcuri://myrepo/README.md:1?remote=github.com/user/myrepo
-srcuri://lib/src/utils.rs:42?remote=gitlab.com/org/lib
-srcuri://api/routes.py:100?branch=main&remote=github.com/team/api
+srcuri://myrepo/README.md@L1?remote=github.com/user/myrepo
+srcuri://lib/src/utils.rs@L42?remote=gitlab.com/org/lib
+srcuri://api/routes.py@L100?branch=main&remote=github.com/team/api
 ```
 
 **Behavior:**
@@ -795,7 +830,7 @@ srcuri://api/routes.py:100?branch=main&remote=github.com/team/api
 Used in rel or any mode to prefer a specific workspace when multiple matches exist.
 
 ```
-srcuri://rel/lib/utils.rs:10?workspaceHint=backend
+srcuri://rel/lib/utils.rs@L10?workspaceHint=backend
 → Searches for "lib/utils.rs", preferring matches in "backend" workspace
 ```
 
@@ -804,10 +839,10 @@ srcuri://rel/lib/utils.rs:10?workspaceHint=backend
 If multiple git reference parameters are present, only the **first recognized parameter** is used:
 
 ```
-srcuri://myrepo/file.rs:10?commit=abc123&branch=main
+srcuri://myrepo/file.rs@L10?commit=abc123&branch=main
 → Uses commit=abc123 (commit appears first)
 
-srcuri://myrepo/file.rs:10?branch=main&tag=v1.0.0
+srcuri://myrepo/file.rs@L10?branch=main&tag=v1.0.0
 → Uses branch=main (branch appears first)
 ```
 
@@ -816,9 +851,9 @@ srcuri://myrepo/file.rs:10?branch=main&tag=v1.0.0
 Unknown or unsupported query parameters are silently ignored:
 
 ```
-srcuri://myrepo/file.rs:10?editor=vscode&theme=dark
+srcuri://myrepo/file.rs@L10?editor=vscode&theme=dark
 → Unknown parameters 'editor' and 'theme' are ignored
-→ URL is treated as: srcuri://myrepo/file.rs:10
+→ URL is treated as: srcuri://myrepo/file.rs@L10
 ```
 
 ---
@@ -830,17 +865,17 @@ srcuri://myrepo/file.rs:10?editor=vscode&theme=dark
 Replace leading `srcuri://` with `https://srcuri.com/`. Preserve the remainder verbatim (path, query, fragment).
 
 ```
-srcuri://myrepo/src/main.rs:42
-→ https://srcuri.com/myrepo/src/main.rs:42
+srcuri://myrepo/src/main.rs@L42
+→ https://srcuri.com/myrepo/src/main.rs@L42
 
-srcuri://rel/README.md:1
-→ https://srcuri.com/rel/README.md:1
+srcuri://rel/README.md@L1
+→ https://srcuri.com/rel/README.md@L1
 
-srcuri://abs/etc/hosts:1
-→ https://srcuri.com/abs/etc/hosts:1
+srcuri://abs/etc/hosts@L1
+→ https://srcuri.com/abs/etc/hosts@L1
 
-srcuri://myrepo/file.rs:10?commit=abc123&remote=github.com/user/myrepo
-→ https://srcuri.com/myrepo/file.rs:10?commit=abc123&remote=github.com/user/myrepo
+srcuri://myrepo/file.rs@L10?commit=abc123&remote=github.com/user/myrepo
+→ https://srcuri.com/myrepo/file.rs@L10?commit=abc123&remote=github.com/user/myrepo
 ```
 
 ### URL → Protocol
@@ -848,8 +883,8 @@ srcuri://myrepo/file.rs:10?commit=abc123&remote=github.com/user/myrepo
 Replace leading `https://srcuri.com/` with `srcuri://`. Preserve the remainder verbatim.
 
 ```
-https://srcuri.com/myrepo/src/main.rs:42
-→ srcuri://myrepo/src/main.rs:42
+https://srcuri.com/myrepo/src/main.rs@L42
+→ srcuri://myrepo/src/main.rs@L42
 ```
 
 **Note:** This spec intentionally avoids semantics that require `//` in the URL path, to reduce mangling by intermediaries.
@@ -901,7 +936,7 @@ Workspace paths are resolved by looking up the workspace name in the user's conf
 
 **Resolution Process:**
 ```
-Input: srcuri://backend/src/handlers/auth.rs:42
+Input: srcuri://backend/src/handlers/auth.rs@L42
 
 1. Extract workspace name from authority: "backend"
 2. Look up in configuration: "/Users/alice/work/api-server"
@@ -913,15 +948,15 @@ Input: srcuri://backend/src/handlers/auth.rs:42
 **Error Conditions:**
 ```
 Unknown workspace:
-srcuri://unknown/file.rs:1
+srcuri://unknown/file.rs@L1
 → Error: "Workspace 'unknown' not found in configuration"
 
 File not found:
-srcuri://myproject/missing.rs:10
+srcuri://myproject/missing.rs@L10
 → Error: "File not found: /Users/alice/code/myproject/missing.rs"
 
 Path traversal attempt:
-srcuri://myproject/../../../etc/passwd:1
+srcuri://myproject/../../../etc/passwd@L1
 → Error: "Invalid path (security violation)"
 ```
 
@@ -931,7 +966,7 @@ Relative mode searches all configured workspaces for matching files.
 
 **Matching Algorithm:**
 ```
-Input: srcuri://rel/main.rs:10
+Input: srcuri://rel/main.rs@L10
 
 1. If workspaceHint provided, search that workspace first
 
@@ -955,7 +990,7 @@ Input: srcuri://rel/main.rs:10
 
 **Attack Vector:**
 ```
-srcuri://myproject/../../../etc/passwd:1
+srcuri://myproject/../../../etc/passwd@L1
 ```
 
 **Protection:**
@@ -974,11 +1009,11 @@ Configured workspaces:
   backend: /Users/alice/code/backend
 
 Safe (auto-open):
-  srcuri://myproject/src/main.rs:1
+  srcuri://myproject/src/main.rs@L1
   → /Users/alice/code/myproject/src/main.rs ✓
 
 Requires confirmation:
-  srcuri://abs/etc/hosts:1
+  srcuri://abs/etc/hosts@L1
   → /etc/hosts (not in any workspace) ⚠
 ```
 
@@ -1037,7 +1072,7 @@ Recommended error object:
 ### Workspace (implicit)
 **Input:**
 ```
-srcuri://sorcery-desktop/app-core/src/lib.rs:33
+srcuri://sorcery-desktop/app-core/src/lib.rs@L33
 ```
 
 **Parsed:**
@@ -1049,7 +1084,7 @@ srcuri://sorcery-desktop/app-core/src/lib.rs:33
 ### Workspace (explicit)
 **Input:**
 ```
-srcuri://wks/myrepo/path/file.rs:22
+srcuri://wks/myrepo/path/file.rs@L22
 ```
 
 **Parsed:**
@@ -1070,7 +1105,7 @@ srcuri://rel/config/routes.rb
 
 **Input:**
 ```
-srcuri://rel/app-core/src/lib.rs:33?workspaceHint=sorcery-desktop
+srcuri://rel/app-core/src/lib.rs@L33?workspaceHint=sorcery-desktop
 ```
 
 **Parsed:**
@@ -1082,7 +1117,7 @@ srcuri://rel/app-core/src/lib.rs:33?workspaceHint=sorcery-desktop
 ### Any (best-effort)
 **Input:**
 ```
-srcuri://any/src-tauri/src/main.rs:12
+srcuri://any/src-tauri/src/main.rs@L12
 ```
 
 **Parsed:**
@@ -1093,7 +1128,7 @@ srcuri://any/src-tauri/src/main.rs:12
 ### Absolute (POSIX)
 **Input:**
 ```
-srcuri://abs/etc/hosts:21
+srcuri://abs/etc/hosts@L21
 ```
 
 **Parsed:**
@@ -1104,7 +1139,7 @@ srcuri://abs/etc/hosts:21
 ### Absolute (Windows drive)
 **Input:**
 ```
-srcuri://abs/C:/Windows/System32/drivers/etc/hosts:21
+srcuri://abs/C:/Windows/System32/drivers/etc/hosts@L21
 ```
 
 **Parsed:**
@@ -1115,7 +1150,7 @@ srcuri://abs/C:/Windows/System32/drivers/etc/hosts:21
 ### Absolute (Windows UNC)
 **Input:**
 ```
-srcuri://abs/UNC/server/share/docs/file.txt:5
+srcuri://abs/UNC/server/share/docs/file.txt@L5
 ```
 
 **Parsed:**
@@ -1136,7 +1171,7 @@ srcuri://ext/https/github.com/user/repo/blob/main/file.rs?plain=1#L12
 ### Revision (workspace with git params)
 **Input:**
 ```
-srcuri://myrepo/src/lib.rs:42?commit=abc123def
+srcuri://myrepo/src/lib.rs@L42?commit=abc123def
 ```
 
 **Parsed:**
@@ -1154,30 +1189,30 @@ srcuri://myrepo/src/lib.rs:42?commit=abc123def
 
 ```
 Basic file reference:
-srcuri://myproject/README.md:1
+srcuri://myproject/README.md@L1
 
 With line and column:
-srcuri://myproject/src/main.rs:42:10
+srcuri://myproject/src/main.rs@L42C10
 
 Relative mode (search):
-srcuri://rel/package.json:15
+srcuri://rel/package.json@L15
 
 Absolute path:
-srcuri://abs/tmp/debug.log:100
+srcuri://abs/tmp/debug.log@L100
 ```
 
 ### Team Collaboration
 
 **Code review comment:**
 ```
-Found a bug here: srcuri://api-server/src/auth.rs:156
+Found a bug here: srcuri://api-server/src/auth.rs@L156
 The authentication check is missing validation.
 ```
 
 **Issue tracker:**
 ```
 Bug Report #1234
-Crash occurs at: srcuri://mobile-app/lib/screens/home.dart:89:12
+Crash occurs at: srcuri://mobile-app/lib/screens/home.dart@L89C12
 Stack trace shows null pointer exception.
 ```
 
@@ -1185,7 +1220,7 @@ Stack trace shows null pointer exception.
 ```markdown
 # Installation Guide
 
-Edit the configuration file: srcuri://myproject/config/app.yml:25
+Edit the configuration file: srcuri://myproject/config/app.yml@L25
 
 Set the `api_key` value to your API key.
 ```
@@ -1194,47 +1229,47 @@ Set the `api_key` value to your API key.
 
 **Referencing a specific commit:**
 ```
-The bug was introduced in: srcuri://backend/src/db.rs:42?commit=abc123def
+The bug was introduced in: srcuri://backend/src/db.rs@L42?commit=abc123def
 ```
 
 **Linking to a release:**
 ```
-See the migration guide: srcuri://docs/MIGRATION.md:1?tag=v1.0.0
+See the migration guide: srcuri://docs/MIGRATION.md@L1?tag=v1.0.0
 ```
 
 **Feature branch reference:**
 ```
-Check out the new auth flow: srcuri://api/routes/auth.py:10?branch=feature-oauth
+Check out the new auth flow: srcuri://api/routes/auth.py@L10?branch=feature-oauth
 ```
 
 **Sharing with clone support:**
 ```
-srcuri://cool-lib/src/lib.rs:1?remote=github.com/user/cool-lib
+srcuri://cool-lib/src/lib.rs@L1?remote=github.com/user/cool-lib
 ```
 
 ### Cross-Platform Examples
 
 **macOS:**
 ```
-srcuri://abs/Users/alice/code/myproject/README.md:1
-srcuri://myproject/src/main.swift:50
+srcuri://abs/Users/alice/code/myproject/README.md@L1
+srcuri://myproject/src/main.swift@L50
 ```
 
 **Linux:**
 ```
-srcuri://abs/home/bob/projects/myapp/README.md:1
-srcuri://myapp/src/main.rs:50
+srcuri://abs/home/bob/projects/myapp/README.md@L1
+srcuri://myapp/src/main.rs@L50
 ```
 
 **Windows:**
 ```
-srcuri://abs/C:/Users/Carol/Dev/myproject/README.md:1
-srcuri://myproject/src/main.cs:50
+srcuri://abs/C:/Users/Carol/Dev/myproject/README.md@L1
+srcuri://myproject/src/main.cs@L50
 ```
 
 **Portable (recommended):**
 ```
-srcuri://myproject/README.md:1
+srcuri://myproject/README.md@L1
 Works on all platforms with proper workspace configuration
 ```
 

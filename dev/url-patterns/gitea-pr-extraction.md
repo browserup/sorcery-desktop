@@ -184,7 +184,7 @@ const filePath = 'README.md';    // From DOM extraction
 const lineNumber = 3;            // From URL fragment
 
 const srcuriUrl = `srcuri://${workspace}/${filePath}:${lineNumber}`;
-// => "srcuri://foo/README.md:3"
+// => "srcuri://foo/README.md@L3"
 ```
 
 ## Complete Example
@@ -250,7 +250,7 @@ console.log(info);
 //   lineNumber: 3,
 //   side: "R",
 //   workspace: "foo",
-//   srcuriUrl: "srcuri://foo/README.md:3"
+//   srcuriUrl: "srcuri://foo/README.md@L3"
 // }
 ```
 

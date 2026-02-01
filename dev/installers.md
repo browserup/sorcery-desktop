@@ -313,7 +313,7 @@ macOS uses the `Info.plist` file inside `.app` bundles to register URL schemes.
    /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -dump | grep -i srcuri
 
    # Test in browser or terminal
-   open "srcuri:///etc/hosts:1"
+   open "srcuri:///etc/hosts@L1"
    ```
 
 #### Method 2: Development Build
@@ -339,7 +339,7 @@ macOS uses the `Info.plist` file inside `.app` bundles to register URL schemes.
 5. **Verify**:
    ```bash
    # Test protocol opens srcuri
-   open "srcuri:///Users/$USER/test.txt:1"
+   open "srcuri:///Users/$USER/test.txt@L1"
    ```
 
 ### Troubleshooting macOS
@@ -367,7 +367,7 @@ defaults read /Applications/sorcery.app/Contents/Info CFBundleURLTypes
 ### Browser Testing on macOS
 
 #### Safari
-- Paste `srcuri:///etc/hosts:1` in address bar
+- Paste `srcuri:///etc/hosts@L1` in address bar
 - Press Enter
 - Dialog: "Open Sorcery Desktop?" → Click "Allow"
 
@@ -438,7 +438,7 @@ Linux uses `.desktop` files to register protocol handlers via the XDG specificat
    # Should output: srcuri.desktop
 
    # Test protocol
-   xdg-open "srcuri:///etc/hosts:1"
+   xdg-open "srcuri:///etc/hosts@L1"
    ```
 
 #### Method 2: AppImage (Universal)
@@ -520,7 +520,7 @@ desktop-file-validate ~/.local/share/applications/srcuri.desktop
 ### Browser Testing on Linux
 
 #### Chrome/Chromium
-- Paste `srcuri:///etc/hosts:1` in address bar
+- Paste `srcuri:///etc/hosts@L1` in address bar
 - Dialog: "Open xdg-open?" → Click "Open xdg-open"
 
 #### Firefox
@@ -574,7 +574,7 @@ HKEY_CLASSES_ROOT\srcuri
    reg query HKEY_CLASSES_ROOT\srcuri
 
    # Test protocol
-   start srcuri:///C:/Users/%USERNAME%/test.txt:1
+   start srcuri:///C:/Users/%USERNAME%/test.txt@L1
    ```
 
 #### Method 2: Manual Registry (Development)
@@ -638,7 +638,7 @@ reg import register-protocol.reg
 ### Browser Testing on Windows
 
 #### Chrome
-- Paste `srcuri:///C:/Users/User/test.txt:1` in address bar
+- Paste `srcuri:///C:/Users/User/test.txt@L1` in address bar
 - Dialog: "Open srcuri?" → Click "Open srcuri"
 
 #### Edge
@@ -668,9 +668,9 @@ Create `test-protocol.html`:
 
     <h2>Test Links</h2>
     <ul>
-        <li><a href="srcuri:///etc/hosts:1">Open /etc/hosts at line 1</a> (macOS/Linux)</li>
-        <li><a href="srcuri:///C:/Windows/System32/drivers/etc/hosts:1">Open hosts at line 1</a> (Windows)</li>
-        <li><a href="srcuri:///tmp/test.txt:42:10">Open test.txt at line 42, column 10</a></li>
+        <li><a href="srcuri:///etc/hosts@L1">Open /etc/hosts at line 1</a> (macOS/Linux)</li>
+        <li><a href="srcuri:///C:/Windows/System32/drivers/etc/hosts@L1">Open hosts at line 1</a> (Windows)</li>
+        <li><a href="srcuri:///tmp/test.txt@L42C10">Open test.txt at line 42, column 10</a></li>
     </ul>
 
     <h2>JavaScript Test</h2>
@@ -678,7 +678,7 @@ Create `test-protocol.html`:
 
     <script>
         function testProtocol() {
-            const url = "srcuri:///tmp/test.txt:1";
+            const url = "srcuri:///tmp/test.txt@L1";
             window.location.href = url;
         }
     </script>
@@ -699,17 +699,17 @@ start test-protocol.html
 
 #### macOS
 ```bash
-open "srcuri:///etc/hosts:22"
+open "srcuri:///etc/hosts@L22"
 ```
 
 #### Linux
 ```bash
-xdg-open "srcuri:///etc/hosts:22"
+xdg-open "srcuri:///etc/hosts@L22"
 ```
 
 #### Windows
 ```powershell
-start srcuri:///C:/Windows/System32/drivers/etc/hosts:22
+start srcuri:///C:/Windows/System32/drivers/etc/hosts@L22
 ```
 
 ---
@@ -731,7 +731,7 @@ start srcuri:///C:/Windows/System32/drivers/etc/hosts:22
 cd src-tauri
 cargo tauri build --debug
 cp -r target/debug/bundle/macos/sorcery.app /Applications/
-open "srcuri:///etc/hosts:1"
+open "srcuri:///etc/hosts@L1"
 ```
 
 #### Linux
@@ -740,7 +740,7 @@ cd src-tauri
 cargo tauri build
 sudo dpkg -i target/release/bundle/deb/srcuri_*.deb
 xdg-mime default srcuri.desktop x-scheme-handler/srcuri
-xdg-open "srcuri:///etc/hosts:1"
+xdg-open "srcuri:///etc/hosts@L1"
 ```
 
 #### Windows
@@ -748,5 +748,5 @@ xdg-open "srcuri:///etc/hosts:1"
 cd src-tauri
 cargo tauri build
 # Run the MSI installer
-start srcuri:///C:/Windows/System32/drivers/etc/hosts:1
+start srcuri:///C:/Windows/System32/drivers/etc/hosts@L1
 ```

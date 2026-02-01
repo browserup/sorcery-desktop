@@ -11,8 +11,8 @@ Both GitHub and GitLab use **path-based git references** in their URLs (not quer
 
 **Current srcuri format uses query parameters:**
 ```
-srcuri://workspace/path/file.rs:42?commit=abc123
-srcuri://workspace/path/file.rs:42?branch=main
+srcuri://workspace/path/file.rs@L42?commit=abc123
+srcuri://workspace/path/file.rs@L42?branch=main
 ```
 
 **GitHub and GitLab use path-based refs:**
@@ -189,7 +189,7 @@ This is a GitLab-specific convention not used by GitHub.
 |----------|-------------|---------|
 | **GitHub** | `github.com/{owner}/{repo}/blob/{ref}/{path}#L{line}` | `github.com/rust-lang/rust/blob/master/src/main.rs#L100` |
 | **GitLab** | `gitlab.com/{owner}/{repo}/-/blob/{ref}/{path}#L{line}` | `gitlab.com/gitlab-org/gitlab/-/blob/master/app/main.rb#L100` |
-| **srcuri** | `srcuri://{workspace}/{path}:{line}?commit={ref}` | `srcuri://rust/src/main.rs:100?commit=abc123` |
+| **srcuri** | `srcuri://{workspace}/{path}@L{line}?commit={ref}` | `srcuri://rust/src/main.rs@L100?commit=abc123` |
 
 ### Git Reference Placement
 
@@ -205,7 +205,7 @@ This is a GitLab-specific convention not used by GitHub.
 |----------|-------------|------------|-------|
 | **GitHub** | `#L42` | `#L10-L20` | Both numbers have `L` prefix |
 | **GitLab** | `#L42` | `#L10-20` | Only start has `L` prefix |
-| **srcuri** | `:42` | `:10` | Colon-based, no range support currently |
+| **srcuri** | `@L42` | Not supported | Suffix-based, legacy `:line` accepted |
 
 ---
 
@@ -241,9 +241,9 @@ GitLab also does NOT use query parameters for git references. The API uses query
 srcuri currently uses query parameters for git references:
 
 ```
-srcuri://workspace/file.rs:42?commit=abc123
-srcuri://workspace/file.rs:42?branch=main
-srcuri://workspace/file.rs:42?tag=v1.0.0
+srcuri://workspace/file.rs@L42?commit=abc123
+srcuri://workspace/file.rs@L42?branch=main
+srcuri://workspace/file.rs@L42?tag=v1.0.0
 ```
 
 **This differs from both GitHub and GitLab.**
@@ -257,15 +257,15 @@ srcuri://workspace/file.rs:42?tag=v1.0.0
 From `URL-FORMATS.md`:
 
 ```
-srcuri://<workspace>/<path>:<line>:<column>
+srcuri://<workspace>/<path>@L<line>[C<column>]
 ```
 
 With git references:
 ```
-srcuri://srcuri/README.md:1?commit=abc123def
-srcuri://srcuri/src/main.rs:50?sha=abc123def
-srcuri://myproject/src/app.js:10?branch=main
-srcuri://myproject/file.txt:10?tag=v1.0.0
+srcuri://srcuri/README.md@L1?commit=abc123def
+srcuri://srcuri/src/main.rs@L50?sha=abc123def
+srcuri://myproject/src/app.js@L10?branch=main
+srcuri://myproject/file.txt@L10?tag=v1.0.0
 ```
 
 ### Key Differences
@@ -273,16 +273,16 @@ srcuri://myproject/file.txt:10?tag=v1.0.0
 | Aspect | GitHub/GitLab | srcuri |
 |--------|---------------|-------|
 | **Git ref location** | Path-based (`/blob/{ref}/`) | Query parameter (`?commit=`, `?branch=`) |
-| **Line syntax** | Fragment (`#L42`) | Colon (`:42`) |
-| **Column support** | None | Yes (`:42:10`) |
+| **Line syntax** | Fragment (`#L42`) | `@L42` (legacy `:42`) |
+| **Column support** | None | Yes (`@L42C10`) |
 | **Workspace concept** | None (always owner/repo) | Yes (maps to local paths) |
-| **Absolute paths** | Not supported | Yes (`srcuri:///abs/path:42`) |
+| **Absolute paths** | Not supported | Yes (`srcuri:///abs/path@L42`) |
 
 ### Advantages of srcuri's Query Parameter Approach
 
 1. **Separation of Concerns**
    - File path is independent of git ref
-   - `srcuri://workspace/file.rs:42` works without git context
+   - `srcuri://workspace/file.rs@L42` works without git context
    - Adding `?commit=abc` is optional, not structural
 
 2. **Backward Compatibility**
@@ -295,7 +295,7 @@ srcuri://myproject/file.txt:10?tag=v1.0.0
    - With srcuri you can explicitly specify the ref type
 
 4. **Column Support**
-   - `:line:column` syntax is unambiguous
+   - `@LlineCcol` syntax is unambiguous
    - GitHub/GitLab don't support column numbers at all
 
 5. **Workspace Abstraction**
@@ -304,7 +304,7 @@ srcuri://myproject/file.txt:10?tag=v1.0.0
    - Different developers can have different local paths
 
 6. **Absolute Path Support**
-   - `srcuri:///Users/me/file.txt:42` for local-only files
+   - `srcuri:///Users/me/file.txt@L42` for local-only files
    - GitHub/GitLab can't represent files outside repositories
 
 ### Disadvantages of srcuri's Query Parameter Approach
@@ -404,22 +404,22 @@ https://gitlab.com/gitlab-org/gitlab-foss/-/tree/master/app/models
 
 ```bash
 # Simple workspace path
-srcuri://myproject/src/main.rs:100
+srcuri://myproject/src/main.rs@L100
 
 # With commit reference
-srcuri://myproject/src/main.rs:100?commit=abc123
+srcuri://myproject/src/main.rs@L100?commit=abc123
 
 # With branch reference
-srcuri://myproject/src/main.rs:100?branch=feature-auth
+srcuri://myproject/src/main.rs@L100?branch=feature-auth
 
 # With tag reference
-srcuri://myproject/CHANGELOG.md:1?tag=v1.0.0
+srcuri://myproject/CHANGELOG.md@L1?tag=v1.0.0
 
 # Absolute path (no git context)
-srcuri:///Users/me/temp/script.py:42
+srcuri:///Users/me/temp/script.py@L42
 
 # With column
-srcuri://myproject/src/main.rs:100:15
+srcuri://myproject/src/main.rs@L100C15
 ```
 
 ---
@@ -446,7 +446,7 @@ https://github.com/rust-lang/rust/blob/b212af08/library/std/src/lib.rs#L100
 
 **Output:**
 ```
-srcuri://rust/library/std/src/lib.rs:100?commit=b212af08
+srcuri://rust/library/std/src/lib.rs@L100?commit=b212af08
 ```
 
 ### GitLab → srcuri Conversion
@@ -469,14 +469,14 @@ https://gitlab.com/gitlab-org/gitlab-foss/-/blob/master/README.md#L10-20
 
 **Output:**
 ```
-srcuri://gitlab-foss/README.md:10?branch=master
+srcuri://gitlab-foss/README.md@L10?branch=master
 ```
 
 ### srcuri → GitHub Conversion (Hypothetical)
 
 **Input:**
 ```
-srcuri://rust/library/std/src/lib.rs:100?commit=b212af08
+srcuri://rust/library/std/src/lib.rs@L100?commit=b212af08
 ```
 
 **Workspace Mapping:**
@@ -511,9 +511,9 @@ https://github.com/rust-lang/rust/blob/b212af08/library/std/src/lib.rs#L100
 
 4. **Potential Format:**
    ```
-   srcuri://workspace@ref/path/file.rs:42
-   srcuri://rust@main/src/lib.rs:100
-   srcuri://rust@b212af08/src/lib.rs:100
+   srcuri://workspace@ref/path/file.rs@L42
+   srcuri://rust@main/src/lib.rs@L100
+   srcuri://rust@b212af08/src/lib.rs@L100
    ```
    - Uses `@` to separate workspace from ref (npm package style)
    - Path-based like GitHub/GitLab
@@ -527,12 +527,12 @@ https://github.com/rust-lang/rust/blob/b212af08/library/std/src/lib.rs#L100
    - Git refs are "overlay" information, not core identity
 
 2. **Optional Refs are Valuable**
-   - `srcuri://myproject/file.rs:42` should work without git context
+   - `srcuri://myproject/file.rs@L42` should work without git context
    - Adding `?commit=abc` when needed is cleaner
    - GitHub/GitLab always require a ref in the path
 
 3. **Column Support Requires Different Syntax**
-   - `:line:column` is already different from `#L` syntax
+   - `@LlineCcol` is already different from `#L` syntax
    - Query params feel consistent with optional features
 
 4. **Backward Compatibility**
@@ -551,12 +551,12 @@ Support BOTH formats:
 
 ```bash
 # Path-based (GitHub-style, for familiarity)
-srcuri://workspace@main/file.rs:42
-srcuri://workspace@abc123/file.rs:42
+srcuri://workspace@main/file.rs@L42
+srcuri://workspace@abc123/file.rs@L42
 
 # Query-based (current, for flexibility)
-srcuri://workspace/file.rs:42?branch=main
-srcuri://workspace/file.rs:42?commit=abc123
+srcuri://workspace/file.rs@L42?branch=main
+srcuri://workspace/file.rs@L42?commit=abc123
 ```
 
 **Pros:**
@@ -579,7 +579,7 @@ srcuri://workspace/file.rs:42?commit=abc123
    - Git refs are optional metadata, not required structure
 
 2. **Query params match srcuri's design**
-   - `srcuri://workspace/file.rs:42` is the "base" link
+   - `srcuri://workspace/file.rs@L42` is the "base" link
    - `?commit=abc` is "open this file, but at this commit"
    - Semantic: the file is the resource, commit is a parameter
 
@@ -589,12 +589,12 @@ srcuri://workspace/file.rs:42?commit=abc123
    - Query params naturally extend
 
 4. **Workspace portability**
-   - `srcuri://myproject/file.rs:42` works on any machine with `myproject` workspace
+   - `srcuri://myproject/file.rs@L42` works on any machine with `myproject` workspace
    - GitHub URLs are tied to `github.com/owner/repo` structure
    - Local workspace mapping is srcuri's killer feature
 
 5. **Column support already diverges**
-   - `:line:column` vs `#L` means syntax is already different
+   - `@LlineCcol` vs `#L` means syntax is already different
    - No point aligning on git refs when line syntax already differs
 
 ### Alternative: Document Conversion Clearly
@@ -608,7 +608,7 @@ Instead of changing srcuri format, provide excellent conversion tools:
 2. **CLI tool:**
    ```bash
    srcuri convert "https://github.com/owner/repo/blob/main/file.rs#L42"
-   # Output: srcuri://repo/file.rs:42?branch=main
+   # Output: srcuri://repo/file.rs@L42?branch=main
    ```
 
 3. **Documentation:**
@@ -644,28 +644,28 @@ Currently NOT supported. Potential formats:
 
 **Option 1: Query parameter**
 ```
-srcuri://workspace/file.rs:10?end=20
+srcuri://workspace/file.rs@L10?end=20
 ```
 
-**Option 2: Colon-based range**
+**Option 2: Suffix-based range**
 ```
-srcuri://workspace/file.rs:10-20
+srcuri://workspace/file.rs@L10-20
 ```
-- Ambiguity: Is `:10-20` a line range, or line 10 column 20 with typo?
+- Ambiguity: Is `@L10-20` a range, or a hyphenated line token?
 
 **Option 3: Separate syntax**
 ```
-srcuri://workspace/file.rs:10:20       # line 10, column 20
-srcuri://workspace/file.rs:10-20       # lines 10-20
+srcuri://workspace/file.rs@L10C20      # line 10, column 20
+srcuri://workspace/file.rs@L10-20      # lines 10-20
 ```
-- Parser must distinguish `-` (range) from `:` (column)
+- Parser must distinguish `-` (range) from `C` (column)
 
 **Recommendation:**
 ```
-srcuri://workspace/file.rs:10?end=20&highlight=true
+srcuri://workspace/file.rs@L10?end=20&highlight=true
 ```
 - Clear and unambiguous
-- Doesn't conflict with `:line:column` syntax
+- Doesn't conflict with `@LlineCcol` syntax
 - Extensible: `?end=20&highlight=false` to just scroll, not highlight
 
 ---
@@ -676,9 +676,9 @@ srcuri://workspace/file.rs:10?end=20&highlight=true
 |---------|--------|--------|-----------------|----------------|
 | **Git ref location** | Path: `/blob/{ref}/` | Path: `/-/blob/{ref}/` | Query: `?commit=` | Keep query params |
 | **Ref required?** | Yes | Yes | No | Keep optional |
-| **Line syntax** | `#L42` | `#L42` | `:42` | Keep colon syntax |
+| **Line syntax** | `#L42` | `#L42` | `@L42` | Keep `@L` (accept `:line`) |
 | **Line range** | `#L10-L20` | `#L10-20` | Not supported | Add `?end=20` |
-| **Column support** | No | No | `:42:10` | Keep as-is |
+| **Column support** | No | No | `@L42C10` | Keep as-is |
 | **Ref type clarity** | Ambiguous | Ambiguous | Explicit (`?branch=`) | Keep explicit |
 | **Workspace concept** | No (owner/repo) | No (owner/repo) | Yes | Keep as-is |
 | **Absolute paths** | No | No | Yes (`///path`) | Keep as-is |

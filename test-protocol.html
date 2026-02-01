@@ -81,22 +81,22 @@
         <p>Click these links to test the protocol handler:</p>
 
         <h3>macOS/Linux</h3>
-        <a href="srcuri:///etc/hosts:1">Open /etc/hosts at line 1</a><br>
-        <a href="srcuri:///etc/hosts:22">Open /etc/hosts at line 22</a><br>
-        <a href="srcuri:///tmp/test.txt:42:10">Open /tmp/test.txt at line 42, column 10</a>
+        <a href="srcuri:///etc/hosts@L1">Open /etc/hosts at line 1</a><br>
+        <a href="srcuri:///etc/hosts@L22">Open /etc/hosts at line 22</a><br>
+        <a href="srcuri:///tmp/test.txt@L42C10">Open /tmp/test.txt at line 42, column 10</a>
 
         <h3>Your Project</h3>
-        <a href="srcuri://sorcery-desktop/README.md:1">Open README.md at line 1</a><br>
-        <a href="srcuri://sorcery-desktop/src-tauri/src/main.rs:50">Open main.rs at line 50</a><br>
-        <a href="srcuri://sorcery-desktop/DEVELOPMENT.md:1">Open DEVELOPMENT.md</a>
+        <a href="srcuri://sorcery-desktop/README.md@L1">Open README.md at line 1</a><br>
+        <a href="srcuri://sorcery-desktop/src-tauri/src/main.rs@L50">Open main.rs at line 50</a><br>
+        <a href="srcuri://sorcery-desktop/DEVELOPMENT.md@L1">Open DEVELOPMENT.md</a>
 
         <h3>Absolute Paths</h3>
-        <a href="srcuri:///Users/ebeland/apps/sorcery-desktop/README.md:1">Open project README (absolute path)</a><br>
-        <a href="srcuri:///Users/ebeland/apps/sorcery-desktop/README.md:50">Open project README at line 50 (absolute path)</a>
+        <a href="srcuri:///Users/alice/apps/sorcery-desktop/README.md@L1">Open project README (absolute path)</a><br>
+        <a href="srcuri:///Users/alice/apps/sorcery-desktop/README.md@L50">Open project README at line 50 (absolute path)</a>
 
         <h3>Any Mode</h3>
-        <a href="srcuri://any/sorcery-desktop/README.md:1">Open README via any (workspace-leading)</a><br>
-        <a href="srcuri://any//etc/hosts:1">Open /etc/hosts via any (absolute)</a>
+        <a href="srcuri://any/sorcery-desktop/README.md@L1">Open README via any (workspace-leading)</a><br>
+        <a href="srcuri://any//etc/hosts@L1">Open /etc/hosts via any (absolute)</a>
     </div>
 
     <div class="test-section">
@@ -117,7 +117,7 @@
     <div class="test-section">
         <h2>Manual Test</h2>
         <p>Paste this directly in your browser's address bar:</p>
-        <code>srcuri:///etc/hosts:1</code>
+        <code>srcuri:///etc/hosts@L1</code>
     </div>
 
     <div class="test-section">

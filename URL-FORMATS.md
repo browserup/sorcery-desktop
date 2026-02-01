@@ -9,8 +9,10 @@ Sorcery Desktop uses the `srcuri://` protocol (also known as the Sorcery protoco
 ## URL Format
 
 ```
-srcuri://<authority>/<path>:<line>:<column>
+srcuri://<authority>/<path>[@L<line>[C<column>]]
 ```
+
+Preferred line syntax uses `@L<line>` and optional `C<column>`. Legacy `:line[:column]` is accepted for compatibility.
 
 The **authority** determines how the link is interpreted:
 - A **workspace name** (most common) — opens file relative to that workspace
@@ -20,15 +22,15 @@ The **authority** determines how the link is interpreted:
 
 ### 1. Workspace Mode (Implicit) — Recommended
 
-**Format:** `srcuri://<workspace>/<path>:<line>:<column>`
+**Format:** `srcuri://<workspace>/<path>@L<line>[C<column>]`
 
 The authority IS the workspace name. This is the shortest and most common format.
 
 **Examples:**
 ```
-srcuri://sorcery/README.md:1
-srcuri://sorcery/src-tauri/src/main.rs:50
-srcuri://myproject/src/App.tsx:100:5
+srcuri://sorcery/README.md@L1
+srcuri://sorcery/src-tauri/src/main.rs@L50
+srcuri://myproject/src/App.tsx@L100C5
 ```
 
 **When to use:**
@@ -48,22 +50,22 @@ srcuri://myproject/src/App.tsx:100:5
 ```json
 {
   "workspaces": {
-    "sorcery": "/Users/ebeland/apps/sorcery",
-    "myproject": "/Users/ebeland/projects/myproject"
+    "sorcery": "/Users/alice/apps/sorcery",
+    "myproject": "/Users/alice/projects/myproject"
   }
 }
 ```
 
 ### 2. Workspace Mode (Explicit)
 
-**Format:** `srcuri://wks/<workspace>/<path>:<line>:<column>`
+**Format:** `srcuri://wks/<workspace>/<path>@L<line>[C<column>]`
 
 Uses the `wks` reserved authority for explicit clarity.
 
 **Examples:**
 ```
-srcuri://wks/sorcery/README.md:1
-srcuri://wks/myproject/src/App.tsx:100:5
+srcuri://wks/sorcery/README.md@L1
+srcuri://wks/myproject/src/App.tsx@L100C5
 ```
 
 **When to use:**
@@ -72,16 +74,16 @@ srcuri://wks/myproject/src/App.tsx:100:5
 
 ### 3. Relative Mode (Search All Workspaces)
 
-**Format:** `srcuri://rel/<path>:<line>:<column>`
+**Format:** `srcuri://rel/<path>@L<line>[C<column>]`
 
 Uses the `rel` reserved authority to search all workspaces.
 
 **Examples:**
 ```
-srcuri://rel/README.md:1
-srcuri://rel/main.rs:50
-srcuri://rel/App.tsx:100
-srcuri://rel/src/utils.py:10?workspaceHint=backend
+srcuri://rel/README.md@L1
+srcuri://rel/main.rs@L50
+srcuri://rel/App.tsx@L100
+srcuri://rel/src/utils.py@L10?workspaceHint=backend
 ```
 
 **When to use:**
@@ -100,7 +102,7 @@ srcuri://rel/src/utils.py:10?workspaceHint=backend
 **Cross-platform path matching:**
 ```
 # Path from Windows that contains workspace name
-srcuri://rel/D:/Code/myproject/src/main.rs:42
+srcuri://rel/D:/Code/myproject/src/main.rs@L42
 
 # Sorcery detects "myproject" in the path and extracts "src/main.rs"
 # Opens: ~/code/myproject/src/main.rs (your local path)
@@ -108,38 +110,38 @@ srcuri://rel/D:/Code/myproject/src/main.rs:42
 
 ### 4. Any Mode (Best-Effort)
 
-**Format:** `srcuri://any/<path>:<line>:<column>`
+**Format:** `srcuri://any/<path>@L<line>[C<column>]`
 
 Best-effort resolution when the source does not know whether the path is workspace-relative, search-relative, or absolute.
 
 **Examples:**
 ```
-srcuri://any/src/main.rs:42
-srcuri://any/Users/ebeland/apps/sorcery/README.md:50
+srcuri://any/src/main.rs@L42
+srcuri://any/Users/alice/apps/sorcery/README.md@L50
 ```
 
 **Resolution order:** workspace, relative, absolute (applicable steps only).
 
 ### 5. Absolute Path Mode
 
-**Format:** `srcuri://abs/<path>:<line>:<column>`
+**Format:** `srcuri://abs/<path>@L<line>[C<column>]`
 
 Uses the `abs` reserved authority for absolute filesystem paths.
 
 **Examples:**
 ```
-srcuri://abs/etc/hosts:1
-srcuri://abs/Users/ebeland/apps/sorcery/README.md:50
-srcuri://abs/Users/ebeland/apps/sorcery/src-tauri/src/main.rs:100:5
-srcuri://abs/tmp/test.txt:42:10
+srcuri://abs/etc/hosts@L1
+srcuri://abs/Users/alice/apps/sorcery/README.md@L50
+srcuri://abs/Users/alice/apps/sorcery/src-tauri/src/main.rs@L100C5
+srcuri://abs/tmp/test.txt@L42C10
 ```
 
 **Note:** For POSIX paths, the leading `/` is implied. `abs/etc/hosts` → `/etc/hosts`
 
 **Windows paths:**
 ```
-srcuri://abs/C:/Users/user/file.txt:1
-srcuri://abs/UNC/server/share/file.txt:5
+srcuri://abs/C:/Users/user/file.txt@L1
+srcuri://abs/UNC/server/share/file.txt@L5
 ```
 
 **When to use:**
@@ -170,12 +172,12 @@ srcuri://ext/https/gitlab.com/org/project/-/blob/main/README.md#L10
 
 ## Line and Column Numbers
 
-All formats support optional line and column numbers:
+All formats support optional line and column numbers (preferred `@L` syntax):
 
 ```
 srcuri://myproject/path                    # Just open the file
-srcuri://myproject/path:50                 # Open at line 50
-srcuri://myproject/path:50:10              # Open at line 50, column 10
+srcuri://myproject/path@L50                 # Open at line 50
+srcuri://myproject/path@L50C10              # Open at line 50, column 10
 ```
 
 **Note:** Column numbers are limited to 0-120. Higher values are ignored.
@@ -211,7 +213,7 @@ Most editors (22 of 26) support opening folders:
 Line and column numbers are **silently ignored** when opening folders:
 
 ```
-srcuri://myproject/src:42:10
+srcuri://myproject/src@L42C10
 → Opens the src folder (line 42, column 10 are ignored)
 ```
 
@@ -226,8 +228,8 @@ Open a file at a specific git reference (commit, branch, or tag):
 #### Commit SHA
 
 ```
-srcuri://sorcery/README.md:1?commit=abc123def
-srcuri://sorcery/src/main.rs:50?sha=abc123def
+srcuri://sorcery/README.md@L1?commit=abc123def
+srcuri://sorcery/src/main.rs@L50?sha=abc123def
 ```
 
 - Most precise - immutable reference to exact code state
@@ -237,8 +239,8 @@ srcuri://sorcery/src/main.rs:50?sha=abc123def
 #### Branch
 
 ```
-srcuri://myproject/src/app.js:10?branch=main
-srcuri://myproject/lib/utils.rs:25?branch=feature-auth
+srcuri://myproject/src/app.js@L10?branch=main
+srcuri://myproject/lib/utils.rs@L25?branch=feature-auth
 ```
 
 - Opens file at your current local branch state
@@ -248,8 +250,8 @@ srcuri://myproject/lib/utils.rs:25?branch=feature-auth
 #### Tag
 
 ```
-srcuri://myproject/file.txt:10?tag=v1.0.0
-srcuri://myproject/CHANGELOG.md:1?tag=release-2024
+srcuri://myproject/file.txt@L10?tag=v1.0.0
+srcuri://myproject/CHANGELOG.md@L1?tag=release-2024
 ```
 
 - Immutable reference to tagged version
@@ -265,8 +267,8 @@ srcuri://myproject/CHANGELOG.md:1?tag=release-2024
 ### Remote (Clone-on-Demand)
 
 ```
-srcuri://myproject/src/app.js:10?remote=github.com/user/myproject
-srcuri://myproject/README.md:1?branch=main&remote=github.com/user/myproject
+srcuri://myproject/src/app.js@L10?remote=github.com/user/myproject
+srcuri://myproject/README.md@L1?branch=main&remote=github.com/user/myproject
 ```
 
 - Enables sharing links to repos the recipient may not have cloned
@@ -276,7 +278,7 @@ srcuri://myproject/README.md:1?branch=main&remote=github.com/user/myproject
 - Can be combined with `?branch=`, `?commit=`, or `?tag=`
 
 **Example workflow:**
-1. Developer A shares: `srcuri://cool-lib/src/utils.rs:42?remote=github.com/org/cool-lib`
+1. Developer A shares: `srcuri://cool-lib/src/utils.rs@L42?remote=github.com/org/cool-lib`
 2. Developer B (who doesn't have cool-lib) clicks the link
 3. Clone dialog appears: "Clone github.com/org/cool-lib to ~/code/cool-lib?"
 4. Developer B confirms → repo is cloned, workspace is added, file opens
@@ -285,7 +287,7 @@ srcuri://myproject/README.md:1?branch=main&remote=github.com/user/myproject
 ### Workspace Hint (Relative/Any Mode)
 
 ```
-srcuri://rel/lib/utils.rs:10?workspaceHint=backend
+srcuri://rel/lib/utils.rs@L10?workspaceHint=backend
 ```
 
 - Used in rel or any mode to prefer a specific workspace when multiple matches exist
@@ -297,8 +299,8 @@ srcuri://rel/lib/utils.rs:10?workspaceHint=backend
 Paste these in your Chrome/Safari/Firefox address bar:
 
 ```
-srcuri://abs/etc/hosts:1
-srcuri://sorcery/README.md:50
+srcuri://abs/etc/hosts@L1
+srcuri://sorcery/README.md@L50
 ```
 
 Browser will ask permission the first time, then remember your choice.
@@ -306,34 +308,34 @@ Browser will ask permission the first time, then remember your choice.
 ### From HTML
 
 ```html
-<a href="srcuri://sorcery/src/main.rs:100">View main.rs</a>
-<a href="srcuri://abs/tmp/test.txt:1">Open test file</a>
+<a href="srcuri://sorcery/src/main.rs@L100">View main.rs</a>
+<a href="srcuri://abs/tmp/test.txt@L1">Open test file</a>
 ```
 
 ### From JavaScript
 
 ```javascript
 // Absolute path
-window.location.href = "srcuri://abs/Users/ebeland/file.txt:50";
+window.location.href = "srcuri://abs/Users/alice/file.txt@L50";
 
 // Workspace path
-window.location.href = "srcuri://myproject/src/app.js:100";
+window.location.href = "srcuri://myproject/src/app.js@L100";
 ```
 
 ### From Command Line
 
 ```bash
 # macOS
-open "srcuri://abs/etc/hosts:1"
-open "srcuri://sorcery/README.md:50"
+open "srcuri://abs/etc/hosts@L1"
+open "srcuri://sorcery/README.md@L50"
 
 # Linux
-xdg-open "srcuri://abs/etc/hosts:1"
-xdg-open "srcuri://sorcery/README.md:50"
+xdg-open "srcuri://abs/etc/hosts@L1"
+xdg-open "srcuri://sorcery/README.md@L50"
 
 # Windows
-start srcuri://abs/C:/Users/user/file.txt:1
-start srcuri://myproject/src/app.js:100
+start srcuri://abs/C:/Users/user/file.txt@L1
+start srcuri://myproject/src/app.js@L100
 ```
 
 ## Testing
@@ -352,31 +354,31 @@ This includes clickable examples of all URL formats.
 
 **Wrong:**
 ```
-file:///Users/ebeland/apps/sorcery/README.md
+file:///Users/alice/apps/sorcery/README.md
 ```
 
 **Correct:**
 ```
-srcuri://abs/Users/ebeland/apps/sorcery/README.md:1
+srcuri://abs/Users/alice/apps/sorcery/README.md@L1
 ```
 
 ### Confusing authorities
 
 **Wrong:**
 ```
-srcuri://etc/hosts:1           # This is workspace "etc", not /etc/hosts
+srcuri://etc/hosts@L1           # This is workspace "etc", not /etc/hosts
 ```
 
 **Correct:**
 ```
-srcuri://abs/etc/hosts:1       # Absolute path mode
+srcuri://abs/etc/hosts@L1       # Absolute path mode
 ```
 
 ### Using git references with absolute path
 
 **Wrong:**
 ```
-srcuri://abs/Users/ebeland/file.txt?commit=abc123
+srcuri://abs/Users/alice/file.txt?commit=abc123
 ```
 
 **Correct:**
@@ -390,22 +392,22 @@ The parser (`src-tauri/src/protocol_handler/parser.rs`) follows these rules:
 
 1. **Authority = "wks"** → Explicit workspace mode
    ```
-   srcuri://wks/myproject/file.rs:1
+   srcuri://wks/myproject/file.rs@L1
    ```
 
 2. **Authority = "rel"** → Relative/search mode
    ```
-   srcuri://rel/README.md:1
+   srcuri://rel/README.md@L1
    ```
 
 3. **Authority = "abs"** → Absolute path mode
    ```
-   srcuri://abs/etc/hosts:1
+   srcuri://abs/etc/hosts@L1
    ```
 
 4. **Authority = "any"** → Any mode (best-effort)
    ```
-   srcuri://any/src/main.rs:42
+   srcuri://any/src/main.rs@L42
    ```
 
 5. **Authority = "ext"** → External URL mode
@@ -415,7 +417,7 @@ The parser (`src-tauri/src/protocol_handler/parser.rs`) follows these rules:
 
 6. **Authority = anything else** → Implicit workspace mode
    ```
-   srcuri://myproject/file.rs:1
+   srcuri://myproject/file.rs@L1
    ```
 
 6. **Line and column extraction:**
@@ -430,14 +432,14 @@ The parser (`src-tauri/src/protocol_handler/parser.rs`) follows these rules:
 
 **Use implicit workspace paths:**
 ```
-srcuri://myproject/src/app.js:100
+srcuri://myproject/src/app.js@L100
 ```
 
 The Sorcery protocol with workspace paths works for everyone regardless of where they cloned the repo.
 
 **Don't use absolute paths:**
 ```
-srcuri://abs/Users/ebeland/projects/myproject/src/app.js:100
+srcuri://abs/Users/alice/projects/myproject/src/app.js@L100
 ```
 
 This only works on your machine.
@@ -446,8 +448,8 @@ This only works on your machine.
 
 **Either format works:**
 ```
-srcuri://abs/Users/ebeland/file.txt:1          # Direct
-srcuri://myproject/file.txt:1                  # Workspace
+srcuri://abs/Users/alice/file.txt@L1          # Direct
+srcuri://myproject/file.txt@L1                  # Workspace
 ```
 
 Choose based on convenience.
@@ -456,7 +458,7 @@ Choose based on convenience.
 
 **Include line numbers:**
 ```
-See the bug in srcuri://myproject/src/bug.js:42
+See the bug in srcuri://myproject/src/bug.js@L42
 ```
 
 **Don't omit line numbers:**

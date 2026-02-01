@@ -9,11 +9,12 @@ Sorcery links let you share code references that open directly in the recipient'
 The two formats are **1-to-1 convertible**—just swap the prefix:
 
 ```
-srcuri://myrepo/src/main.rs:42
-https://srcuri.com/myrepo/src/main.rs:42
+srcuri://myrepo/src/main.rs@L42
+https://srcuri.com/myrepo/src/main.rs@L42
 ```
 
 Everything after the prefix is identical. You can convert between them mechanically.
+Preferred line syntax uses `@L`. Legacy `:line` is accepted for compatibility.
 
 ### When to use which
 
@@ -40,10 +41,10 @@ Sorcery supports several modes, determined by the first path segment:
 
 | Mode | Format | Purpose |
 |------|--------|---------|
-| **Workspace** (default) | `/myrepo/path:line` | Reference code via shared workspace names |
-| **Relative** | `/rel/path:line` | Search for a path across all workspaces |
-| **Any** | `/any/path:line` | Best-effort resolution when path context is unknown |
-| **Absolute** | `/abs/path:line` | Reference a specific filesystem path |
+| **Workspace** (default) | `/myrepo/path@Lline` | Reference code via shared workspace names |
+| **Relative** | `/rel/path@Lline` | Search for a path across all workspaces |
+| **Any** | `/any/path@Lline` | Best-effort resolution when path context is unknown |
+| **Absolute** | `/abs/path@Lline` | Reference a specific filesystem path |
 | **External** | `/ext/https/github.com/...` | Encode an upstream URL (GitHub, GitLab, etc.) |
 
 ### Workspace Mode
@@ -51,7 +52,7 @@ Sorcery supports several modes, determined by the first path segment:
 The most common mode. References code relative to a named workspace.
 
 ```
-srcuri.com/backend-api/src/handlers/auth.rs:42
+srcuri.com/backend-api/src/handlers/auth.rs@L42
 ```
 
 Workspace names are shared conventions within your team, company, or collaborator group. When you say `backend-api`, everyone in your group knows what repo that means—and it might be your company's fork, not the upstream.
@@ -63,7 +64,7 @@ Workspace names are shared conventions within your team, company, or collaborato
 - You want to specify the canonical clone source
 
 ```
-srcuri.com/rails/config/routes.rb:42?remote=github.com/ourcompany/rails
+srcuri.com/rails/config/routes.rb@L42?remote=github.com/ourcompany/rails
 ```
 
 ### External Mode
@@ -95,7 +96,7 @@ Use this for generic paths in blog posts, tutorials, or documentation—where re
 Best-effort resolution when the source doesn't know if a path is workspace-relative, search-relative, or absolute.
 
 ```
-srcuri://any/src/main.rs:42
+srcuri://any/src/main.rs@L42
 ```
 
 Resolution order (applicable steps only): workspace, relative, absolute. `any` never attempts external (`ext`) resolution. Prefer specific modes when you know the context.
@@ -105,7 +106,7 @@ Resolution order (applicable steps only): workspace, relative, absolute. `any` n
 References a specific filesystem path. Useful for system files or documentation that points to known locations.
 
 ```
-srcuri.com/abs/etc/hosts:1
+srcuri.com/abs/etc/hosts@L1
 ```
 
 Not portable across machines.
@@ -141,7 +142,7 @@ If you control the local environment (terminal, logs, scripts) and can't tell wh
 Your team has shared workspace names. Mix of developers, PMs, and managers may click the link.
 
 ```
-https://srcuri.com/backend-api/src/auth/handler.rs:156?remote=github.com/ourcompany/backend-api
+https://srcuri.com/backend-api/src/auth/handler.rs@L156?remote=github.com/ourcompany/backend-api
 ```
 
 - Devs with Sorcery → opens in editor
@@ -168,7 +169,7 @@ Readers open this in whichever Rails project they're working in.
 ### Documenting a system file edit
 
 ```
-https://srcuri.com/abs/etc/hosts:1
+https://srcuri.com/abs/etc/hosts@L1
 ```
 
 ### Creating links in your company's README
@@ -176,7 +177,7 @@ https://srcuri.com/abs/etc/hosts:1
 Internal docs where everyone has the workspace configured.
 
 ```
-See the authentication flow: https://srcuri.com/backend/src/auth/flow.rs:25?remote=github.com/ourcompany/backend
+See the authentication flow: https://srcuri.com/backend/src/auth/flow.rs@L25?remote=github.com/ourcompany/backend
 ```
 
 ### Terminal output or local scripts
@@ -184,7 +185,7 @@ See the authentication flow: https://srcuri.com/backend/src/auth/flow.rs:25?remo
 Custom protocols work here, and you control the environment.
 
 ```
-srcuri://any/src/main.rs:42
+srcuri://any/src/main.rs@L42
 ```
 
 ## Quick Reference
@@ -192,8 +193,8 @@ srcuri://any/src/main.rs:42
 | Context | Format | Mode |
 |---------|--------|------|
 | Any web/SaaS tool | `srcuri.com` | — |
-| Team/company code | workspace | `srcuri.com/myrepo/path:line?remote=...` |
+| Team/company code | workspace | `srcuri.com/myrepo/path@Lline?remote=...` |
 | External OSS (no workspace relationship) | ext | `srcuri.com/ext/https/github.com/...` |
-| Generic path (tutorials, blogs) | rel | `srcuri.com/rel/path:line` |
-| System files | abs | `srcuri.com/abs/etc/hosts:1` |
-| Local scripts / terminal | `srcuri://any/path:line` | any |
+| Generic path (tutorials, blogs) | rel | `srcuri.com/rel/path@Lline` |
+| System files | abs | `srcuri.com/abs/etc/hosts@L1` |
+| Local scripts / terminal | `srcuri://any/path@Lline` | any |

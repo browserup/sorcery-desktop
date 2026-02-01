@@ -185,7 +185,7 @@ examples:
       path: "README.md"
       line_start: 10
       line_end: 20
-    srcuri_url: "srcuri://gitlab-foss/README.md:10"
+    srcuri_url: "srcuri://gitlab-foss/README.md@L10"
     notes: "File view with line range - open at start line"
 
   - gitlab_url: "https://gitlab.com/gitlab-org/gitlab-foss/-/blob/master/LICENSE"
@@ -301,7 +301,7 @@ extraction_examples:
       line_end: "20"
     git_remote_ssh: "git@gitlab.com:gitlab-org/gitlab-foss.git"
     git_remote_https: "https://gitlab.com/gitlab-org/gitlab-foss.git"
-    srcuri_url: "srcuri://gitlab-foss/README.md:10?rev=master"
+    srcuri_url: "srcuri://gitlab-foss/README.md@L10?rev=master"
 
   # Extract from tree URL
   tree_url_extraction:

@@ -714,7 +714,7 @@
                 Profiles → Default → Advanced → Semantic History → Run command:
               </div>
               <div style="background: var(--bg-primary); border: 1px solid var(--border); border-radius: 6px; padding: 0.5rem 0.75rem; display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;">
-                <code style="color: var(--success-light); font-family: 'SF Mono', Monaco, monospace; font-size: 0.875rem;">open "srcuri://\1:\2"</code>
+                <code style="color: var(--success-light); font-family: 'SF Mono', Monaco, monospace; font-size: 0.875rem;">open "srcuri://\1@L\2"</code>
                 <button class="button" onclick="copyItermCommand(this)" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">Copy</button>
               </div>
               <div style="margin-top: 0.5rem;">
@@ -1632,7 +1632,7 @@
     }
 
     async function copyItermCommand(btn) {
-      const command = 'open "srcuri://\\1:\\2"';
+      const command = 'open "srcuri://\\1@L\\2"';
       try {
         await navigator.clipboard.writeText(command);
         const original = btn.textContent;

@@ -199,23 +199,23 @@ conversion:
 # Example transformations
 examples:
   - gitea_url: "https://demo.gitea.com/wediaklup/calc/src/branch/master/add.c#L10"
-    srcuri_url: "srcuri://calc/add.c:10"
+    srcuri_url: "srcuri://calc/add.c@L10"
     notes: "Assumes 'calc' workspace configured locally"
 
   - gitea_url: "https://demo.gitea.com/wediaklup/calc/src/branch/master/sub.c#L5-L15"
-    srcuri_url: "srcuri://calc/sub.c:5"
+    srcuri_url: "srcuri://calc/sub.c@L5"
     notes: "Line ranges converted to start line (editor will show range context)"
 
   - gitea_url: "https://demo.gitea.com/wediaklup/calc/src/commit/afa626e5234875ed9ccd0b3bae59fb88c829a69b/mul.c#L8"
-    srcuri_url: "srcuri://calc/mul.c:8?rev=afa626e5"
+    srcuri_url: "srcuri://calc/mul.c@L8?rev=afa626e5"
     notes: "Commit hash passed as revision parameter"
 
   - gitea_url: "https://git.mycompany.com/backend/api-server/src/branch/develop/src/handlers/user.go#L42"
-    srcuri_url: "srcuri://api-server/src/handlers/user.go:42"
+    srcuri_url: "srcuri://api-server/src/handlers/user.go@L42"
     notes: "Works with self-hosted Gitea instances"
 
   - gitea_url: "http://demo.gitea.com/adamm2/foo/pulls/2/files#diff-8ec9a00bfd09b3190ac6b22251dbb1aa95a0579dR3"
-    srcuri_url: "srcuri://foo/README.md:3"
+    srcuri_url: "srcuri://foo/README.md@L3"
     notes: "PR diff with line number - 'R3' means line 3 in new version, file path extracted from DOM"
 
   - gitea_url: "http://demo.gitea.com/adamm2/foo/pulls/2/files#diff-8ec9a00bfd09b3190ac6b22251dbb1aa95a0579d"

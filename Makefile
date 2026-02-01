@@ -54,7 +54,7 @@ install-quick:
 test-protocol:
 	@echo "==> Testing protocol handler..."
 	@echo "Opening /etc/hosts at line 1..."
-	@open "srcuri:///etc/hosts:1"
+	@open "srcuri:///etc/hosts@L1"
 	@sleep 1
 	@echo ""
 	@echo "If your editor opened /etc/hosts, the protocol handler is working!"

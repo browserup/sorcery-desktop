@@ -130,7 +130,7 @@ Workspace Resolution:
   3. If not found, prompt user to configure workspace
 
 Output srcuri URL:
-  srcuri://calc/add.c:10
+  srcuri://calc/add.c@L10
 ```
 
 ## Adding a New Platform

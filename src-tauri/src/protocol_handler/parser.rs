@@ -11,7 +11,7 @@ pub enum GitRef {
 #[derive(Debug, Clone, PartialEq)]
 pub enum SrcuriRequest {
     /// Implicit workspace: authority IS the workspace name.
-    /// Example: `srcuri://myrepo/path:42`
+    /// Example: `srcuri://myrepo/path@L42`
     ImplicitWorkspace {
         workspace: String,
         path: String,
@@ -21,7 +21,7 @@ pub enum SrcuriRequest {
         remote: Option<String>,
     },
     /// Explicit workspace: authority is "wks".
-    /// Example: `srcuri://wks/myrepo/path:42`
+    /// Example: `srcuri://wks/myrepo/path@L42`
     ExplicitWorkspace {
         workspace: String,
         path: String,
@@ -31,7 +31,7 @@ pub enum SrcuriRequest {
         remote: Option<String>,
     },
     /// Relative mode: authority is "rel" - search for file.
-    /// Example: `srcuri://rel/path/file.rs:42`
+    /// Example: `srcuri://rel/path/file.rs@L42`
     RelativePath {
         path: String,
         line: Option<usize>,
@@ -39,7 +39,7 @@ pub enum SrcuriRequest {
         workspace_hint: Option<String>,
     },
     /// Any mode: authority is "any" - best-effort resolution.
-    /// Example: `srcuri://any/path/file.rs:42`
+    /// Example: `srcuri://any/path/file.rs@L42`
     AnyPath {
         path: String,
         line: Option<usize>,
@@ -47,7 +47,7 @@ pub enum SrcuriRequest {
         workspace_hint: Option<String>,
     },
     /// Absolute path: authority is "abs".
-    /// Examples: `srcuri://abs/etc/hosts:1`, `srcuri://abs/C:/Windows/system.ini:1`
+    /// Examples: `srcuri://abs/etc/hosts@L1`, `srcuri://abs/C:/Windows/system.ini@L1`
     AbsolutePath {
         full_path: String,
         line: Option<usize>,
@@ -242,7 +242,7 @@ impl SrcuriParser {
         }
     }
 
-    /// Parse implicit workspace (e.g., `srcuri://myrepo/path:42`).
+    /// Parse implicit workspace (e.g., `srcuri://myrepo/path@L42`).
     /// Authority IS the workspace name.
     fn parse_implicit_workspace_mode(
         authority: &str,
@@ -275,7 +275,7 @@ impl SrcuriParser {
         })
     }
 
-    /// Parse explicit workspace (e.g., `srcuri://workspace/myrepo/path:42`).
+    /// Parse explicit workspace (e.g., `srcuri://workspace/myrepo/path@L42`).
     /// First path segment after "workspace" is the workspace name.
     fn parse_explicit_workspace_mode(
         path_part: &str,
@@ -312,7 +312,7 @@ impl SrcuriParser {
         })
     }
 
-    /// Parse rel mode (e.g., `srcuri://rel/path/file.rs:42`).
+    /// Parse rel mode (e.g., `srcuri://rel/path/file.rs@L42`).
     /// Searches all workspaces for matching path.
     #[allow(clippy::unnecessary_wraps)]
     fn parse_rel_mode(
@@ -334,7 +334,7 @@ impl SrcuriParser {
         })
     }
 
-    /// Parse any mode (e.g., `srcuri://any/path/file.rs:42`).
+    /// Parse any mode (e.g., `srcuri://any/path/file.rs@L42`).
     /// Best-effort resolution in handler.
     #[allow(clippy::unnecessary_wraps)]
     fn parse_any_mode(
@@ -649,6 +649,10 @@ impl SrcuriParser {
     }
 
     fn parse_path_with_location(path: &str) -> (String, Option<usize>, Option<usize>) {
+        if let Some(parsed) = Self::parse_at_location(path) {
+            return parsed;
+        }
+
         let mut end = path.len();
         let mut line: Option<usize> = None;
         let mut column: Option<usize> = None;
@@ -684,6 +688,117 @@ impl SrcuriParser {
         let file_path = path[..end].to_string();
 
         (file_path, line, column)
+    }
+
+    fn parse_at_location(path: &str) -> Option<(String, Option<usize>, Option<usize>)> {
+        let (head, tail) = Self::split_last_segment(path);
+        let (marker_idx, marker_len) = Self::find_at_marker(tail)?;
+        let suffix = &tail[marker_idx + marker_len..];
+
+        let parsed = Self::parse_at_suffix(suffix)?;
+        let base_tail = &tail[..marker_idx];
+        let file_path = if head.is_empty() {
+            base_tail.to_string()
+        } else {
+            format!("{}/{}", head, base_tail)
+        };
+
+        Some((file_path, parsed.line, parsed.column))
+    }
+
+    fn split_last_segment(path: &str) -> (&str, &str) {
+        if let Some(idx) = path.rfind('/') {
+            (&path[..idx], &path[idx + 1..])
+        } else {
+            ("", path)
+        }
+    }
+
+    fn find_at_marker(tail: &str) -> Option<(usize, usize)> {
+        let mut best_idx: Option<(usize, usize)> = None;
+
+        if let Some(idx) = tail.rfind('@') {
+            best_idx = Some((idx, 1));
+        }
+
+        let lower = tail.to_ascii_lowercase();
+        if let Some(idx) = lower.rfind("%40") {
+            if best_idx.map_or(true, |(best, _)| idx > best) {
+                best_idx = Some((idx, 3));
+            }
+        }
+
+        let (idx, len) = best_idx?;
+        let suffix = &tail[idx + len..];
+        if suffix.is_empty() {
+            return None;
+        }
+        if !suffix.starts_with('L') && !suffix.starts_with('l') {
+            return None;
+        }
+
+        Some((idx, len))
+    }
+
+    fn parse_at_suffix(suffix: &str) -> Option<AtSuffix> {
+        let mut chars = suffix.chars();
+        let first = chars.next()?;
+        if first != 'L' && first != 'l' {
+            return None;
+        }
+
+        let rest = chars.as_str();
+        if rest.is_empty() {
+            return Some(AtSuffix::empty());
+        }
+
+        let (line_opt, rem) = Self::parse_leading_number(rest);
+        if let Some(line) = line_opt {
+            return Self::parse_at_column(line, rem);
+        }
+
+        if let Some(rem) = rem {
+            let mut rem_chars = rem.chars();
+            let first_rem = rem_chars.next()?;
+            if first_rem == 'C' || first_rem == 'c' {
+                let col_tail = rem_chars.as_str();
+                if col_tail.chars().all(|c| c.is_ascii_digit()) {
+                    return Some(AtSuffix::empty());
+                }
+            }
+        }
+
+        None
+    }
+
+    fn parse_at_column(line: usize, rem: Option<&str>) -> Option<AtSuffix> {
+        let Some(rem) = rem else {
+            return Some(AtSuffix::new(line, None));
+        };
+        if rem.is_empty() {
+            return Some(AtSuffix::new(line, None));
+        }
+
+        let mut rem_chars = rem.chars();
+        let marker = rem_chars.next().unwrap_or_default();
+        let col_tail = rem_chars.as_str();
+
+        if marker == 'C' || marker == 'c' || marker == ':' {
+            if col_tail.is_empty() {
+                return Some(AtSuffix::new(line, None));
+            }
+            if !col_tail.chars().all(|c| c.is_ascii_digit()) {
+                return None;
+            }
+            if let Ok(parsed_column) = col_tail.parse::<usize>() {
+                if parsed_column <= 120 {
+                    return Some(AtSuffix::new(line, Some(parsed_column)));
+                }
+            }
+            return Some(AtSuffix::new(line, None));
+        }
+
+        None
     }
 
     fn find_non_drive_colon(path: &str, before: usize) -> Option<usize> {
@@ -724,6 +839,28 @@ impl SrcuriParser {
     }
 }
 
+#[derive(Debug)]
+struct AtSuffix {
+    line: Option<usize>,
+    column: Option<usize>,
+}
+
+impl AtSuffix {
+    fn new(line: usize, column: Option<usize>) -> Self {
+        Self {
+            line: Some(line),
+            column,
+        }
+    }
+
+    fn empty() -> Self {
+        Self {
+            line: None,
+            column: None,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -749,6 +886,121 @@ mod tests {
     #[test]
     fn test_implicit_workspace_with_line() {
         let request = SrcuriParser::parse("srcuri://myproject/README.md:25").expect("parse URL");
+        assert_eq!(
+            request,
+            SrcuriRequest::ImplicitWorkspace {
+                workspace: "myproject".to_string(),
+                path: "README.md".to_string(),
+                line: Some(25),
+                column: None,
+                git_ref: None,
+                remote: None,
+            }
+        );
+    }
+
+    #[test]
+    fn test_implicit_workspace_with_at_line() {
+        let request = SrcuriParser::parse("srcuri://myproject/README.md@L25").expect("parse URL");
+        assert_eq!(
+            request,
+            SrcuriRequest::ImplicitWorkspace {
+                workspace: "myproject".to_string(),
+                path: "README.md".to_string(),
+                line: Some(25),
+                column: None,
+                git_ref: None,
+                remote: None,
+            }
+        );
+    }
+
+    #[test]
+    fn test_implicit_workspace_with_at_line_lowercase() {
+        let request = SrcuriParser::parse("srcuri://myproject/README.md@l25").expect("parse URL");
+        assert_eq!(
+            request,
+            SrcuriRequest::ImplicitWorkspace {
+                workspace: "myproject".to_string(),
+                path: "README.md".to_string(),
+                line: Some(25),
+                column: None,
+                git_ref: None,
+                remote: None,
+            }
+        );
+    }
+
+    #[test]
+    fn test_implicit_workspace_with_at_line_and_column() {
+        let request =
+            SrcuriParser::parse("srcuri://myproject/README.md@L25C7").expect("parse URL");
+        assert_eq!(
+            request,
+            SrcuriRequest::ImplicitWorkspace {
+                workspace: "myproject".to_string(),
+                path: "README.md".to_string(),
+                line: Some(25),
+                column: Some(7),
+                git_ref: None,
+                remote: None,
+            }
+        );
+    }
+
+    #[test]
+    fn test_implicit_workspace_with_at_line_and_column_colon() {
+        let request =
+            SrcuriParser::parse("srcuri://myproject/README.md@L25:7").expect("parse URL");
+        assert_eq!(
+            request,
+            SrcuriRequest::ImplicitWorkspace {
+                workspace: "myproject".to_string(),
+                path: "README.md".to_string(),
+                line: Some(25),
+                column: Some(7),
+                git_ref: None,
+                remote: None,
+            }
+        );
+    }
+
+    #[test]
+    fn test_implicit_workspace_with_at_empty_line() {
+        let request = SrcuriParser::parse("srcuri://myproject/README.md@L").expect("parse URL");
+        assert_eq!(
+            request,
+            SrcuriRequest::ImplicitWorkspace {
+                workspace: "myproject".to_string(),
+                path: "README.md".to_string(),
+                line: None,
+                column: None,
+                git_ref: None,
+                remote: None,
+            }
+        );
+    }
+
+    #[test]
+    fn test_implicit_workspace_with_at_empty_line_and_column_marker() {
+        let request = SrcuriParser::parse("srcuri://myproject/README.md@LC").expect("parse URL");
+        assert_eq!(
+            request,
+            SrcuriRequest::ImplicitWorkspace {
+                workspace: "myproject".to_string(),
+                path: "README.md".to_string(),
+                line: None,
+                column: None,
+                git_ref: None,
+                remote: None,
+            }
+        );
+    }
+
+    #[test]
+    fn test_implicit_workspace_with_encoded_at_line() {
+        let request =
+            SrcuriParser::parse("srcuri://myproject/README.md%40L25").expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::ImplicitWorkspace {
@@ -1511,11 +1763,11 @@ mod tests {
     #[test]
     fn test_trailing_colon_abs_mode() {
         let request =
-            SrcuriParser::parse("srcuri://abs/Users/ebeland/file.txt:").expect("parse URL");
+            SrcuriParser::parse("srcuri://abs/Users/alice/file.txt:").expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::AbsolutePath {
-                full_path: "/Users/ebeland/file.txt".to_string(),
+                full_path: "/Users/alice/file.txt".to_string(),
                 line: None,
                 column: None,
             }

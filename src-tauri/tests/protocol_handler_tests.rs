@@ -7,7 +7,7 @@ use tempfile::TempDir;
 async fn test_protocol_handler_full_path() {
     let (protocol_handler, _settings_manager, _temp_dir, test_file) = setup().await;
 
-    let url = format!("srcuri://abs/{}:5:10", test_file.display());
+    let url = format!("srcuri://abs/{}@L5C10", test_file.display());
     let result = protocol_handler.handle_url(&url).await;
 
     match result {
@@ -30,7 +30,7 @@ async fn test_protocol_handler_partial_path_single_match() {
 
     configure_workspace(&settings_manager, workspace_dir.to_str().unwrap()).await;
 
-    let url = "srcuri://rel/main.rs:10:5";
+    let url = "srcuri://rel/main.rs@L10C5";
     let result = protocol_handler.handle_url(url).await;
 
     match result {
@@ -53,7 +53,7 @@ async fn test_protocol_handler_workspace_path() {
 
     configure_workspace(&settings_manager, workspace_dir.to_str().unwrap()).await;
 
-    let url = "srcuri://myproject/README.md:1:1";
+    let url = "srcuri://myproject/README.md@L1C1";
     let result = protocol_handler.handle_url(url).await;
 
     match result {
@@ -82,7 +82,7 @@ async fn test_protocol_handler_invalid_url() {
 async fn test_protocol_handler_missing_file() {
     let (protocol_handler, _settings_manager, _temp_dir, _test_file) = setup().await;
 
-    let url = "srcuri://abs/nonexistent/file.rs:1:1";
+    let url = "srcuri://abs/nonexistent/file.rs@L1C1";
     let result = protocol_handler.handle_url(url).await;
 
     assert!(

@@ -1,7 +1,7 @@
 ## Overview
 
 Sorcery Desktop is a cross-platform hyperlinker for editors/IDEs. The srcuri:// protocol lets developers share editor-independent code references (file + line) that open in each recipient's preferred editor.
-Example: `srcuri://myproject/README.md:75`
+Example: `srcuri://myproject/README.md@L75`
 
 The app maintains a long-lived local background service to track active editors and their activity
 

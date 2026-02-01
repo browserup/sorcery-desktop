@@ -70,11 +70,11 @@ make install-quick
 ```bash
 # Test protocol handler from command line
 make test-protocol
-open "srcuri:///etc/hosts:1"
+open "srcuri:///etc/hosts@L1"
 
 # Test from browser
 # Paste this in Chrome/Safari/Firefox address bar:
-# srcuri:///etc/hosts:1
+# srcuri:///etc/hosts@L1
 ```
 
 ## Troubleshooting
@@ -98,7 +98,7 @@ make install-quick
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f /Applications/Sorcery\ Desktop.app
 
 # 5. Test
-open "srcuri:///etc/hosts:1"
+open "srcuri:///etc/hosts@L1"
 ```
 
 ### App Won't Launch
@@ -202,7 +202,7 @@ Exec=/usr/bin/sorcery-desktop %u
 
 **Mode 1: Command-line** (fast, exits immediately)
 ```bash
-open "srcuri:///etc/hosts:1"
+open "srcuri:///etc/hosts@L1"
 # macOS passes URL as argv[1]
 # App handles URL, opens editor, exits
 # No GUI, no background process

@@ -66,9 +66,9 @@ test_protocol() {
 }
 
 # Test cases
-test_protocol "srcuri://srcuri/README.md:10:5" "code"
-test_protocol "srcuri://srcuri/src/main.rs:42" "idea"
-test_protocol "srcuri:///absolute/path/file.txt:100" "vim"
+test_protocol "srcuri://srcuri/README.md@L10C5" "code"
+test_protocol "srcuri://srcuri/src/main.rs@L42" "idea"
+test_protocol "srcuri:///absolute/path/file.txt@L100" "vim"
 ```
 
 ### Integration Test Structure

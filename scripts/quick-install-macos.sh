@@ -47,4 +47,4 @@ echo ""
 echo "==> Starting Sorcery Desktop..."
 open "/Applications/Sorcery Desktop.app"
 
-echo "Test with: open \"srcuri:///etc/hosts:1\""
+echo "Test with: open \"srcuri:///etc/hosts@L1\""

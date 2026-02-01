@@ -55,7 +55,7 @@ The only real alternative now, is github.
 
 In slack:
     package.json goes to: http://package.json/
-    with srcuri://package.json:43
+    with srcuri://package.json@L43
 
 * Pasting a link into slack, because of Sorcery Desktop's "path smoothing" universal links work on different machines,
 with different editors, os's, and across git branches, and they can link to a given line, in an editor.
