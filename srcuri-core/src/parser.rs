@@ -5,6 +5,10 @@ use url::Url;
 /// - Full URL: `https://github.com/owner/repo/blob/main/file.rs#L42`
 /// - Path-style: `github.com/owner/repo/blob/main/file.rs@L42` (legacy `:42` accepted)
 /// - With https:// in path: `https://github.com/owner/repo/...`
+///
+/// # Errors
+///
+/// Returns `ParseError` if the URL is malformed or the repository provider is unrecognized.
 pub fn parse_remote_url(remote_url: &str) -> Result<SrcuriTarget, ParseError> {
     // Extract line number from @L or :N suffix if present (for path-style URLs)
     let (url_part, path_line) = extract_path_line_suffix(remote_url);
@@ -13,7 +17,7 @@ pub fn parse_remote_url(remote_url: &str) -> Result<SrcuriTarget, ParseError> {
     let normalized = normalize_to_url(url_part);
 
     let url = Url::parse(&normalized)
-        .map_err(|e| ParseError::new(format!("Invalid URL: {}", e), remote_url))?;
+        .map_err(|e| ParseError::new(format!("Invalid URL: {e}"), remote_url))?;
 
     let provider = detect_provider(&url)
         .ok_or_else(|| ParseError::new("Unrecognized repository provider", remote_url))?;
@@ -35,7 +39,8 @@ pub fn parse_remote_url(remote_url: &str) -> Result<SrcuriTarget, ParseError> {
 }
 
 /// Extract :N line suffix from end of path-style URL
-/// Returns (url_without_suffix, optional_line)
+/// Returns (`url_without_suffix`, `optional_line`)
+#[must_use]
 pub fn extract_path_line_suffix(input: &str) -> (&str, Option<u32>) {
     if let Some((trimmed, line)) = extract_at_line_suffix(input) {
         return (trimmed, line);
@@ -136,10 +141,11 @@ fn normalize_to_url(input: &str) -> String {
     if trimmed.starts_with("https://") || trimmed.starts_with("http://") {
         trimmed.to_string()
     } else {
-        format!("https://{}", trimmed)
+        format!("https://{trimmed}")
     }
 }
 
+#[must_use]
 pub fn detect_provider(url: &Url) -> Option<Provider> {
     let host = url.host_str()?;
     let path = url.path();
@@ -226,7 +232,7 @@ fn parse_github(url: &Url) -> Result<SrcuriTarget, ParseError> {
         if segments.len() >= 2 {
             let owner = segments[0];
             let repo = segments[1];
-            let remote = format!("github.com/{}/{}", owner, repo);
+            let remote = format!("github.com/{owner}/{repo}");
             return Ok(SrcuriTarget {
                 remote,
                 repo_name: repo.to_string(),
@@ -253,7 +259,7 @@ fn parse_github(url: &Url) -> Result<SrcuriTarget, ParseError> {
         }
         let owner = segments[2];
         let repo = segments[3];
-        let remote = format!("github.com/{}/{}", owner, repo);
+        let remote = format!("github.com/{owner}/{repo}");
         return Ok(SrcuriTarget {
             remote,
             repo_name: repo.to_string(),
@@ -274,7 +280,7 @@ fn parse_github(url: &Url) -> Result<SrcuriTarget, ParseError> {
     let owner = segments[0];
     let repo = segments[1];
     // For github.dev, keep github.dev as the host; otherwise use the actual host
-    let remote = format!("{}/{}/{}", host, owner, repo);
+    let remote = format!("{host}/{owner}/{repo}");
 
     // Repo-only URL
     if segments.len() == 2 {
@@ -290,10 +296,7 @@ fn parse_github(url: &Url) -> Result<SrcuriTarget, ParseError> {
 
     // Check for blob/tree/blame/raw/pull pattern
     let view_type = segments.get(2).copied();
-    if !matches!(
-        view_type,
-        Some("blob") | Some("tree") | Some("blame") | Some("raw") | Some("pull")
-    ) {
+    if !matches!(view_type, Some("blob" | "tree" | "blame" | "raw" | "pull")) {
         // Unknown pattern, treat as repo-only
         return Ok(SrcuriTarget {
             remote,
@@ -317,7 +320,7 @@ fn parse_github(url: &Url) -> Result<SrcuriTarget, ParseError> {
         });
     }
 
-    let ref_value = segments.get(3).map(|s| s.to_string());
+    let ref_value = segments.get(3).map(ToString::to_string);
     let file_path = if segments.len() > 4 {
         Some(segments[4..].join("/"))
     } else {
@@ -335,77 +338,73 @@ fn parse_github(url: &Url) -> Result<SrcuriTarget, ParseError> {
     })
 }
 
+/// Parse GitLab Web IDE URLs: /-/ide/project/:group/:project/...
+fn parse_gitlab_web_ide(
+    segments: &[&str],
+    host: &str,
+    fragment: Option<&str>,
+) -> Option<SrcuriTarget> {
+    if segments.len() < 5 || segments[0] != "-" || segments[1] != "ide" || segments[2] != "project"
+    {
+        return None;
+    }
+
+    let group = segments[3];
+    let project = segments[4];
+    let remote = format!("{host}/{group}/{project}");
+
+    // Check for edit/:ref/... pattern with file path
+    if segments.len() >= 7 && segments[5] == "edit" {
+        let ref_value = Some(segments[6].to_string());
+
+        // Determine file path - several patterns possible:
+        // 1. edit/:ref/-/:path (standard with -/ separator)
+        // 2. edit/:ref/-/ (trailing slash, no file)
+        // 3. edit/:ref/:path (no -/ separator, file directly after ref)
+        // 4. edit/:ref (no file at all)
+        let file_path = if segments.len() >= 9 && segments[7] == "-" {
+            let path = segments[8..].join("/");
+            if path.is_empty() {
+                None
+            } else {
+                Some(path)
+            }
+        } else if segments.len() == 8 && segments[7] == "-" {
+            None
+        } else if segments.len() > 7 && segments[7] != "-" {
+            Some(segments[7..].join("/"))
+        } else {
+            None
+        };
+
+        return Some(SrcuriTarget {
+            remote,
+            repo_name: project.to_string(),
+            ref_value,
+            file_path,
+            line: extract_github_line(fragment),
+            is_absolute: false,
+        });
+    }
+
+    // Other IDE patterns (merge_requests, etc.) - repo only
+    Some(SrcuriTarget {
+        remote,
+        repo_name: project.to_string(),
+        ref_value: None,
+        file_path: None,
+        line: None,
+        is_absolute: false,
+    })
+}
+
 fn parse_gitlab(url: &Url) -> Result<SrcuriTarget, ParseError> {
     let host = url.host_str().unwrap_or("gitlab.com");
     let path = url.path();
     let segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
 
-    // Handle Web IDE URLs: /-/ide/project/:group/:project/...
-    if segments.len() >= 5 && segments[0] == "-" && segments[1] == "ide" && segments[2] == "project"
-    {
-        let group = segments[3];
-        let project = segments[4];
-        let remote = format!("{}/{}/{}", host, group, project);
-
-        // Check for edit/:ref/... pattern
-        if segments.len() >= 7 && segments[5] == "edit" {
-            let ref_value = Some(segments[6].to_string());
-
-            // Determine file path - several patterns possible:
-            // 1. edit/:ref/-/:path (standard with -/ separator)
-            // 2. edit/:ref/-/ (trailing slash, no file)
-            // 3. edit/:ref/:path (no -/ separator, file directly after ref)
-            // 4. edit/:ref (no file at all)
-            let file_path = if segments.len() >= 9 && segments[7] == "-" {
-                // Pattern 1: edit/:ref/-/:path
-                let path = segments[8..].join("/");
-                if path.is_empty() {
-                    None
-                } else {
-                    Some(path)
-                }
-            } else if segments.len() == 8 && segments[7] == "-" {
-                // Pattern 2: edit/:ref/-/ (no file after separator)
-                None
-            } else if segments.len() > 7 && segments[7] != "-" {
-                // Pattern 3: edit/:ref/:path (no -/ separator)
-                Some(segments[7..].join("/"))
-            } else {
-                // Pattern 4: edit/:ref (no file)
-                None
-            };
-
-            return Ok(SrcuriTarget {
-                remote,
-                repo_name: project.to_string(),
-                ref_value,
-                file_path,
-                line: extract_github_line(url.fragment()),
-                is_absolute: false,
-            });
-        }
-
-        // edit/:ref with no further segments (e.g., edit/master)
-        if segments.len() == 7 && segments[5] == "edit" {
-            return Ok(SrcuriTarget {
-                remote,
-                repo_name: project.to_string(),
-                ref_value: Some(segments[6].to_string()),
-                file_path: None,
-                line: None,
-                is_absolute: false,
-            });
-        }
-
-        // Other IDE patterns (merge_requests, etc.) - repo only
-        return Ok(SrcuriTarget {
-            remote,
-            repo_name: project.to_string(),
-            ref_value: None,
-            file_path: None,
-            line: None,
-            is_absolute: false,
-        });
+    if let Some(target) = parse_gitlab_web_ide(&segments, host, url.fragment()) {
+        return Ok(target);
     }
 
     if segments.len() < 2 {
@@ -417,7 +416,7 @@ fn parse_gitlab(url: &Url) -> Result<SrcuriTarget, ParseError> {
 
     let group = segments[0];
     let project = segments[1];
-    let remote = format!("{}/{}/{}", host, group, project);
+    let remote = format!("{host}/{group}/{project}");
 
     // Repo-only URL
     if segments.len() == 2 {
@@ -447,10 +446,7 @@ fn parse_gitlab(url: &Url) -> Result<SrcuriTarget, ParseError> {
 
     let dash_idx = dash_pos.unwrap();
     let view_type = segments.get(dash_idx + 1).copied();
-    if !matches!(
-        view_type,
-        Some("blob") | Some("tree") | Some("blame") | Some("raw")
-    ) {
+    if !matches!(view_type, Some("blob" | "tree" | "blame" | "raw")) {
         return Ok(SrcuriTarget {
             remote,
             repo_name: project.to_string(),
@@ -461,7 +457,7 @@ fn parse_gitlab(url: &Url) -> Result<SrcuriTarget, ParseError> {
         });
     }
 
-    let ref_value = segments.get(dash_idx + 2).map(|s| s.to_string());
+    let ref_value = segments.get(dash_idx + 2).map(ToString::to_string);
     let file_path = if segments.len() > dash_idx + 3 {
         Some(segments[dash_idx + 3..].join("/"))
     } else {
@@ -493,7 +489,7 @@ fn parse_bitbucket(url: &Url) -> Result<SrcuriTarget, ParseError> {
 
     let workspace = segments[0];
     let repo = segments[1];
-    let remote = format!("{}/{}/{}", host, workspace, repo);
+    let remote = format!("{host}/{workspace}/{repo}");
 
     // Repo-only URL
     if segments.len() == 2 {
@@ -519,7 +515,7 @@ fn parse_bitbucket(url: &Url) -> Result<SrcuriTarget, ParseError> {
         });
     }
 
-    let ref_value = segments.get(3).map(|s| s.to_string());
+    let ref_value = segments.get(3).map(ToString::to_string);
     let file_path = if segments.len() > 4 {
         Some(segments[4..].join("/"))
     } else {
@@ -554,7 +550,7 @@ fn parse_gitea(url: &Url, provider: Provider) -> Result<SrcuriTarget, ParseError
 
     let owner = segments[0];
     let repo = segments[1];
-    let remote = format!("{}/{}/{}", host, owner, repo);
+    let remote = format!("{host}/{owner}/{repo}");
 
     // Repo-only URL
     if segments.len() == 2 {
@@ -581,7 +577,7 @@ fn parse_gitea(url: &Url, provider: Provider) -> Result<SrcuriTarget, ParseError
     }
 
     let ref_type = segments.get(3).copied();
-    if !matches!(ref_type, Some("branch") | Some("tag") | Some("commit")) {
+    if !matches!(ref_type, Some("branch" | "tag" | "commit")) {
         return Ok(SrcuriTarget {
             remote,
             repo_name: repo.to_string(),
@@ -592,7 +588,7 @@ fn parse_gitea(url: &Url, provider: Provider) -> Result<SrcuriTarget, ParseError
         });
     }
 
-    let ref_value = segments.get(4).map(|s| s.to_string());
+    let ref_value = segments.get(4).map(ToString::to_string);
     let file_path = if segments.len() > 5 {
         Some(segments[5..].join("/"))
     } else {
@@ -631,7 +627,7 @@ fn parse_azure(url: &Url) -> Result<SrcuriTarget, ParseError> {
 
     // Build remote: either org/project/_git/repo or org/_git/repo
     let remote = segments[..=git_idx + 1].join("/");
-    let remote = format!("{}/{}", host, remote);
+    let remote = format!("{host}/{remote}");
 
     // Extract query params
     let mut file_path = None;
@@ -1064,8 +1060,7 @@ mod tests {
 
     #[test]
     fn path_style_with_encoded_at_line() {
-        let result =
-            parse_remote_url("github.com/owner/repo/blob/main/file.rs%40L42").unwrap();
+        let result = parse_remote_url("github.com/owner/repo/blob/main/file.rs%40L42").unwrap();
         assert_eq!(result.line, Some(42));
         assert_eq!(result.file_path, Some("file.rs".to_string()));
     }

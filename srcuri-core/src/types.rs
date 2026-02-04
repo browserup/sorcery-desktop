@@ -1,6 +1,6 @@
-use std::fmt;
+use std::fmt::{self, Write};
 
-#[derive(Debug, Clone, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct SrcuriTarget {
     pub remote: String,
     pub repo_name: String,
@@ -11,6 +11,7 @@ pub struct SrcuriTarget {
 }
 
 impl SrcuriTarget {
+    #[must_use]
     pub fn to_mirror_url(&self) -> String {
         let mut url = format!("/{}", self.repo_name);
 
@@ -20,12 +21,12 @@ impl SrcuriTarget {
         }
 
         if let Some(line) = self.line {
-            url.push_str(&format!("@L{}", line));
+            write!(url, "@L{line}").unwrap();
         }
 
         let mut query_parts = Vec::new();
         if let Some(ref branch) = self.ref_value {
-            query_parts.push(format!("branch={}", branch));
+            query_parts.push(format!("branch={branch}"));
         }
         // Include https:// prefix for git clone compatibility
         query_parts.push(format!("remote=https://{}", self.remote));
@@ -40,6 +41,7 @@ impl SrcuriTarget {
 
     /// Construct a URL to view this file on the remote provider (GitHub, GitLab, etc.)
     /// Returns None if there's no remote or no file path to view.
+    #[must_use]
     pub fn to_view_url(&self) -> Option<String> {
         if self.remote.is_empty() || self.file_path.is_none() {
             return None;
@@ -81,9 +83,9 @@ impl SrcuriTarget {
         // Append line number fragment
         let url = if let Some(line) = self.line {
             if remote_lower.contains("bitbucket") {
-                format!("{}#lines-{}", base_url, line)
+                format!("{base_url}#lines-{line}")
             } else {
-                format!("{}#L{}", base_url, line)
+                format!("{base_url}#L{line}")
             }
         } else {
             base_url
@@ -93,6 +95,7 @@ impl SrcuriTarget {
     }
 
     /// Get a human-readable name for the remote provider
+    #[must_use]
     pub fn provider_name(&self) -> &'static str {
         let remote_lower = self.remote.to_lowercase();
         if remote_lower.contains("github.com") {
@@ -113,7 +116,7 @@ impl SrcuriTarget {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Provider {
     GitHub,
     GitLab,
