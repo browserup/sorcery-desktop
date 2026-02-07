@@ -230,7 +230,7 @@ pub struct RepoIdentity {
 pub struct WorkspaceConfig {
     pub path: String,
 
-    #[serde(default)]
+    #[serde(default, alias = "name")]
     pub workspace_key: String,
 
     #[serde(default)]

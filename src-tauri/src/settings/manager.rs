@@ -759,6 +759,35 @@ workspaces:
     }
 
     #[tokio::test]
+    async fn load_accepts_legacy_name_field_as_workspace_key() {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let settings_path = temp_dir.path().join("settings.yaml");
+        let workspace_path = temp_dir.path().join("repo");
+        std::fs::create_dir_all(&workspace_path).expect("workspace path");
+
+        let yaml = format!(
+            r#"
+defaults:
+  editor: "vscode"
+workspaces:
+  - path: "{}"
+    name: "repo"
+"#,
+            workspace_path.to_string_lossy()
+        );
+        std::fs::write(&settings_path, yaml).expect("write settings yaml");
+
+        let manager = SettingsManager::new_with_path(settings_path)
+            .await
+            .expect("settings manager");
+        manager.load().await.expect("legacy name field should load");
+
+        let settings = manager.get().await;
+        assert_eq!(settings.workspaces.len(), 1);
+        assert_eq!(settings.workspaces[0].workspace_key, "repo");
+    }
+
+    #[tokio::test]
     async fn save_normalizes_existing_absolute_workspace_path() {
         let temp_dir = TempDir::new().expect("temp dir");
         let settings_path = temp_dir.path().join("settings.yaml");
