@@ -281,7 +281,7 @@ pub async fn delete_workspace(
         settings.workspaces.remove(index);
 
         // If it was auto-discovered, add to ignored list so it doesn't reappear
-        if was_auto_discovered {
+        if was_auto_discovered && !settings.defaults.ignored_workspaces.contains(&path) {
             settings.defaults.ignored_workspaces.push(path);
         }
 

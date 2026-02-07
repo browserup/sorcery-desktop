@@ -1005,6 +1005,19 @@
             </div>
             <div id="discovered-workspaces-list"></div>
           </div>
+          <div style="margin-top: 0.5rem;">
+            <a
+              href="#"
+              id="ignored-workspaces-toggle"
+              onclick="toggleIgnoredWorkspaces(); return false;"
+              style="display: none; color: var(--text-secondary); font-size: 0.8125rem;"
+            >
+              Ignored Items (0)
+            </a>
+          </div>
+          <div id="ignored-workspaces-section" style="display: none; margin-top: 0.5rem;">
+            <div id="ignored-workspaces-list"></div>
+          </div>
         </div>
 
         <div id="workspaces-status-message" class="status-message"></div>
@@ -1182,6 +1195,7 @@
     // Settings Tab
     let workspaces = [];
     let discoveredWorkspaces = [];
+    let ignoredWorkspaces = [];
     let defaultEditor = 'vscode';
     let allowNonWorkspaceFiles = false;
     let preferredTerminal = 'auto';
@@ -1257,11 +1271,13 @@
       const settings = await window.__TAURI__.core.invoke('get_settings');
       const allWorkspaces = settings.workspaces || [];
       persistedAutoDiscoveredWorkspaces = allWorkspaces.filter(ws => ws.auto_discovered);
+      ignoredWorkspaces = settings.defaults?.ignored_workspaces || [];
       workspaces = allWorkspaces
         .filter(ws => !ws.auto_discovered)
         .map(withLookupKey);
       renderWorkspaces();
       await loadDiscoveredWorkspaces();
+      renderIgnoredWorkspaces();
     }
 
     async function subscribeWorkspaceHealthUpdates() {
@@ -1317,6 +1333,7 @@
         const settings = await window.__TAURI__.core.invoke('get_settings');
         const allWorkspaces = settings.workspaces || [];
         persistedAutoDiscoveredWorkspaces = allWorkspaces.filter(ws => ws.auto_discovered);
+        ignoredWorkspaces = settings.defaults?.ignored_workspaces || [];
         workspaces = allWorkspaces
           .filter(ws => !ws.auto_discovered)
           .map(withLookupKey);
@@ -1347,6 +1364,7 @@
         await refreshWorkspaceHealth(false);
         renderWorkspaces();
         await loadDiscoveredWorkspaces();
+        renderIgnoredWorkspaces();
       } catch (e) {
         showStatus('Error loading settings: ' + e, 'error');
       }
@@ -1416,12 +1434,14 @@
         const settings = await window.__TAURI__.core.invoke('get_settings');
         const allWorkspaces = settings.workspaces || [];
         persistedAutoDiscoveredWorkspaces = allWorkspaces.filter(ws => ws.auto_discovered);
+        ignoredWorkspaces = settings.defaults?.ignored_workspaces || [];
         workspaces = allWorkspaces
           .filter(ws => !ws.auto_discovered)
           .map(withLookupKey);
         await refreshWorkspaceHealth(false);
         renderWorkspaces();
         await loadDiscoveredWorkspaces();
+        renderIgnoredWorkspaces();
       } catch (e) {
         console.error('Failed to sync workspaces:', e);
       }
@@ -1442,6 +1462,7 @@
           allow_non_workspace_files: allowNonWorkspaceFiles,
           preferred_terminal: preferredTerminal,
           auto_switch_clean_branches: autoSwitchCleanBranches,
+          ignored_workspaces: ignoredWorkspaces,
           strip_git_diff_prefixes: stripGitDiffPrefixes,
           default_workspaces_folder: defaultWorkspacesFolder,
           large_file_warning_mb: largeFileWarningMb,
@@ -1770,7 +1791,7 @@
       try {
         await window.__TAURI__.core.invoke('delete_workspace', { path: ws.path });
         showWorkspacesStatus('Workspace removed (added to ignored list)', 'success');
-        await loadDiscoveredWorkspaces();
+        await loadSettings();
       } catch (e) {
         showWorkspacesStatus('Failed to remove workspace: ' + e, 'error');
       }
@@ -1791,6 +1812,72 @@
       } catch (e) {
         showWorkspacesStatus('Failed to promote workspace: ' + e, 'error');
       }
+    }
+
+    function toggleIgnoredWorkspaces() {
+      const section = document.getElementById('ignored-workspaces-section');
+      const link = document.getElementById('ignored-workspaces-toggle');
+      if (!section || !link) return;
+
+      const isHidden = section.style.display === 'none' || section.style.display === '';
+      section.style.display = isHidden ? 'block' : 'none';
+      link.textContent = isHidden
+        ? `Hide Ignored Items (${ignoredWorkspaces.length})`
+        : `Ignored Items (${ignoredWorkspaces.length})`;
+    }
+
+    async function unignoreWorkspace(idx) {
+      const path = ignoredWorkspaces[idx];
+      if (!path) return;
+
+      ignoredWorkspaces = ignoredWorkspaces.filter((candidate, index) => index !== idx);
+
+      try {
+        await saveSettings();
+        await syncAndReloadWorkspaces();
+        showWorkspacesStatus('Workspace removed from ignored list', 'success');
+      } catch (e) {
+        showWorkspacesStatus('Failed to un-ignore workspace: ' + e, 'error');
+      }
+    }
+
+    function renderIgnoredWorkspaces() {
+      const toggle = document.getElementById('ignored-workspaces-toggle');
+      const section = document.getElementById('ignored-workspaces-section');
+      const list = document.getElementById('ignored-workspaces-list');
+      if (!toggle || !section || !list) return;
+
+      if (ignoredWorkspaces.length === 0) {
+        toggle.style.display = 'none';
+        section.style.display = 'none';
+        list.innerHTML = '';
+        return;
+      }
+
+      const isExpanded = section.style.display === 'block';
+      toggle.style.display = 'inline';
+      toggle.textContent = isExpanded
+        ? `Hide Ignored Items (${ignoredWorkspaces.length})`
+        : `Ignored Items (${ignoredWorkspaces.length})`;
+
+      const items = ignoredWorkspaces.map((path, idx) => `
+        <div class="workspace-item discovered">
+          <div class="workspace-meta">
+            <span class="workspace-status-badge unavailable">Ignored</span>
+          </div>
+          <div class="workspace-row">
+            <div class="field-group path-field">
+              <div class="field-label">Path</div>
+              <div style="padding: 0.375rem 0; color: var(--text-secondary); font-size: 0.875rem;">${path}</div>
+            </div>
+            <div class="workspace-actions">
+              <button class="workspace-btn" onclick="unignoreWorkspace(${idx})">Un-ignore</button>
+            </div>
+          </div>
+        </div>
+      `).join('');
+
+      list.innerHTML = items;
     }
 
     function showStatus(message, type) {
