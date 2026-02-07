@@ -1,4 +1,4 @@
-.PHONY: help build build-release build-dmg build-linux install install-quick release test-protocol clean dev
+.PHONY: help build build-release build-dmg build-linux install install-quick auto-install release test-protocol clean dev
 
 help:
 	@echo "Sorcery Desktop Development Makefile"
@@ -11,6 +11,7 @@ help:
 	@echo "  make build-dmg      - Build signed/notarized DMG for distribution (macOS)"
 	@echo "  make build-linux    - Build .deb/.rpm/.AppImage for distribution (Linux)"
 	@echo "  make install-quick  - Install existing build (no rebuild)"
+	@echo "  make auto-install   - Watch files and run make install on changes (macOS)"
 	@echo "  make test-protocol  - Test srcuri:// protocol handler"
 	@echo "  make clean          - Clean build artifacts"
 	@echo "  make dev            - Build, install, and test"
@@ -50,6 +51,9 @@ release:
 
 install-quick:
 	@./scripts/quick-install-macos.sh
+
+auto-install:
+	@./scripts/auto-install-macos.sh
 
 test-protocol:
 	@echo "==> Testing protocol handler..."
