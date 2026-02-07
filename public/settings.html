@@ -365,6 +365,17 @@
       color: var(--primary);
     }
 
+    .refresh-icon-btn {
+      width: 30px;
+      height: 30px;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.95rem;
+      line-height: 1;
+    }
+
     .discovered-section-header {
       display: flex;
       align-items: center;
@@ -979,7 +990,14 @@
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
             <h2>Workspace Mappings</h2>
             <div style="display: flex; gap: 0.5rem;">
-              <button class="promote-btn" onclick="reconcileWorkspaceHealth()">Refresh Status</button>
+              <button
+                class="promote-btn refresh-icon-btn"
+                onclick="reconcileWorkspaceHealth()"
+                title="Refresh Status"
+                aria-label="Refresh Status"
+              >
+                ⟳
+              </button>
               <button class="add-workspace-btn" onclick="addWorkspace()">+ Add Workspace</button>
             </div>
           </div>
@@ -1068,10 +1086,14 @@
     <div id="debug-pane" class="tab-pane">
       <div style="max-width: 1200px; margin: 0 auto;">
         <h1 style="font-size: 1.5rem; margin-bottom: 0.5rem;">Command History</h1>
-        <p style="color: var(--text-secondary); margin-bottom: 1.5rem; font-size: 0.875rem;">Log showing the last 30 commands (editor launches, git operations, etc.)</p>
+        <p style="color: var(--text-secondary); margin-bottom: 1.5rem; font-size: 0.875rem;">Log showing the last 30 commands. Use the toggle to switch between editor and git history.</p>
 
         <div class="toolbar">
           <input type="text" class="search-box" id="search-box" placeholder="Search commands, args, or output...">
+          <div style="display: flex; gap: 0.5rem;">
+            <button class="filter-button active" data-scope="editor" onclick="setCommandScope('editor')">Editor</button>
+            <button class="filter-button" data-scope="git" onclick="setCommandScope('git')">Git</button>
+          </div>
           <div style="display: flex; gap: 0.5rem;">
             <button class="filter-button active" data-filter="all" onclick="setFilter('all')">All</button>
             <button class="filter-button" data-filter="success" onclick="setFilter('success')">Success</button>
@@ -2192,6 +2214,7 @@
 
     // Debug Log Tab
     let commandHistory = [];
+    let currentCommandScope = 'editor';
     let currentFilter = 'all';
     let expandedRows = new Set();
 
@@ -2206,10 +2229,19 @@
 
     function setFilter(filter) {
       currentFilter = filter;
-      document.querySelectorAll('.filter-button').forEach(btn => {
+      document.querySelectorAll('.filter-button[data-filter]').forEach(btn => {
         btn.classList.remove('active');
       });
       document.querySelector(`[data-filter="${filter}"]`).classList.add('active');
+      renderHistory();
+    }
+
+    function setCommandScope(scope) {
+      currentCommandScope = scope;
+      document.querySelectorAll('.filter-button[data-scope]').forEach(btn => {
+        btn.classList.remove('active');
+      });
+      document.querySelector(`[data-scope="${scope}"]`).classList.add('active');
       renderHistory();
     }
 
@@ -2227,6 +2259,9 @@
     function renderHistory() {
       const searchTerm = document.getElementById('search-box').value.toLowerCase();
       let filtered = commandHistory.filter(entry => {
+        const commandType = entry.command_type || 'git';
+        if (currentCommandScope === 'editor' && commandType === 'git') return false;
+        if (currentCommandScope === 'git' && commandType !== 'git') return false;
         if (currentFilter === 'success' && !entry.success) return false;
         if (currentFilter === 'error' && entry.success) return false;
         if (searchTerm) {
