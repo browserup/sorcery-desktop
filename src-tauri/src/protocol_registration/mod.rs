@@ -76,20 +76,16 @@ impl ProtocolRegistration {
         // Find the .app bundle containing this executable
         let app_bundle = if exe_str.contains(".app/Contents/MacOS/") {
             let parts: Vec<&str> = exe_str.split(".app/Contents/MacOS/").collect();
-            if !parts.is_empty() {
-                format!("{}.app", parts[0])
-            } else {
-                anyhow::bail!(
-                    "Could not determine app bundle path from executable: {}",
-                    exe_str
-                );
+            if parts.is_empty() {
+                anyhow::bail!("Could not determine app bundle path from executable: {exe_str}");
             }
+            format!("{}.app", parts[0])
         } else {
-            anyhow::bail!("Executable is not inside an app bundle: {}", exe_str);
+            anyhow::bail!("Executable is not inside an app bundle: {exe_str}");
         };
 
         if !std::path::Path::new(&app_bundle).exists() {
-            anyhow::bail!("App bundle not found: {}", app_bundle);
+            anyhow::bail!("App bundle not found: {app_bundle}");
         }
 
         tracing::info!("Re-registering app bundle with lsregister: {}", app_bundle);
@@ -137,11 +133,7 @@ impl ProtocolRegistration {
             details = "Protocol not registered. Run the app to auto-register.".to_string();
         }
 
-        let executables_match = if let Some(ref reg_exe) = registered_exe {
-            reg_exe == &current_exe
-        } else {
-            false
-        };
+        let executables_match = registered_exe.as_ref() == Some(&current_exe);
 
         ProtocolRegistrationStatus {
             is_registered,
@@ -236,6 +228,10 @@ impl ProtocolRegistration {
         // Get the executable path
         let exe_path = std::env::current_exe()?;
         let exe_path_str = exe_path.to_string_lossy();
+        let startup_wm_class = exe_path
+            .file_stem()
+            .and_then(|stem| stem.to_str())
+            .map_or_else(|| "sorcery".to_string(), ToString::to_string);
 
         let desktop_content = format!(
             r#"[Desktop Entry]
@@ -248,9 +244,9 @@ Icon=sorcery
 Terminal=false
 Categories=Development;Utility;
 MimeType=x-scheme-handler/srcuri;
-StartupWMClass=sorcery-desktop
+StartupWMClass={}
 "#,
-            exe_path_str
+            exe_path_str, startup_wm_class
         );
 
         fs::write(path, desktop_content)?;
@@ -290,7 +286,7 @@ StartupWMClass=sorcery-desktop
         ];
 
         for app_path in &possible_paths {
-            let plist_path = format!("{}/Contents/Info.plist", app_path);
+            let plist_path = format!("{app_path}/Contents/Info.plist");
             if std::path::Path::new(&plist_path).exists() {
                 // Check if this plist has srcuri in CFBundleURLSchemes
                 let output = Command::new("defaults")
@@ -308,12 +304,20 @@ StartupWMClass=sorcery-desktop
                             .ok()
                             .and_then(|o| String::from_utf8(o.stdout).ok())
                             .map_or_else(
-                                || "sorcery-desktop".to_string(),
+                                || {
+                                    std::path::Path::new(&current_exe)
+                                        .file_name()
+                                        .and_then(|name| name.to_str())
+                                        .map_or_else(
+                                            || "sorcery-desktop".to_string(),
+                                            ToString::to_string,
+                                        )
+                                },
                                 |s| s.trim().to_string(),
                             );
-                        let exe_path = format!("{}/Contents/MacOS/{}", app_path, exe_name);
+                        let exe_path = format!("{app_path}/Contents/MacOS/{exe_name}");
                         registered_exe = Some(exe_path);
-                        details = format!("App bundle: {}", app_path);
+                        details = format!("App bundle: {app_path}");
                         break;
                     }
                 }
@@ -325,7 +329,7 @@ StartupWMClass=sorcery-desktop
             let parts: Vec<&str> = current_exe.split(".app/Contents/MacOS/").collect();
             if !parts.is_empty() {
                 let app_bundle = format!("{}.app", parts[0]);
-                let plist_path = format!("{}/Contents/Info.plist", app_bundle);
+                let plist_path = format!("{app_bundle}/Contents/Info.plist");
 
                 if std::path::Path::new(&plist_path).exists() {
                     let output = Command::new("defaults")
@@ -337,7 +341,7 @@ StartupWMClass=sorcery-desktop
                         if plist_content.contains("srcuri") {
                             is_registered = true;
                             registered_exe = Some(current_exe.clone());
-                            details = format!("App bundle: {}", app_bundle);
+                            details = format!("App bundle: {app_bundle}");
                         }
                     }
                 }
@@ -349,11 +353,7 @@ StartupWMClass=sorcery-desktop
                 .to_string();
         }
 
-        let executables_match = if let Some(ref reg_exe) = registered_exe {
-            reg_exe == &current_exe
-        } else {
-            false
-        };
+        let executables_match = registered_exe.as_ref() == Some(&current_exe);
 
         ProtocolRegistrationStatus {
             is_registered,
@@ -415,11 +415,7 @@ StartupWMClass=sorcery-desktop
             details = "Protocol not registered. Run the MSI installer.".to_string();
         }
 
-        let executables_match = if let Some(ref reg_exe) = registered_exe {
-            reg_exe == &current_exe
-        } else {
-            false
-        };
+        let executables_match = registered_exe.as_ref() == Some(&current_exe);
 
         ProtocolRegistrationStatus {
             is_registered,

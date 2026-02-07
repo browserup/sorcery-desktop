@@ -35,7 +35,9 @@ impl Default for GitCommandLog {
     }
 }
 
+#[allow(clippy::cast_possible_truncation)]
 impl GitCommandLog {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -153,12 +155,12 @@ impl GitCommandLog {
 
         let entry = GitCommandLogEntry {
             timestamp: Utc::now(),
-            command: format!("open-{}", editor),
+            command: format!("open-{editor}"),
             args,
             working_dir: ".".to_string(),
             exit_code: if success { Some(0) } else { Some(1) },
             stdout: if success {
-                format!("Launched {} for {}", editor, file_path)
+                format!("Launched {editor} for {file_path}")
             } else {
                 String::new()
             },
@@ -217,6 +219,7 @@ impl GitCommandLog {
 pub static GIT_COMMAND_LOG: LazyLock<Arc<GitCommandLog>> =
     LazyLock::new(|| Arc::new(GitCommandLog::new()));
 
+#[allow(clippy::missing_errors_doc)]
 pub fn run_git_command(working_dir: &str, args: &[&str]) -> std::io::Result<Output> {
     let start = Instant::now();
 

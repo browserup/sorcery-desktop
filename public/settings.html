@@ -237,6 +237,106 @@
       border-style: dashed;
     }
 
+    .workspace-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      align-items: center;
+      margin-bottom: 0.25rem;
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+    }
+
+    .workspace-meta code {
+      font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+      font-size: 0.75rem;
+    }
+
+    .workspace-status-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.125rem 0.5rem;
+      border-radius: 999px;
+      font-size: 0.6875rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+      border: 1px solid var(--border);
+      background: var(--bg-primary);
+    }
+
+    .workspace-status-badge.healthy {
+      color: #16a34a;
+      border-color: rgba(22, 163, 74, 0.45);
+      background: rgba(22, 163, 74, 0.12);
+    }
+
+    .workspace-status-badge.missing {
+      color: #d97706;
+      border-color: rgba(217, 119, 6, 0.45);
+      background: rgba(217, 119, 6, 0.12);
+    }
+
+    .workspace-status-badge.unavailable {
+      color: #f59e0b;
+      border-color: rgba(245, 158, 11, 0.45);
+      background: rgba(245, 158, 11, 0.12);
+    }
+
+    .workspace-status-badge.drifted {
+      color: #f97316;
+      border-color: rgba(249, 115, 22, 0.45);
+      background: rgba(249, 115, 22, 0.12);
+    }
+
+    .workspace-status-badge.conflict {
+      color: #ef4444;
+      border-color: rgba(239, 68, 68, 0.45);
+      background: rgba(239, 68, 68, 0.12);
+    }
+
+    .workspace-health-banner {
+      display: none;
+      border: 1px solid rgba(245, 158, 11, 0.35);
+      border-radius: 8px;
+      background: rgba(245, 158, 11, 0.08);
+      padding: 0.75rem;
+      margin-bottom: 0.75rem;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+    }
+
+    .workspace-health-banner strong {
+      color: var(--text-primary);
+    }
+
+    .workspace-health-banner .summary {
+      color: var(--text-secondary);
+      font-size: 0.8125rem;
+    }
+
+    .workspace-health-banner button {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+      padding: 0.35rem 0.65rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .workspace-health-banner button:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    .workspace-health-actions {
+      display: flex;
+      gap: 0.5rem;
+    }
+
     .badge-auto {
       background: #6b7280;
       color: white;
@@ -326,6 +426,48 @@
 
     .field-group.path-field {
       flex: 1;
+    }
+
+    .workspace-actions {
+      display: flex;
+      align-items: flex-end;
+      gap: 0.375rem;
+      margin-left: auto;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .workspace-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      padding: 0.35rem 0.6rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+
+    .workspace-btn:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    .workspace-btn.warn:hover {
+      border-color: var(--warning);
+      color: var(--warning-light);
+    }
+
+    .workspace-btn.danger {
+      border-color: rgba(239, 68, 68, 0.45);
+      color: var(--error-light);
+    }
+
+    .workspace-btn.danger:hover {
+      border-color: var(--error);
+      color: white;
+      background: rgba(239, 68, 68, 0.85);
     }
 
     .add-workspace-btn {
@@ -663,7 +805,7 @@
 </head>
 <body>
   <div class="title-bar" data-tauri-drag-region>
-    <h1>Sorcery</h1>
+    <h1>Sorcery Desktop</h1>
   </div>
   <div class="tabs">
     <button class="tab active" data-tab="settings" onclick="switchTab('settings')">Settings</button>
@@ -836,11 +978,24 @@
         <div class="section">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
             <h2>Workspace Mappings</h2>
-            <button class="add-workspace-btn" onclick="addWorkspace()">+ Add Workspace</button>
+            <div style="display: flex; gap: 0.5rem;">
+              <button class="promote-btn" onclick="reconcileWorkspaceHealth()">Refresh Status</button>
+              <button class="add-workspace-btn" onclick="addWorkspace()">+ Add Workspace</button>
+            </div>
           </div>
           <p class="help-text" style="margin-bottom: 0.75rem;">
             Map workspace directories to specific editors. Files will open in the matching editor.
           </p>
+          <div id="workspace-health-banner" class="workspace-health-banner">
+            <div>
+              <strong>Workspace health issues detected</strong>
+              <div id="workspace-health-summary" class="summary"></div>
+            </div>
+            <div class="workspace-health-actions">
+              <button onclick="reviewWorkspaceIssues()">Review</button>
+              <button onclick="reconcileWorkspaceHealth()">Reconcile</button>
+            </div>
+          </div>
           <div id="workspaces-list"></div>
           <div id="discovered-workspaces-section" style="display: none;">
             <div class="discovered-section-header">
@@ -1036,6 +1191,99 @@
     let largeFileWarningMb = 5;
     let maxFileSizeMb = 50;
     let installedEditors = [];
+    let persistedAutoDiscoveredWorkspaces = [];
+    let workspaceHealth = {
+      healthy: 0,
+      missing: 0,
+      unavailable: 0,
+      drifted: 0,
+      conflict: 0
+    };
+    let workspaceHealthUnlisten = null;
+    let workspaceRefreshDebounceTimer = null;
+
+    function workspaceDisplayKey(workspace) {
+      return (workspace.workspace_key || workspace.__lookup_key || '').trim();
+    }
+
+    function workspaceLookupKey(workspace) {
+      return (workspace.__lookup_key || workspace.workspace_key || '').trim();
+    }
+
+    function withLookupKey(workspace) {
+      return {
+        ...workspace,
+        __lookup_key: workspaceDisplayKey(workspace)
+      };
+    }
+
+    function serializeWorkspaceForSave(workspace) {
+      const workspaceKey = workspaceDisplayKey(workspace);
+      return {
+        path: workspace.path,
+        editor: workspace.editor || '',
+        workspace_key: workspaceKey,
+        trusted: workspace.trusted === true,
+        auto_discovered: workspace.auto_discovered === true,
+        workspace_kind: workspace.workspace_kind || 'non_git',
+        workspace_state: workspace.workspace_state || 'present',
+        repo_identity: workspace.repo_identity || null,
+        last_verified_at: workspace.last_verified_at ?? null
+      };
+    }
+
+    function normalizeWorkspaceHealthPayload(payload) {
+      if (!payload || typeof payload !== 'object') {
+        return {
+          healthy: 0,
+          missing: 0,
+          unavailable: 0,
+          drifted: 0,
+          conflict: 0
+        };
+      }
+
+      const count = (key) => Number(payload[key] ?? 0) || 0;
+      return {
+        healthy: count('healthy'),
+        missing: count('missing'),
+        unavailable: count('unavailable'),
+        drifted: count('drifted'),
+        conflict: count('conflict')
+      };
+    }
+
+    async function reloadWorkspaceListsOnly() {
+      const settings = await window.__TAURI__.core.invoke('get_settings');
+      const allWorkspaces = settings.workspaces || [];
+      persistedAutoDiscoveredWorkspaces = allWorkspaces.filter(ws => ws.auto_discovered);
+      workspaces = allWorkspaces
+        .filter(ws => !ws.auto_discovered)
+        .map(withLookupKey);
+      renderWorkspaces();
+      await loadDiscoveredWorkspaces();
+    }
+
+    async function subscribeWorkspaceHealthUpdates() {
+      if (workspaceHealthUnlisten || !window.__TAURI__?.event?.listen) {
+        return;
+      }
+
+      const { listen } = window.__TAURI__.event;
+      workspaceHealthUnlisten = await listen('workspace-health-updated', async (event) => {
+        workspaceHealth = normalizeWorkspaceHealthPayload(event.payload);
+        renderWorkspaceHealthBanner();
+
+        if (workspaceRefreshDebounceTimer) {
+          clearTimeout(workspaceRefreshDebounceTimer);
+        }
+        workspaceRefreshDebounceTimer = setTimeout(() => {
+          reloadWorkspaceListsOnly().catch((e) => {
+            console.error('Failed to refresh workspaces after health update:', e);
+          });
+        }, 250);
+      });
+    }
 
     async function loadInstalledEditors() {
       try {
@@ -1067,7 +1315,11 @@
         await loadInstalledEditors();
 
         const settings = await window.__TAURI__.core.invoke('get_settings');
-        workspaces = settings.workspaces || [];
+        const allWorkspaces = settings.workspaces || [];
+        persistedAutoDiscoveredWorkspaces = allWorkspaces.filter(ws => ws.auto_discovered);
+        workspaces = allWorkspaces
+          .filter(ws => !ws.auto_discovered)
+          .map(withLookupKey);
         defaultEditor = settings.defaults?.editor || 'vscode';
         allowNonWorkspaceFiles = settings.defaults?.allow_non_workspace_files ?? false;
         preferredTerminal = settings.defaults?.preferred_terminal || 'auto';
@@ -1092,10 +1344,55 @@
         document.getElementById('default-workspaces-folder').value = defaultWorkspacesFolder;
         document.getElementById('large-file-warning-mb').value = largeFileWarningMb;
         document.getElementById('max-file-size-mb').value = maxFileSizeMb;
+        await refreshWorkspaceHealth(false);
         renderWorkspaces();
         await loadDiscoveredWorkspaces();
       } catch (e) {
         showStatus('Error loading settings: ' + e, 'error');
+      }
+    }
+
+    async function refreshWorkspaceHealth(showToast = false) {
+      try {
+        workspaceHealth = await window.__TAURI__.core.invoke('get_workspace_health_summary');
+        renderWorkspaceHealthBanner();
+        if (showToast) {
+          showWorkspacesStatus('Workspace status refreshed', 'success');
+        }
+      } catch (e) {
+        console.error('Failed to load workspace health summary:', e);
+      }
+    }
+
+    function renderWorkspaceHealthBanner() {
+      const banner = document.getElementById('workspace-health-banner');
+      const summary = document.getElementById('workspace-health-summary');
+      const unhealthyCount = workspaceHealth.missing + workspaceHealth.unavailable + workspaceHealth.drifted + workspaceHealth.conflict;
+
+      if (unhealthyCount === 0) {
+        banner.style.display = 'none';
+        summary.textContent = '';
+        return;
+      }
+
+      const parts = [];
+      if (workspaceHealth.missing > 0) parts.push(`${workspaceHealth.missing} missing`);
+      if (workspaceHealth.unavailable > 0) parts.push(`${workspaceHealth.unavailable} unavailable`);
+      if (workspaceHealth.drifted > 0) parts.push(`${workspaceHealth.drifted} drifted`);
+      if (workspaceHealth.conflict > 0) parts.push(`${workspaceHealth.conflict} conflict`);
+
+      summary.textContent = parts.join(' | ');
+      banner.style.display = 'flex';
+    }
+
+    async function reconcileWorkspaceHealth() {
+      try {
+        workspaceHealth = await window.__TAURI__.core.invoke('reconcile_workspace_states');
+        renderWorkspaceHealthBanner();
+        await loadSettings();
+        showWorkspacesStatus('Workspace reconciliation complete', 'success');
+      } catch (e) {
+        showWorkspacesStatus('Failed to reconcile workspace state: ' + e, 'error');
       }
     }
 
@@ -1117,7 +1414,12 @@
         }
         // Reload settings to get updated workspaces list
         const settings = await window.__TAURI__.core.invoke('get_settings');
-        workspaces = settings.workspaces.filter(ws => !ws.auto_discovered) || [];
+        const allWorkspaces = settings.workspaces || [];
+        persistedAutoDiscoveredWorkspaces = allWorkspaces.filter(ws => ws.auto_discovered);
+        workspaces = allWorkspaces
+          .filter(ws => !ws.auto_discovered)
+          .map(withLookupKey);
+        await refreshWorkspaceHealth(false);
         renderWorkspaces();
         await loadDiscoveredWorkspaces();
       } catch (e) {
@@ -1126,12 +1428,15 @@
     }
 
     async function saveSettings() {
+      const explicitWorkspaces = workspaces
+        .map(serializeWorkspaceForSave)
+        .filter(workspace => workspace.path);
+      const discoveredWorkspacesForSave = persistedAutoDiscoveredWorkspaces
+        .map(serializeWorkspaceForSave)
+        .filter(workspace => workspace.path);
+
       const settings = {
-        workspaces: workspaces.map(w => ({
-          path: w.path,
-          editor: w.editor,
-          name: w.name || null
-        })).filter(w => w.path),
+        workspaces: [...explicitWorkspaces, ...discoveredWorkspacesForSave],
         defaults: {
           editor: defaultEditor,
           allow_non_workspace_files: allowNonWorkspaceFiles,
@@ -1169,7 +1474,12 @@
         workspaces.push({
           path: selected,
           editor: '',
-          name: folderName
+          workspace_key: folderName,
+          __lookup_key: folderName,
+          trusted: false,
+          auto_discovered: false,
+          workspace_kind: 'non_git',
+          workspace_state: 'present'
         });
         renderWorkspaces();
         await saveSettings();
@@ -1178,22 +1488,127 @@
       }
     }
 
-    async function removeWorkspace(index) {
-      workspaces.splice(index, 1);
-      renderWorkspaces();
-      await saveSettings();
+    function reviewWorkspaceIssues() {
+      const firstUnhealthy = document.querySelector('.workspace-item[data-workspace-status]:not([data-workspace-status="present"])');
+      if (!firstUnhealthy) {
+        showWorkspacesStatus('No unhealthy workspaces found', 'success');
+        return;
+      }
+      firstUnhealthy.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      firstUnhealthy.style.borderColor = 'var(--warning)';
+      window.setTimeout(() => {
+        firstUnhealthy.style.borderColor = '';
+      }, 1500);
     }
 
     async function updateWorkspace(index, field, value) {
-      workspaces[index][field] = value;
+      const workspace = workspaces[index];
+      if (!workspace) return;
+
+      workspace[field] = value;
       if (field === 'editor') {
         await saveSettings();
       }
     }
 
     async function saveWorkspaceField(index, field, value) {
-      workspaces[index][field] = value;
+      const workspace = workspaces[index];
+      if (!workspace) return;
+
+      workspace[field] = value;
+
+      if (field === 'workspace_key') {
+        await renameWorkspaceKey(index);
+        return;
+      }
+
       await saveSettings();
+    }
+
+    async function renameWorkspaceKey(index) {
+      const workspace = workspaces[index];
+      if (!workspace) return;
+
+      const previousKey = workspaceLookupKey(workspace);
+      const nextKey = workspaceDisplayKey(workspace);
+      if (!nextKey) {
+        showWorkspacesStatus('Workspace key cannot be empty', 'error');
+        await loadSettings();
+        return;
+      }
+
+      if (previousKey === nextKey) {
+        return;
+      }
+
+      try {
+        await window.__TAURI__.core.invoke('rename_workspace_key', {
+          workspace_key: previousKey,
+          new_workspace_key: nextKey
+        });
+        showWorkspacesStatus(`Workspace key renamed to '${nextKey}'`, 'success');
+        await loadSettings();
+      } catch (e) {
+        showWorkspacesStatus('Failed to rename workspace key: ' + e, 'error');
+        await loadSettings();
+      }
+    }
+
+    async function rebindWorkspace(index) {
+      const workspace = workspaces[index];
+      if (!workspace) return;
+
+      const key = workspaceLookupKey(workspace);
+      if (!key) {
+        showWorkspacesStatus('Workspace key is missing', 'error');
+        return;
+      }
+
+      try {
+        const defaultPath = workspace.path || defaultWorkspacesFolder;
+        const { open } = window.__TAURI_PLUGIN_DIALOG__;
+        const selected = await open({
+          directory: true,
+          multiple: false,
+          title: `Select folder for ${key}`,
+          defaultPath
+        });
+
+        if (!selected) return;
+
+        await window.__TAURI__.core.invoke('rebind_workspace_path', {
+          workspace_key: key,
+          new_path: selected
+        });
+        showWorkspacesStatus(`Workspace '${key}' rebound to ${selected}`, 'success');
+        await loadSettings();
+      } catch (e) {
+        showWorkspacesStatus('Failed to rebind workspace: ' + e, 'error');
+      }
+    }
+
+    async function forgetWorkspace(index) {
+      const workspace = workspaces[index];
+      if (!workspace) return;
+
+      const key = workspaceLookupKey(workspace);
+      if (!key) {
+        showWorkspacesStatus('Workspace key is missing', 'error');
+        return;
+      }
+
+      const confirmed = window.confirm(`Forget workspace mapping '${key}'?`);
+      if (!confirmed) return;
+
+      try {
+        await window.__TAURI__.core.invoke('forget_workspace_by_key', {
+          workspace_key: key
+        });
+        showWorkspacesStatus(`Forgot workspace '${key}'`, 'success');
+        await loadSettings();
+      } catch (e) {
+        showWorkspacesStatus('Failed to forget workspace: ' + e, 'error');
+      }
     }
 
     async function testWorkspace(index) {
@@ -1247,12 +1662,34 @@
           ? `<option value="${ws.editor}" selected>${ws.editor} (not installed)</option>`
           : '';
 
+        const workspaceKey = workspaceDisplayKey(ws);
+        const status = ws.workspace_state || 'present';
+        const statusClass = status === 'present' ? 'healthy' : (status === 'identity_drift' ? 'drifted' : status);
+        const statusLabel = status === 'present'
+          ? 'Healthy'
+          : status === 'identity_drift'
+            ? 'Drifted'
+            : status.charAt(0).toUpperCase() + status.slice(1);
+        const kindLabel = ws.workspace_kind === 'git' ? 'Git' : 'Folder';
+        const remote = ws.repo_identity?.primary_remote || '—';
+        const resolveAction = status === 'present'
+          ? ''
+          : `<button class="workspace-btn warn" onclick="rebindWorkspace(${idx})">Resolve</button>`;
+        const trustLabel = ws.trusted ? 'Trusted' : 'Untrusted';
+
         return `
-          <div class="workspace-item">
+          <div class="workspace-item" data-workspace-status="${status}">
+            <div class="workspace-meta">
+              <span class="workspace-status-badge ${statusClass}">${statusLabel}</span>
+              <span>Key: <code>${workspaceKey || 'unset'}</code></span>
+              <span>Type: ${kindLabel}</span>
+              <span>Remote: <code>${remote}</code></span>
+              <span>${trustLabel}</span>
+            </div>
             <div class="workspace-row">
               <div class="field-group name-field">
-                <div class="field-label">Name</div>
-                <input type="text" placeholder="my-project" value="${ws.name || ''}" oninput="updateWorkspace(${idx}, 'name', this.value)" onblur="saveWorkspaceField(${idx}, 'name', this.value)" />
+                <div class="field-label">Workspace Key</div>
+                <input type="text" placeholder="my-project" value="${workspaceKey}" oninput="updateWorkspace(${idx}, 'workspace_key', this.value)" onblur="saveWorkspaceField(${idx}, 'workspace_key', this.value)" />
               </div>
               <div class="field-group editor-field">
                 <div class="field-label">Editor</div>
@@ -1260,13 +1697,18 @@
                   ${defaultOption}${notInstalledOption}${editorOptions}
                 </select>
               </div>
-              <button class="test-button" onclick="testWorkspace(${idx})" style="align-self: flex-end;">Test</button>
-              <button class="remove-btn" onclick="removeWorkspace(${idx})" title="Remove workspace" style="align-self: flex-end;">×</button>
             </div>
             <div class="workspace-row">
               <div class="field-group path-field">
                 <div class="field-label">Path</div>
-                <input type="text" placeholder="/Users/you/projects/myapp" value="${ws.path || ''}" oninput="updateWorkspace(${idx}, 'path', this.value)" onblur="saveWorkspaceField(${idx}, 'path', this.value)" />
+                <input type="text" placeholder="/Users/you/projects/myapp" value="${ws.path || ''}" readonly />
+              </div>
+              <div class="workspace-actions">
+                <button class="workspace-btn" onclick="renameWorkspaceKey(${idx})">Rename</button>
+                <button class="workspace-btn" onclick="rebindWorkspace(${idx})">Rebind</button>
+                ${resolveAction}
+                <button class="workspace-btn" onclick="testWorkspace(${idx})">Test</button>
+                <button class="workspace-btn danger" onclick="forgetWorkspace(${idx})">Forget</button>
               </div>
             </div>
           </div>
@@ -1291,10 +1733,16 @@
 
       const items = discoveredWorkspaces.map((ws, idx) => `
         <div class="workspace-item discovered">
+          <div class="workspace-meta">
+            <span class="workspace-status-badge healthy">Healthy</span>
+            <span>Key: <code>${ws.workspace_key}</code></span>
+            <span>Type: ${ws.workspace_kind === 'git' ? 'Git' : 'Folder'}</span>
+            <span>Remote: <code>${ws.primary_remote || '—'}</code></span>
+          </div>
           <div class="workspace-row">
             <div class="field-group name-field">
-              <div class="field-label">Name <span class="badge-auto">auto</span></div>
-              <div style="padding: 0.375rem 0; color: var(--text-primary);">${ws.name}</div>
+              <div class="field-label">Workspace Key <span class="badge-auto">auto</span></div>
+              <div style="padding: 0.375rem 0; color: var(--text-primary);">${ws.workspace_key}</div>
             </div>
             <div class="field-group editor-field">
               <div class="field-label">Editor</div>
@@ -1335,7 +1783,7 @@
       try {
         await window.__TAURI__.core.invoke('promote_workspace', {
           path: ws.path,
-          name: ws.name
+          workspace_key: ws.workspace_key
         });
         showWorkspacesStatus('Workspace promoted to explicit mapping', 'success');
         // Reload both lists
@@ -1771,6 +2219,9 @@
     document.getElementById('search-box').addEventListener('input', renderHistory);
 
     // Initialize
+    subscribeWorkspaceHealthUpdates().catch((e) => {
+      console.error('Failed to subscribe workspace health events:', e);
+    });
     loadSettings();
     loadEditorsTabData();
     setInterval(() => {

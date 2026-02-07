@@ -17,6 +17,7 @@ pub struct EditorRegistry {
 }
 
 impl EditorRegistry {
+    #[must_use]
     pub fn new() -> Self {
         let registry = Self {
             managers: RwLock::new(HashMap::new()),

@@ -8,18 +8,18 @@ use tracing::debug;
 pub struct KakouneManager;
 
 impl KakouneManager {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self
     }
 }
 
 #[async_trait]
 impl EditorManager for KakouneManager {
-    fn id(&self) -> &str {
+    fn id(&self) -> &'static str {
         "kakoune"
     }
 
-    fn display_name(&self) -> &str {
+    fn display_name(&self) -> &'static str {
         "Kakoune"
     }
 
@@ -77,10 +77,10 @@ impl EditorManager for KakouneManager {
         let mut kak_args: Vec<String> = vec![];
         match (options.line, options.column) {
             (Some(line), Some(column)) => {
-                kak_args.push(format!("+{}:{}", line, column));
+                kak_args.push(format!("+{line}:{column}"));
             }
             (Some(line), None) => {
-                kak_args.push(format!("+{}:1", line));
+                kak_args.push(format!("+{line}:1"));
             }
             _ => {}
         }

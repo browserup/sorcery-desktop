@@ -1,9 +1,8 @@
-use crate::settings::SettingsManager;
 use anyhow::{bail, Context, Result};
 use regex::Regex;
 use std::borrow::Cow;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, LazyLock};
+use std::sync::LazyLock;
 
 // Blocks shell/HTML metacharacters that could enable command or DOM injection.
 // Parentheses and square brackets are intentionally omitted—they're common in
@@ -19,26 +18,26 @@ static SUSPICIOUS_PATTERNS: LazyLock<Regex> = LazyLock::new(|| {
 // they're source code and opening them in an editor doesn't execute them.
 static DANGEROUS_EXTENSIONS: &[&str] = &[".exe", ".app", ".dmg"];
 
-pub struct PathValidator {
-    settings_manager: Arc<SettingsManager>,
-}
+#[derive(Default)]
+pub struct PathValidator;
 
 impl PathValidator {
-    pub fn new(settings_manager: Arc<SettingsManager>) -> Self {
-        Self { settings_manager }
+    #[must_use]
+    pub const fn new() -> Self {
+        Self
     }
 
+    #[allow(clippy::unused_async, clippy::missing_errors_doc)]
     pub async fn validate_any(&self, path_str: &str) -> Result<PathBuf> {
         tracing::debug!("Validating path (file or directory): {}", path_str);
 
         Self::sanitize(path_str).context("Sanitize failed")?;
         tracing::debug!("Path sanitized");
 
-        let normalized = self.normalize(path_str).context("Normalize failed")?;
+        let normalized = Self::normalize(path_str).context("Normalize failed")?;
         tracing::debug!("Path normalized to: {}", normalized.display());
 
-        self.verify_exists_any(&normalized)
-            .context("Verification failed")?;
+        Self::verify_exists_any(&normalized).context("Verification failed")?;
         tracing::debug!("Path exists verified");
 
         Ok(normalized)
@@ -64,7 +63,21 @@ impl PathValidator {
         };
         let input = expanded.as_ref();
 
-        if SUSPICIOUS_PATTERNS.is_match(input) {
+        #[cfg(target_os = "windows")]
+        {
+            if input.starts_with("//") || input.starts_with("\\\\") {
+                // UNC paths trigger automatic SMB auth and can leak NTLM credentials.
+                bail!("Network paths (UNC) are not supported for security reasons");
+            }
+        }
+
+        let normalized_for_scan: Cow<'_, str> = if input.contains("//") {
+            Cow::Owned(Self::collapse_forward_slashes(input))
+        } else {
+            Cow::Borrowed(input)
+        };
+
+        if SUSPICIOUS_PATTERNS.is_match(normalized_for_scan.as_ref()) {
             bail!("Path contains suspicious patterns");
         }
 
@@ -118,7 +131,26 @@ impl PathValidator {
         Ok(())
     }
 
-    fn normalize(&self, path: &str) -> Result<PathBuf> {
+    fn collapse_forward_slashes(input: &str) -> String {
+        let mut collapsed = String::with_capacity(input.len());
+        let mut previous_was_slash = false;
+
+        for character in input.chars() {
+            if character == '/' {
+                if previous_was_slash {
+                    continue;
+                }
+                previous_was_slash = true;
+            } else {
+                previous_was_slash = false;
+            }
+            collapsed.push(character);
+        }
+
+        collapsed
+    }
+
+    fn normalize(path: &str) -> Result<PathBuf> {
         let expanded = shellexpand::tilde(path);
         let path = Path::new(expanded.as_ref());
 
@@ -145,7 +177,7 @@ impl PathValidator {
         Ok(canonical)
     }
 
-    fn verify_exists_any(&self, path: &Path) -> Result<()> {
+    fn verify_exists_any(path: &Path) -> Result<()> {
         if !path.exists() {
             bail!("Path does not exist: {}", path.display());
         }
@@ -155,55 +187,6 @@ impl PathValidator {
         }
 
         Ok(())
-    }
-
-    // TODO: Implement workspace-based security checks per ai/4-path-validation.md
-    #[allow(dead_code)]
-    async fn check_workspace_membership(&self, path: &Path) -> Result<()> {
-        let workspaces = self.settings_manager.get_workspaces().await;
-
-        if workspaces.is_empty() {
-            return Ok(());
-        }
-
-        for workspace in &workspaces {
-            if let Some(normalized) = &workspace.normalized_path {
-                if Self::is_under(path, normalized) {
-                    return Ok(());
-                }
-            }
-        }
-
-        bail!(
-            "File is not within any configured workspace: {}",
-            path.display()
-        );
-    }
-
-    #[allow(dead_code)]
-    fn is_under(child: &Path, parent: &Path) -> bool {
-        child.starts_with(parent)
-    }
-
-    // TODO: Implement workspace-based security checks per ai/4-path-validation.md
-    #[allow(dead_code)]
-    pub async fn validate_workspace_path(&self, path_str: &str) -> Result<PathBuf> {
-        let expanded = shellexpand::tilde(path_str);
-        let path = Path::new(expanded.as_ref());
-
-        if !path.is_absolute() {
-            bail!("Workspace path must be absolute");
-        }
-
-        let canonical = path
-            .canonicalize()
-            .context("Failed to resolve workspace path (directory may not exist)")?;
-
-        if !canonical.is_dir() {
-            bail!("Workspace path must be a directory");
-        }
-
-        Ok(canonical)
     }
 }
 
@@ -238,6 +221,24 @@ mod tests {
             assert!(
                 PathValidator::sanitize(r"\\attacker.com\share\secrets").is_err(),
                 "Attacker UNC path should be rejected"
+            );
+            assert!(
+                PathValidator::sanitize("//server/share/file.txt").is_err(),
+                "Forward-slash UNC path should be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn allows_redundant_forward_slashes_on_unix_like_paths() {
+        if cfg!(not(target_os = "windows")) {
+            assert!(
+                PathValidator::sanitize("//private/var/folders/test.rs").is_ok(),
+                "leading redundant slash should normalize"
+            );
+            assert!(
+                PathValidator::sanitize("/tmp//nested///file.rs").is_ok(),
+                "internal redundant slashes should normalize"
             );
         }
     }

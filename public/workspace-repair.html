@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Workspace Needs Repair</title>
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --bg-primary: #101217;
+      --bg-surface: #171a21;
+      --bg-elevated: #212635;
+      --text-primary: #f8fafc;
+      --text-secondary: #b8c2d1;
+      --border: #2e3648;
+      --warning: #f59e0b;
+      --warning-bg: rgba(245, 158, 11, 0.14);
+      --danger: #ef4444;
+      --danger-hover: #dc2626;
+      --danger-bg: rgba(239, 68, 68, 0.14);
+    }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg-primary);
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: var(--text-primary);
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .container {
+      max-width: 680px;
+      margin: 0 auto;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    h1 {
+      font-size: 1.2rem;
+      font-weight: 650;
+    }
+
+    .subtitle {
+      color: var(--text-secondary);
+      font-size: 0.88rem;
+      line-height: 1.45;
+    }
+
+    .alert {
+      background: var(--warning-bg);
+      border: 1px solid rgba(245, 158, 11, 0.4);
+      color: #fcd34d;
+      border-radius: 8px;
+      padding: 0.75rem 0.85rem;
+      font-size: 0.85rem;
+    }
+
+    .info-box {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.85rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 110px 1fr;
+      gap: 0.6rem;
+      align-items: start;
+    }
+
+    .label {
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      font-size: 0.68rem;
+      font-weight: 650;
+      padding-top: 0.1rem;
+    }
+
+    .value {
+      color: var(--text-primary);
+      font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
+      font-size: 0.79rem;
+      line-height: 1.45;
+      word-break: break-word;
+    }
+
+    .state-pill {
+      display: inline-flex;
+      align-items: center;
+      background: var(--warning-bg);
+      border: 1px solid rgba(245, 158, 11, 0.4);
+      border-radius: 999px;
+      color: #fcd34d;
+      padding: 0.14rem 0.55rem;
+      font-size: 0.74rem;
+      font-weight: 600;
+      width: fit-content;
+      text-transform: capitalize;
+    }
+
+    .status {
+      min-height: 1.25rem;
+      font-size: 0.84rem;
+      color: var(--text-secondary);
+    }
+
+    .status.error {
+      color: #fca5a5;
+    }
+
+    .status.success {
+      color: #86efac;
+    }
+
+    .button-group {
+      margin-top: auto;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.65rem;
+      justify-content: flex-end;
+    }
+
+    .button {
+      border: 1px solid var(--border);
+      background: var(--bg-elevated);
+      color: var(--text-primary);
+      border-radius: 6px;
+      padding: 0.48rem 0.9rem;
+      font-size: 0.83rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .button:hover:not(:disabled) {
+      border-color: #3c4660;
+      background: #2a3144;
+    }
+
+    .button.primary {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: white;
+    }
+
+    .button.primary:hover:not(:disabled) {
+      background: var(--primary-hover);
+      border-color: var(--primary-hover);
+    }
+
+    .button.danger {
+      background: var(--danger-bg);
+      border-color: rgba(239, 68, 68, 0.35);
+      color: #fca5a5;
+    }
+
+    .button.danger:hover:not(:disabled) {
+      background: var(--danger);
+      border-color: var(--danger-hover);
+      color: white;
+    }
+
+    .button:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Workspace Needs Repair</h1>
+    <p class="subtitle">
+      Sorcery Desktop could not open this link because the workspace mapping is not healthy. Rebind to the correct folder, then retry.
+    </p>
+
+    <div class="alert">
+      <strong>Important:</strong> trust is reset when you rebind.
+    </div>
+
+    <div class="info-box">
+      <div class="row">
+        <div class="label">Workspace</div>
+        <div class="value" id="workspace-key">loading...</div>
+      </div>
+      <div class="row">
+        <div class="label">State</div>
+        <div><span class="state-pill" id="workspace-state">unknown</span></div>
+      </div>
+      <div class="row">
+        <div class="label">Mapped Path</div>
+        <div class="value" id="workspace-path">loading...</div>
+      </div>
+      <div class="row">
+        <div class="label">Requested File</div>
+        <div class="value" id="file-path">loading...</div>
+      </div>
+    </div>
+
+    <div class="status" id="status"></div>
+
+    <div class="button-group">
+      <button class="button" onclick="cancel()">Cancel</button>
+      <button class="button danger" onclick="forgetMapping()">Forget Mapping</button>
+      <button class="button primary" id="rebind-btn" onclick="locateAndRebind()">Locate Folder</button>
+      <button class="button primary" id="retry-btn" onclick="retryOpen()">Retry</button>
+    </div>
+  </div>
+
+  <script>
+    const { invoke } = window.__TAURI__.core;
+    const { open } = window.__TAURI_PLUGIN_DIALOG__;
+
+    let dialogData = null;
+    let isBusy = false;
+
+    function setBusy(busy) {
+      isBusy = busy;
+      document.getElementById('rebind-btn').disabled = busy;
+      document.getElementById('retry-btn').disabled = busy;
+    }
+
+    function setStatus(message, type = '') {
+      const status = document.getElementById('status');
+      status.textContent = message || '';
+      status.className = type ? `status ${type}` : 'status';
+    }
+
+    async function init() {
+      try {
+        dialogData = await invoke('get_workspace_repair_dialog_data');
+        document.getElementById('workspace-key').textContent = dialogData.workspace_key;
+        document.getElementById('workspace-state').textContent = dialogData.workspace_state;
+        document.getElementById('workspace-path').textContent = dialogData.workspace_path;
+        document.getElementById('file-path').textContent = dialogData.file_path;
+      } catch (error) {
+        setStatus(`Failed to load dialog data: ${error}`, 'error');
+      }
+    }
+
+    async function retryOpen() {
+      if (!dialogData?.original_url || isBusy) return;
+
+      setBusy(true);
+      setStatus('Retrying link...', '');
+      try {
+        await invoke('test_protocol_url', { url: dialogData.original_url });
+        window.close();
+      } catch (error) {
+        setStatus(`Retry failed: ${error}`, 'error');
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    async function locateAndRebind() {
+      if (!dialogData || isBusy) return;
+
+      const selected = await open({
+        directory: true,
+        multiple: false,
+        defaultPath: dialogData.workspace_path,
+        title: `Select folder for ${dialogData.workspace_key}`
+      });
+
+      if (!selected) return;
+
+      setBusy(true);
+      setStatus('Saving new workspace path...', '');
+      try {
+        await invoke('rebind_workspace_path', {
+          workspace_key: dialogData.workspace_key,
+          new_path: selected
+        });
+        dialogData.workspace_path = selected;
+        document.getElementById('workspace-path').textContent = selected;
+        setStatus('Workspace mapping updated. Retrying link...', 'success');
+        await retryOpen();
+      } catch (error) {
+        setStatus(`Rebind failed: ${error}`, 'error');
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    async function forgetMapping() {
+      if (!dialogData || isBusy) return;
+      const confirmed = window.confirm(`Forget workspace mapping '${dialogData.workspace_key}'?`);
+      if (!confirmed) return;
+
+      setBusy(true);
+      setStatus('Removing workspace mapping...', '');
+      try {
+        await invoke('forget_workspace_by_key', { workspace_key: dialogData.workspace_key });
+        setStatus('Workspace mapping removed.', 'success');
+        window.close();
+      } catch (error) {
+        setStatus(`Failed to forget mapping: ${error}`, 'error');
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    function cancel() {
+      window.close();
+    }
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && !isBusy) {
+        cancel();
+      }
+    });
+
+    init();
+  </script>
+</body>
+</html>

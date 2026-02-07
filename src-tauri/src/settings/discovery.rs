@@ -22,17 +22,20 @@ pub struct WorkspaceSync {
 }
 
 impl WorkspaceSync {
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
     pub fn new(settings_manager: Arc<SettingsManager>) -> Self {
         Self { settings_manager }
     }
 
     /// Sync workspaces with the `default_workspaces_folder`.
     /// - Adds new repos as `auto_discovered` workspaces
-    /// - Removes `auto_discovered` workspaces that no longer exist on disk
+    /// - Preserves missing workspaces so mappings can be repaired if folders return
     /// - Respects `ignored_workspaces` list
+    #[allow(clippy::missing_errors_doc)]
     pub async fn sync(&self) -> Result<SyncResult> {
         let defaults_folder = self.settings_manager.get_default_workspaces_folder().await;
-        let normalized_folder = self.get_normalized_workspaces_folder(&defaults_folder);
+        let normalized_folder = Self::get_normalized_workspaces_folder(&defaults_folder);
         let Some(folder) = normalized_folder else {
             debug!("No valid default_workspaces_folder configured, skipping sync");
             return Ok(SyncResult::default());
@@ -53,7 +56,7 @@ impl WorkspaceSync {
                     .defaults
                     .ignored_workspaces
                     .iter()
-                    .filter_map(|p| self.normalize_path(p))
+                    .filter_map(|p| Self::normalize_path(p))
                     .collect();
 
                 let existing_paths: HashSet<PathBuf> = settings
@@ -73,47 +76,27 @@ impl WorkspaceSync {
                         .unwrap_or("unknown")
                         .to_string();
 
-                    info!("Adding auto-discovered workspace: {}", name);
+                    info!("Adding auto-discovered workspace: {name}");
                     result.added.push(name.clone());
 
                     settings.workspaces.push(WorkspaceConfig {
                         path: repo.to_string_lossy().to_string(),
-                        name: Some(name),
+                        workspace_key: name,
                         editor: String::new(),
                         auto_discovered: true,
                         trusted: false,
+                        workspace_kind: super::models::WorkspaceKind::Git,
+                        workspace_state: super::models::WorkspaceState::Present,
+                        repo_identity: None,
+                        last_verified_at: None,
                         normalized_path: Some(repo.clone()),
                     });
                 }
 
-                let discovered_set: HashSet<&PathBuf> = discovered.iter().collect();
-                let mut i = 0;
-                while i < settings.workspaces.len() {
-                    let ws = &settings.workspaces[i];
-                    if ws.auto_discovered {
-                        if let Some(ref path) = ws.normalized_path {
-                            if !discovered_set.contains(path) {
-                                let name = ws.name.clone().unwrap_or_else(|| ws.path.clone());
-                                info!(
-                                    "Removing auto-discovered workspace (no longer exists): {}",
-                                    name
-                                );
-                                result.removed.push(name);
-                                settings.workspaces.remove(i);
-                                continue;
-                            }
-                        }
-                    }
-                    i += 1;
-                }
-
-                let changed = !result.added.is_empty() || !result.removed.is_empty();
+                let changed = !result.added.is_empty();
                 if changed {
-                    info!(
-                        "Workspace sync complete: {} added, {} removed",
-                        result.added.len(),
-                        result.removed.len()
-                    );
+                    let added_count = result.added.len();
+                    info!("Workspace sync complete: {added_count} added");
                 } else {
                     debug!("Workspace sync complete: no changes");
                 }
@@ -123,7 +106,7 @@ impl WorkspaceSync {
             .await
     }
 
-    fn get_normalized_workspaces_folder(&self, raw_path: &str) -> Option<PathBuf> {
+    fn get_normalized_workspaces_folder(raw_path: &str) -> Option<PathBuf> {
         if raw_path.is_empty() {
             return None;
         }
@@ -134,15 +117,12 @@ impl WorkspaceSync {
         if path.exists() && path.is_dir() {
             Some(path)
         } else {
-            warn!(
-                "default_workspaces_folder '{}' does not exist or is not a directory",
-                raw_path
-            );
+            warn!("default_workspaces_folder '{raw_path}' does not exist or is not a directory");
             None
         }
     }
 
-    fn normalize_path(&self, raw_path: &str) -> Option<PathBuf> {
+    fn normalize_path(raw_path: &str) -> Option<PathBuf> {
         if raw_path.is_empty() {
             return None;
         }
@@ -160,10 +140,7 @@ impl WorkspaceSync {
             let entries = match std::fs::read_dir(&folder) {
                 Ok(entries) => entries,
                 Err(e) => {
-                    warn!(
-                        "Failed to read default_workspaces_folder {:?}: {}",
-                        folder, e
-                    );
+                    warn!("Failed to read default_workspaces_folder {folder:?}: {e}");
                     return Vec::new();
                 }
             };
@@ -174,10 +151,7 @@ impl WorkspaceSync {
             for entry in entries.filter_map(Result::ok) {
                 scanned += 1;
                 if scanned > MAX_ENTRIES_TO_SCAN {
-                    warn!(
-                        "Workspace scan stopped: exceeded {} entries in {:?}",
-                        MAX_ENTRIES_TO_SCAN, folder
-                    );
+                    warn!("Workspace scan stopped: exceeded {MAX_ENTRIES_TO_SCAN} entries in {folder:?}");
                     break;
                 }
 
@@ -199,24 +173,19 @@ impl WorkspaceSync {
                 }
             }
 
-            debug!("Found {} git repos in {:?}", repos.len(), folder);
+            let count = repos.len();
+            debug!("Found {count} git repos in {folder:?}");
             repos
         });
 
         match tokio::time::timeout(SCAN_TIMEOUT, scan_task).await {
             Ok(Ok(repos)) => repos,
             Ok(Err(e)) => {
-                warn!(
-                    "Workspace scan task failed for {:?}: {}",
-                    folder_for_error, e
-                );
+                warn!("Workspace scan task failed for {folder_for_error:?}: {e}");
                 Vec::new()
             }
             Err(_) => {
-                warn!(
-                    "Workspace scan timed out after {:?} for {:?}",
-                    SCAN_TIMEOUT, folder_for_error
-                );
+                warn!("Workspace scan timed out after {SCAN_TIMEOUT:?} for {folder_for_error:?}");
                 Vec::new()
             }
         }

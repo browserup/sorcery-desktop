@@ -210,6 +210,13 @@
       color: #f87171;
     }
 
+    .status.info {
+      display: block;
+      background: var(--info-bg);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      color: var(--text-secondary);
+    }
+
     .output-panel {
       display: none;
       margin-top: 0.5rem;
@@ -357,6 +364,22 @@
     let unlisten = null;
     const MAX_OUTPUT_LINES = 100;
 
+    function applyCloneValidation(data) {
+      const status = document.getElementById('status');
+      const cloneBtn = document.getElementById('clone-btn');
+
+      if (data.clone_validation_message || data.policy_violation) {
+        const message = data.clone_validation_message || `Policy advisory: ${data.policy_violation}`;
+        status.className = data.clone_allowed ? 'status info' : 'status error';
+        status.textContent = message;
+      } else {
+        status.className = 'status';
+        status.textContent = '';
+      }
+
+      cloneBtn.disabled = !data.clone_allowed;
+    }
+
     async function init() {
       try {
         const data = await invoke('get_clone_dialog_data');
@@ -365,9 +388,10 @@
         currentClonePath = data.clone_path;
 
         document.getElementById('workspace-name').textContent = data.workspace_name;
-        document.getElementById('remote-url').textContent = data.remote_url;
+        document.getElementById('remote-url').textContent = data.normalized_remote || data.remote_url;
         document.getElementById('clone-path').textContent = data.clone_path;
         document.getElementById('file-path').textContent = data.file_path;
+        applyCloneValidation(data);
 
         if (data.git_ref) {
           document.getElementById('git-ref').textContent = data.git_ref;
@@ -396,7 +420,8 @@
           const newPath = selected + '/' + workspaceName;
           currentClonePath = newPath;
           document.getElementById('clone-path').textContent = newPath;
-          await invoke('update_clone_path', { newPath: newPath });
+          const updated = await invoke('update_clone_path', { newPath: newPath });
+          applyCloneValidation(updated);
         }
       } catch (e) {
         console.error('Failed to select directory:', e);

@@ -28,10 +28,11 @@ impl JetBrainsManager {
         }
     }
 
-    fn cache_ttl() -> Duration {
+    const fn cache_ttl() -> Duration {
         Duration::from_secs(300)
     }
 
+    #[allow(clippy::significant_drop_tightening)]
     fn get_cached_binary(&self) -> Option<PathBuf> {
         let cache = self.cache.read();
         if let Some(cached) = cache.as_ref() {
@@ -51,7 +52,7 @@ impl JetBrainsManager {
     }
 
     #[cfg(target_os = "macos")]
-    async fn find_toolbox_binary_macos(&self) -> Option<PathBuf> {
+    fn find_toolbox_binary_macos(&self) -> Option<PathBuf> {
         let toolbox_apps =
             dirs::home_dir()?.join("Library/Application Support/JetBrains/Toolbox/apps");
 
@@ -134,7 +135,7 @@ impl JetBrainsManager {
     }
 
     #[cfg(target_os = "macos")]
-    async fn find_standalone_binary_macos(&self) -> Option<PathBuf> {
+    fn find_standalone_binary_macos(&self) -> Option<PathBuf> {
         let app_name = format!("{}.app", self.display_name);
 
         // Check both /Applications and ~/Applications
@@ -458,7 +459,7 @@ impl JetBrainsManager {
                         .and_then(|s| s.to_str())
                         .unwrap_or(&self.toolbox_id)
                         .to_lowercase()
-                        .replace(" ", ""),
+                        .replace(' ', ""),
                 );
                 if fallback.exists() {
                     fallback
@@ -556,12 +557,12 @@ impl EditorManager for JetBrainsManager {
 
         #[cfg(target_os = "macos")]
         {
-            if let Some(path) = self.find_toolbox_binary_macos().await {
+            if let Some(path) = self.find_toolbox_binary_macos() {
                 self.cache_binary(Some(path.clone()));
                 return Some(path);
             }
 
-            if let Some(path) = self.find_standalone_binary_macos().await {
+            if let Some(path) = self.find_standalone_binary_macos() {
                 self.cache_binary(Some(path.clone()));
                 return Some(path);
             }
@@ -639,7 +640,7 @@ impl EditorManager for JetBrainsManager {
                 debug!("Retrying with fresh binary: {:?}", retry_binary);
                 return self
                     .spawn_editor(&retry_binary, &args)
-                    .map_err(|e| EditorError::LaunchFailed(format!("Retry failed: {}", e)));
+                    .map_err(|e| EditorError::LaunchFailed(format!("Retry failed: {e}")));
             }
 
             return Err(EditorError::LaunchFailed(e));

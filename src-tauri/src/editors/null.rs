@@ -15,18 +15,19 @@ impl Default for NullEditor {
 
 impl NullEditor {
     #[allow(dead_code)] // Only used by integration tests
-    pub fn new() -> Self {
+    #[must_use]
+    pub const fn new() -> Self {
         Self
     }
 }
 
 #[async_trait]
 impl EditorManager for NullEditor {
-    fn id(&self) -> &str {
+    fn id(&self) -> &'static str {
         "null"
     }
 
-    fn display_name(&self) -> &str {
+    fn display_name(&self) -> &'static str {
         "Null Editor (Testing)"
     }
 

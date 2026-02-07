@@ -1,6 +1,7 @@
 // Library interface for testing
 // This exposes internal modules for integration testing
 
+mod config_paths;
 pub mod dispatcher;
 pub mod editors;
 pub mod git_command_log;

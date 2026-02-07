@@ -9,7 +9,7 @@ pub struct XcodeManager;
 
 #[cfg(target_os = "macos")]
 impl XcodeManager {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self
     }
 }
@@ -17,11 +17,11 @@ impl XcodeManager {
 #[cfg(target_os = "macos")]
 #[async_trait]
 impl EditorManager for XcodeManager {
-    fn id(&self) -> &str {
+    fn id(&self) -> &'static str {
         "xcode"
     }
 
-    fn display_name(&self) -> &str {
+    fn display_name(&self) -> &'static str {
         "Xcode"
     }
 
@@ -63,18 +63,18 @@ impl EditorManager for XcodeManager {
 pub struct ZedManager;
 
 impl ZedManager {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self
     }
 }
 
 #[async_trait]
 impl EditorManager for ZedManager {
-    fn id(&self) -> &str {
+    fn id(&self) -> &'static str {
         "zed"
     }
 
-    fn display_name(&self) -> &str {
+    fn display_name(&self) -> &'static str {
         "Zed"
     }
 
@@ -119,11 +119,10 @@ impl EditorManager for ZedManager {
 
         let mut args = vec![];
 
-        let file_arg = if let Some(line) = options.line {
-            format!("{}:{}", path.display(), line)
-        } else {
-            path.display().to_string()
-        };
+        let file_arg = options.line.map_or_else(
+            || path.display().to_string(),
+            |line| format!("{}:{}", path.display(), line),
+        );
 
         args.push(file_arg);
 
@@ -145,7 +144,7 @@ impl EditorManager for ZedManager {
 pub struct SublimeManager;
 
 impl SublimeManager {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self
     }
 }
@@ -153,18 +152,18 @@ impl SublimeManager {
 pub struct GeditManager;
 
 impl GeditManager {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self
     }
 }
 
 #[async_trait]
 impl EditorManager for GeditManager {
-    fn id(&self) -> &str {
+    fn id(&self) -> &'static str {
         "gedit"
     }
 
-    fn display_name(&self) -> &str {
+    fn display_name(&self) -> &'static str {
         "Gedit"
     }
 
@@ -208,7 +207,7 @@ impl EditorManager for GeditManager {
         let mut args = vec![];
 
         if let Some(line) = options.line {
-            args.push(format!("+{}", line));
+            args.push(format!("+{line}"));
         }
 
         args.push(path.display().to_string());
@@ -230,11 +229,11 @@ impl EditorManager for GeditManager {
 
 #[async_trait]
 impl EditorManager for SublimeManager {
-    fn id(&self) -> &str {
+    fn id(&self) -> &'static str {
         "sublime"
     }
 
-    fn display_name(&self) -> &str {
+    fn display_name(&self) -> &'static str {
         "Sublime Text"
     }
 

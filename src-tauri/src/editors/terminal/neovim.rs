@@ -8,7 +8,7 @@ use tracing::debug;
 pub struct NeovimManager;
 
 impl NeovimManager {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self
     }
 
@@ -28,10 +28,11 @@ impl NeovimManager {
             }
         }
 
-        sockets.first().cloned()
+        sockets.into_iter().next()
     }
 
     #[cfg(unix)]
+    #[allow(clippy::only_used_in_recursion, clippy::self_only_used_in_recursion)]
     fn search_dir_for_sockets(
         &self,
         dir: &Path,
@@ -50,10 +51,10 @@ impl NeovimManager {
                 let path = entry.path();
                 if let Ok(metadata) = std::fs::metadata(&path) {
                     if metadata.file_type().is_socket() {
-                        debug!("Found nvim socket at depth {}: {:?}", depth, path);
+                        debug!("Found nvim socket at depth {depth}: {path:?}");
                         sockets.push(path);
                     } else if metadata.is_dir() {
-                        debug!("Searching subdirectory at depth {}: {:?}", depth, path);
+                        debug!("Searching subdirectory at depth {depth}: {path:?}");
                         self.search_dir_for_sockets(&path, sockets, depth + 1, max_depth);
                     }
                 }
@@ -61,6 +62,7 @@ impl NeovimManager {
         }
     }
 
+    #[allow(clippy::unused_async)]
     async fn gather_nvim_sockets(&self) -> Vec<PathBuf> {
         #[cfg(unix)]
         {
@@ -72,8 +74,8 @@ impl NeovimManager {
 
             if let Ok(tmpdir) = env::var("TMPDIR") {
                 let tmpdir_path = PathBuf::from(&tmpdir);
-                dirs.push(tmpdir_path.clone());
-                debug!("Searching for nvim sockets in: /tmp and {}", tmpdir);
+                dirs.push(tmpdir_path);
+                debug!("Searching for nvim sockets in: /tmp and {tmpdir}");
             }
 
             for dir in dirs {
@@ -136,11 +138,11 @@ impl NeovimManager {
 
 #[async_trait]
 impl EditorManager for NeovimManager {
-    fn id(&self) -> &str {
+    fn id(&self) -> &'static str {
         "neovim"
     }
 
-    fn display_name(&self) -> &str {
+    fn display_name(&self) -> &'static str {
         "Neovim"
     }
 
@@ -211,16 +213,13 @@ impl EditorManager for NeovimManager {
             let escaped_path = path_str.replace('\\', "\\\\").replace(' ', "\\ ");
             let keys = match (options.line, options.column) {
                 (Some(line), Some(column)) => {
-                    format!(
-                        ":e {}<CR>:call cursor({},{})<CR>",
-                        escaped_path, line, column
-                    )
+                    format!(":e {escaped_path}<CR>:call cursor({line},{column})<CR>")
                 }
                 (Some(line), None) => {
-                    format!(":{}<CR>:e {}<CR>", line, escaped_path)
+                    format!(":{line}<CR>:e {escaped_path}<CR>")
                 }
                 _ => {
-                    format!(":e {}<CR>", escaped_path)
+                    format!(":e {escaped_path}<CR>")
                 }
             };
 
@@ -256,10 +255,10 @@ impl EditorManager for NeovimManager {
         match (options.line, options.column) {
             (Some(line), Some(column)) => {
                 nvim_args.push("-c".to_string());
-                nvim_args.push(format!("call cursor({},{})", line, column));
+                nvim_args.push(format!("call cursor({line},{column})"));
             }
             (Some(line), None) => {
-                nvim_args.push(format!("+{}", line));
+                nvim_args.push(format!("+{line}"));
             }
             _ => {}
         }

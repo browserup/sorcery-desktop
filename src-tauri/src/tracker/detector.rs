@@ -8,36 +8,31 @@ pub struct DetectionResult {
     pub window_title: Option<String>,
 }
 
+#[allow(clippy::unused_async)]
 pub async fn detect_active_editor() -> DetectionResult {
     #[cfg(target_os = "macos")]
-    return detect_active_editor_macos().await;
+    return detect_active_editor_macos();
 
     #[cfg(target_os = "windows")]
-    return detect_active_editor_windows().await;
+    return detect_active_editor_windows();
 
     #[cfg(target_os = "linux")]
-    return detect_active_editor_linux().await;
+    return detect_active_editor_linux();
 }
 
 #[cfg(target_os = "macos")]
-async fn detect_active_editor_macos() -> DetectionResult {
+#[allow(clippy::option_if_let_else)]
+fn detect_active_editor_macos() -> DetectionResult {
     let (app_name, window_title) = get_frontmost_app_info_native();
     let app_name_lower = app_name.as_deref().map(str::to_lowercase);
 
-    debug!(
-        "Detected frontmost app: {:?}, title: {:?}",
-        app_name, window_title
-    );
+    debug!("Detected frontmost app: {app_name:?}, title: {window_title:?}");
 
     let editor_id = if let Some(ref name) = app_name_lower {
         if name == "electron" {
-            detect_vscodium_via_ps()
-                .await
-                .or_else(|| map_app_name_to_editor(name))
+            detect_vscodium_via_ps().or_else(|| map_app_name_to_editor(name))
         } else if name.contains("iterm") || name.contains("terminal") {
-            detect_terminal_editor()
-                .await
-                .or_else(|| map_app_name_to_editor(name))
+            detect_terminal_editor().or_else(|| map_app_name_to_editor(name))
         } else {
             map_app_name_to_editor(name)
         }
@@ -104,7 +99,7 @@ fn map_app_name_to_editor(app_name: &str) -> Option<String> {
 }
 
 #[cfg(target_os = "macos")]
-async fn detect_vscodium_via_ps() -> Option<String> {
+fn detect_vscodium_via_ps() -> Option<String> {
     let output = Command::new("ps").arg("aux").output().ok()?;
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -115,7 +110,7 @@ async fn detect_vscodium_via_ps() -> Option<String> {
 }
 
 #[cfg(target_os = "macos")]
-async fn detect_terminal_editor() -> Option<String> {
+fn detect_terminal_editor() -> Option<String> {
     let output = Command::new("ps").arg("aux").output().ok()?;
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -132,7 +127,7 @@ async fn detect_terminal_editor() -> Option<String> {
 }
 
 #[cfg(target_os = "windows")]
-async fn detect_active_editor_windows() -> DetectionResult {
+fn detect_active_editor_windows() -> DetectionResult {
     let ps_script = r#"
 Add-Type @"
   using System;
@@ -178,7 +173,7 @@ $title.ToString()
     let title = String::from_utf8_lossy(&output.stdout).trim().to_string();
     let title_lower = title.to_lowercase();
 
-    debug!("Detected window title: {}", title);
+    debug!("Detected window title: {title}");
 
     let editor_id = map_window_title_to_editor(&title_lower);
 
@@ -222,7 +217,7 @@ fn map_window_title_to_editor(title: &str) -> Option<String> {
 }
 
 #[cfg(target_os = "linux")]
-async fn detect_active_editor_linux() -> DetectionResult {
+fn detect_active_editor_linux() -> DetectionResult {
     let window_title = get_active_window_title_x11();
     let title_lower = window_title.as_ref().map(|t| t.to_lowercase());
 

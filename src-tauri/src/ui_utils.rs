@@ -8,7 +8,7 @@ pub struct DialogConfig {
     pub height: f64,
 }
 
-pub fn build_dialog(app_handle: &AppHandle, config: DialogConfig) -> Result<(), String> {
+pub fn build_dialog(app_handle: &AppHandle, config: &DialogConfig) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     activate_app();
 
@@ -33,8 +33,8 @@ pub fn build_dialog(app_handle: &AppHandle, config: DialogConfig) -> Result<(), 
             Ok(())
         }
         Err(e) => {
-            let msg = format!("Failed to open {} dialog: {}", config.id, e);
-            tracing::error!("{}", msg);
+            let msg = format!("Failed to open {} dialog: {e}", config.id);
+            tracing::error!("{msg}");
             Err(msg)
         }
     }

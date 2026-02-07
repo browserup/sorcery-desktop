@@ -7,13 +7,13 @@ pub use matcher::{PathMatcher, WorkspaceLookupError, WorkspaceMatch};
 pub use parser::{GitRef, SrcuriParser, SrcuriRequest};
 
 use crate::dispatcher::EditorDispatcher;
-use crate::settings::SettingsManager;
+use crate::settings::{identity, PolicyDecision, SettingsManager, WorkspaceConfig, WorkspaceState};
 use crate::trust_check;
 use crate::workspace_mru::ActiveWorkspaceTracker;
 use anyhow::{bail, Context, Result};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use tracing::info;
+use tracing::{info, warn};
 
 pub struct ProtocolHandler {
     matcher: PathMatcher,
@@ -22,7 +22,16 @@ pub struct ProtocolHandler {
     workspace_tracker: Arc<ActiveWorkspaceTracker>,
 }
 
+#[derive(Debug)]
+enum WorkspaceResolution {
+    Matched(Box<WorkspaceConfig>),
+    RemoteMismatch(Vec<WorkspaceConfig>),
+    NotConfigured,
+}
+
 impl ProtocolHandler {
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
     pub fn new(
         settings_manager: Arc<SettingsManager>,
         dispatcher: Arc<EditorDispatcher>,
@@ -37,6 +46,77 @@ impl ProtocolHandler {
             dispatcher,
             workspace_tracker,
         }
+    }
+
+    async fn scan_workspace_trust(
+        workspace_path: &Path,
+        is_trusted: bool,
+    ) -> Option<trust_check::TrustScanResult> {
+        let workspace_path_for_task = workspace_path.to_path_buf();
+        let workspace_path_for_log = workspace_path.to_path_buf();
+
+        match tokio::task::spawn_blocking(move || {
+            trust_check::needs_trust_check(&workspace_path_for_task, is_trusted)
+        })
+        .await
+        {
+            Ok(scan_result) => scan_result,
+            Err(error) => {
+                let workspace_display = workspace_path_for_log.display();
+                warn!("Trust scan task failed for {workspace_display}: {error}");
+                Some(trust_check::TrustScanResult {
+                    has_auto_tasks: false,
+                    task_labels: Vec::new(),
+                    vim_local_rc_files: Vec::new(),
+                    dangerous_files: Vec::new(),
+                    dangerous_settings: Vec::new(),
+                    scan_error: Some(format!(
+                        "Failed to scan workspace for trust checks: {error}"
+                    )),
+                })
+            }
+        }
+    }
+
+    async fn trust_dialog_if_needed(
+        &self,
+        workspace_path: PathBuf,
+        pending_file_path: &str,
+        line: Option<usize>,
+        column: Option<usize>,
+        editor_hint: Option<String>,
+    ) -> Option<HandleResult> {
+        let is_trusted = self
+            .settings_manager
+            .is_workspace_trusted(&workspace_path)
+            .await;
+        let scan_result = Self::scan_workspace_trust(&workspace_path, is_trusted).await?;
+
+        let workspace_name = workspace_path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("unknown")
+            .to_string();
+
+        info!(
+            "Trust check triggered for workspace '{}': {} auto-run tasks found",
+            workspace_name,
+            scan_result.task_labels.len()
+        );
+
+        Some(HandleResult::ShowTrustDialog {
+            workspace_path,
+            workspace_name,
+            task_labels: scan_result.task_labels,
+            vim_local_rc_files: scan_result.vim_local_rc_files,
+            dangerous_files: scan_result.dangerous_files,
+            dangerous_settings: scan_result.dangerous_settings,
+            scan_error: scan_result.scan_error,
+            pending_file_path: pending_file_path.to_string(),
+            line,
+            column,
+            editor_hint,
+        })
     }
 
     async fn open_with_size_check(
@@ -55,13 +135,13 @@ impl ProtocolHandler {
                 let warning_size = self.settings_manager.get_large_file_warning_bytes().await;
 
                 if file_size > max_size {
+                    #[allow(clippy::cast_precision_loss)]
                     let size_mb = file_size as f64 / (1024.0 * 1024.0);
+                    #[allow(clippy::cast_precision_loss)]
                     let max_mb = max_size as f64 / (1024.0 * 1024.0);
                     bail!(
-                        "File is too large ({:.1} MB). Maximum allowed size is {:.0} MB. \
-                         You can increase this limit in Settings.",
-                        size_mb,
-                        max_mb
+                        "File is too large ({size_mb:.1} MB). Maximum allowed size is {max_mb:.0} MB. \
+                         You can increase this limit in Settings."
                     );
                 }
 
@@ -101,76 +181,44 @@ impl ProtocolHandler {
     ) -> Result<HandleResult> {
         let path = Path::new(file_path);
 
-        if let Some(workspace_path) = self.find_workspace_for_path(file_path).await {
-            let is_trusted = self
-                .settings_manager
-                .is_workspace_trusted(&workspace_path)
-                .await;
+        if let Some(workspace) = self.settings_manager.get_workspace_for_path(path).await {
+            let workspace_key = identity::derive_workspace_key(&workspace);
+            if let Some(policy_violation) = self
+                .enforced_workspace_policy_violation(&workspace_key, &workspace)
+                .await
+            {
+                bail!("{policy_violation}");
+            }
 
-            if let Some(scan_result) = trust_check::needs_trust_check(&workspace_path, is_trusted) {
-                let workspace_name = workspace_path
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("unknown")
-                    .to_string();
-
-                info!(
-                    "Trust check triggered for workspace '{}': {} auto-run tasks found",
-                    workspace_name,
-                    scan_result.task_labels.len()
-                );
-
-                return Ok(HandleResult::ShowTrustDialog {
-                    workspace_path,
-                    workspace_name,
-                    task_labels: scan_result.task_labels,
-                    vim_local_rc_files: scan_result.vim_local_rc_files,
-                    dangerous_files: scan_result.dangerous_files,
-                    dangerous_settings: scan_result.dangerous_settings,
-                    scan_error: scan_result.scan_error,
-                    pending_file_path: file_path.to_string(),
-                    line,
-                    column,
-                    editor_hint,
-                });
+            if let Some(workspace_path) = workspace.normalized_path {
+                if let Some(dialog) = self
+                    .trust_dialog_if_needed(
+                        workspace_path,
+                        file_path,
+                        line,
+                        column,
+                        editor_hint.clone(),
+                    )
+                    .await
+                {
+                    return Ok(dialog);
+                }
             }
         } else if path.is_file() {
             if let Some(parent) = path.parent() {
                 let git_root = GitHandler::find_git_root(parent);
                 if let Some(workspace_path) = git_root {
-                    let is_trusted = self
-                        .settings_manager
-                        .is_workspace_trusted(&workspace_path)
-                        .await;
-
-                    if let Some(scan_result) =
-                        trust_check::needs_trust_check(&workspace_path, is_trusted)
-                    {
-                        let workspace_name = workspace_path
-                            .file_name()
-                            .and_then(|n| n.to_str())
-                            .unwrap_or("unknown")
-                            .to_string();
-
-                        info!(
-                            "Trust check triggered for workspace '{}': {} auto-run tasks found",
-                            workspace_name,
-                            scan_result.task_labels.len()
-                        );
-
-                        return Ok(HandleResult::ShowTrustDialog {
+                    if let Some(dialog) = self
+                        .trust_dialog_if_needed(
                             workspace_path,
-                            workspace_name,
-                            task_labels: scan_result.task_labels,
-                            vim_local_rc_files: scan_result.vim_local_rc_files,
-                            dangerous_files: scan_result.dangerous_files,
-                            dangerous_settings: scan_result.dangerous_settings,
-                            scan_error: scan_result.scan_error,
-                            pending_file_path: file_path.to_string(),
+                            file_path,
                             line,
                             column,
-                            editor_hint,
-                        });
+                            editor_hint.clone(),
+                        )
+                        .await
+                    {
+                        return Ok(dialog);
                     }
                 }
             }
@@ -181,17 +229,219 @@ impl ProtocolHandler {
     }
 
     async fn find_workspace_for_path(&self, file_path: &str) -> Option<PathBuf> {
-        let path = std::path::Path::new(file_path);
-        for ws in self.settings_manager.get_workspaces().await {
-            if let Some(ref ws_path) = ws.normalized_path {
-                if path.starts_with(ws_path) {
-                    return Some(ws_path.clone());
-                }
-            }
-        }
-        None
+        let path = Path::new(file_path);
+        self.settings_manager
+            .get_workspace_for_path(path)
+            .await
+            .and_then(|workspace| workspace.normalized_path)
     }
 
+    async fn resolve_workspace(
+        &self,
+        workspace_key: &str,
+        remote: Option<&str>,
+    ) -> WorkspaceResolution {
+        let (remote_matches, key_matches) = self
+            .settings_manager
+            .resolve_workspace_by_key(workspace_key, remote)
+            .await;
+
+        if let Some(remote) = remote {
+            if let Some(matched) = remote_matches
+                .into_iter()
+                .find(|workspace| workspace.workspace_state == WorkspaceState::Present)
+                .or_else(|| key_matches.first().cloned())
+            {
+                if matched
+                    .repo_identity
+                    .as_ref()
+                    .is_some_and(|identity| identity::remote_matches_identity(remote, identity))
+                {
+                    return WorkspaceResolution::Matched(Box::new(matched));
+                }
+            }
+
+            if !key_matches.is_empty() {
+                return WorkspaceResolution::RemoteMismatch(key_matches);
+            }
+
+            return WorkspaceResolution::NotConfigured;
+        }
+
+        if let Some(matched) = key_matches
+            .iter()
+            .find(|workspace| workspace.workspace_state == WorkspaceState::Present)
+            .cloned()
+            .or_else(|| key_matches.first().cloned())
+        {
+            WorkspaceResolution::Matched(Box::new(matched))
+        } else {
+            WorkspaceResolution::NotConfigured
+        }
+    }
+
+    fn suggest_clone_path(
+        workspace_name: &str,
+        default_folder: &str,
+        remote: Option<&str>,
+        existing_mappings: &[WorkspaceConfig],
+    ) -> PathBuf {
+        let repo_base = shellexpand::tilde(default_folder);
+        let base_path = PathBuf::from(repo_base.as_ref());
+        let default_path = base_path.join(workspace_name);
+
+        let normalized_existing_paths: Vec<PathBuf> = existing_mappings
+            .iter()
+            .filter_map(|workspace| workspace.normalized_path.clone())
+            .collect();
+
+        if !normalized_existing_paths.contains(&default_path) {
+            return default_path;
+        }
+
+        let owner_hint = remote
+            .and_then(identity::normalize_remote_identity)
+            .and_then(|normalized| {
+                let mut pieces = normalized.split('/');
+                let _host = pieces.next()?;
+                pieces.next().map(ToString::to_string)
+            })
+            .unwrap_or_else(|| "fork".to_string());
+
+        let owner_candidate = base_path.join(format!("{workspace_name}-{owner_hint}"));
+        if !normalized_existing_paths.contains(&owner_candidate) {
+            return owner_candidate;
+        }
+
+        base_path.join(format!("{workspace_name}-clone"))
+    }
+
+    async fn select_most_recent_workspace(
+        &self,
+        candidates: Vec<WorkspaceConfig>,
+    ) -> Option<WorkspaceConfig> {
+        let mut best_candidate: Option<WorkspaceConfig> = None;
+        let mut best_time = None;
+
+        for candidate in candidates {
+            let candidate_time = if let Some(path) = candidate.normalized_path.as_ref() {
+                self.workspace_tracker
+                    .compute_effective_time(path, false)
+                    .await
+            } else {
+                None
+            };
+
+            if best_candidate.is_none() || candidate_time > best_time {
+                best_time = candidate_time;
+                best_candidate = Some(candidate);
+            }
+        }
+
+        best_candidate
+    }
+
+    async fn select_workspace_for_revision(
+        &self,
+        mapping: &WorkspaceConfig,
+        git_ref: &GitRef,
+    ) -> Option<WorkspaceConfig> {
+        let repo_identity = mapping.repo_identity.as_ref()?;
+        let mut candidates = self
+            .settings_manager
+            .get_workspaces_in_repo_group(repo_identity)
+            .await;
+
+        candidates.retain(|candidate| {
+            candidate.workspace_state == WorkspaceState::Present
+                && candidate
+                    .normalized_path
+                    .as_ref()
+                    .is_some_and(|path| path.exists())
+        });
+
+        if candidates.is_empty() {
+            return None;
+        }
+
+        let target_ref = match git_ref {
+            GitRef::Commit(value) | GitRef::Branch(value) | GitRef::Tag(value) => value.as_str(),
+        };
+
+        let mut exact_ref_matches = Vec::new();
+        for candidate in &candidates {
+            let Some(workspace_path) = candidate.normalized_path.as_ref() else {
+                continue;
+            };
+            if GitHandler::should_skip_revision_dialog(workspace_path, target_ref).unwrap_or(false)
+            {
+                exact_ref_matches.push(candidate.clone());
+            }
+        }
+
+        if !exact_ref_matches.is_empty() {
+            return self.select_most_recent_workspace(exact_ref_matches).await;
+        }
+
+        self.select_most_recent_workspace(candidates).await
+    }
+
+    async fn enforced_workspace_policy_violation(
+        &self,
+        workspace_key: &str,
+        mapping: &WorkspaceConfig,
+    ) -> Option<String> {
+        match self
+            .settings_manager
+            .evaluate_workspace_policy(mapping)
+            .await
+        {
+            PolicyDecision::Allowed => None,
+            PolicyDecision::AdvisoryViolation(violation) => {
+                warn!(
+                    "Policy advisory for workspace '{}' mapping '{}': {}",
+                    workspace_key,
+                    identity::derive_workspace_key(mapping),
+                    violation
+                );
+                None
+            }
+            PolicyDecision::EnforcedViolation(violation) => {
+                warn!(
+                    "Policy denied workspace '{}' mapping '{}': {}",
+                    workspace_key,
+                    identity::derive_workspace_key(mapping),
+                    violation
+                );
+                Some(violation.to_string())
+            }
+        }
+    }
+
+    async fn enforced_clone_policy_violation(
+        &self,
+        workspace_key: &str,
+        remote: Option<&str>,
+        clone_path: &Path,
+    ) -> Option<String> {
+        match self
+            .settings_manager
+            .evaluate_clone_policy(workspace_key, remote, clone_path)
+            .await
+        {
+            PolicyDecision::Allowed => None,
+            PolicyDecision::AdvisoryViolation(violation) => {
+                warn!("Policy advisory for clone '{workspace_key}': {violation}");
+                None
+            }
+            PolicyDecision::EnforcedViolation(violation) => {
+                warn!("Policy denied clone '{workspace_key}': {violation}");
+                Some(violation.to_string())
+            }
+        }
+    }
+
+    #[allow(clippy::missing_errors_doc)]
     pub async fn handle_url(&self, url: &str) -> Result<HandleResult> {
         info!("Handling srcuri URL: {}", url);
 
@@ -291,6 +541,17 @@ impl ProtocolHandler {
         }
     }
 
+    #[allow(clippy::missing_errors_doc)]
+    pub async fn open_resolved_path(
+        &self,
+        full_path: &str,
+        line: Option<usize>,
+        column: Option<usize>,
+    ) -> Result<HandleResult> {
+        self.open_with_trust_and_size_check(full_path, line, column, None)
+            .await
+    }
+
     async fn handle_rel_path(
         &self,
         path: &str,
@@ -306,7 +567,7 @@ impl ProtocolHandler {
         let mut matches = self.matcher.find_partial_matches(path).await?;
 
         if matches.is_empty() {
-            bail!("File '{}' not found in any configured workspace", path);
+            bail!("File '{path}' not found in any configured workspace");
         }
 
         if matches.len() == 1 {
@@ -373,16 +634,9 @@ impl ProtocolHandler {
         let remainder = segments.collect::<Vec<_>>().join("/");
 
         for workspace in self.settings_manager.get_workspaces().await {
-            let ws_name = workspace.name.as_deref().or_else(|| {
-                Path::new(&workspace.path)
-                    .file_name()
-                    .and_then(|name| name.to_str())
-            });
-
-            if let Some(ws_name) = ws_name {
-                if ws_name.eq_ignore_ascii_case(first) {
-                    return Some((ws_name.to_string(), remainder));
-                }
+            let workspace_key = identity::derive_workspace_key(&workspace);
+            if workspace_key.eq_ignore_ascii_case(first) {
+                return Some((workspace_key, remainder));
             }
         }
 
@@ -403,7 +657,7 @@ impl ProtocolHandler {
             if bytes.len() == 2 {
                 return true;
             }
-            return matches!(bytes.get(2), Some(b'/') | Some(b'\\'));
+            return matches!(bytes.get(2), Some(b'/' | b'\\'));
         }
 
         false
@@ -419,34 +673,126 @@ impl ProtocolHandler {
     ) -> Result<HandleResult> {
         info!("Handling workspace path: {}/{}", workspace, path);
 
-        match self.matcher.find_workspace_path(workspace, path).await {
-            Ok(full_path) => {
-                let file_path_str = full_path.to_string_lossy().to_string();
-                self.open_with_trust_and_size_check(&file_path_str, line, column, None)
+        match self.resolve_workspace(workspace, remote).await {
+            WorkspaceResolution::Matched(mapping) => {
+                let mapping = *mapping;
+
+                if mapping.workspace_state != WorkspaceState::Present {
+                    let workspace_path = mapping.normalized_path.as_ref().map_or_else(
+                        || mapping.path.clone(),
+                        |path| path.to_string_lossy().to_string(),
+                    );
+                    return Ok(HandleResult::ShowWorkspaceRepairDialog {
+                        workspace_key: workspace.to_string(),
+                        workspace_path,
+                        workspace_state: mapping.workspace_state,
+                        file_path: path.to_string(),
+                        line,
+                        column,
+                    });
+                }
+
+                if let Some(policy_violation) = self
+                    .enforced_workspace_policy_violation(workspace, &mapping)
                     .await
+                {
+                    let default_folder =
+                        self.settings_manager.get_default_workspaces_folder().await;
+                    let clone_path = Self::suggest_clone_path(
+                        workspace,
+                        &default_folder,
+                        remote,
+                        std::slice::from_ref(&mapping),
+                    );
+                    let requested_remote = remote
+                        .map(ToString::to_string)
+                        .or_else(|| {
+                            mapping
+                                .repo_identity
+                                .as_ref()
+                                .and_then(|identity| identity.primary_remote.clone())
+                        })
+                        .unwrap_or_else(|| "not-provided".to_string());
+
+                    return Ok(HandleResult::ShowWorkspaceConflictDialog {
+                        workspace_name: workspace.to_string(),
+                        requested_remote,
+                        existing_mappings: vec![mapping],
+                        clone_path: clone_path.to_string_lossy().to_string(),
+                        file_path: path.to_string(),
+                        line,
+                        column,
+                        git_ref: None,
+                        policy_violation: Some(policy_violation),
+                    });
+                }
+
+                match self.matcher.find_workspace_path(workspace, path).await {
+                    Ok(full_path) => {
+                        let file_path_str = full_path.to_string_lossy().to_string();
+                        self.open_with_trust_and_size_check(&file_path_str, line, column, None)
+                            .await
+                    }
+                    Err(e) => Err(e.into()),
+                }
             }
-            Err(WorkspaceLookupError::WorkspaceNotFound(_)) if remote.is_some() => {
-                let remote_url = remote.expect("guard ensures Some");
+            WorkspaceResolution::RemoteMismatch(existing) => {
+                let remote_url = remote.expect("resolution guarantees remote");
                 let default_folder = self.settings_manager.get_default_workspaces_folder().await;
-                let repo_base = shellexpand::tilde(&default_folder);
-                let clone_path = std::path::PathBuf::from(repo_base.as_ref()).join(workspace);
+                let clone_path =
+                    Self::suggest_clone_path(workspace, &default_folder, remote, &existing);
+                let policy_violation = self
+                    .enforced_clone_policy_violation(workspace, Some(remote_url), &clone_path)
+                    .await;
 
-                info!(
-                    "Workspace '{}' not found, offering to clone from {}",
-                    workspace, remote_url
-                );
-
-                Ok(HandleResult::ShowCloneDialog {
+                Ok(HandleResult::ShowWorkspaceConflictDialog {
                     workspace_name: workspace.to_string(),
+                    requested_remote: remote_url.to_string(),
+                    existing_mappings: existing,
                     clone_path: clone_path.to_string_lossy().to_string(),
-                    remote_url: remote_url.to_string(),
                     file_path: path.to_string(),
                     line,
                     column,
                     git_ref: None,
+                    policy_violation,
                 })
             }
-            Err(e) => Err(e.into()),
+            WorkspaceResolution::NotConfigured => {
+                if let Some(remote_url) = remote {
+                    let default_folder =
+                        self.settings_manager.get_default_workspaces_folder().await;
+                    let clone_path =
+                        Self::suggest_clone_path(workspace, &default_folder, remote, &[]);
+                    let policy_violation = self
+                        .enforced_clone_policy_violation(workspace, Some(remote_url), &clone_path)
+                        .await;
+
+                    info!(
+                        "Workspace '{}' not found, offering to clone from {}",
+                        workspace, remote_url
+                    );
+
+                    return Ok(HandleResult::ShowCloneDialog {
+                        workspace_name: workspace.to_string(),
+                        clone_path: clone_path.to_string_lossy().to_string(),
+                        remote_url: remote_url.to_string(),
+                        file_path: path.to_string(),
+                        line,
+                        column,
+                        git_ref: None,
+                        policy_violation,
+                    });
+                }
+
+                match self.matcher.find_workspace_path(workspace, path).await {
+                    Ok(full_path) => {
+                        let file_path_str = full_path.to_string_lossy().to_string();
+                        self.open_with_trust_and_size_check(&file_path_str, line, column, None)
+                            .await
+                    }
+                    Err(e) => Err(e.into()),
+                }
+            }
         }
     }
 
@@ -466,12 +812,10 @@ impl ProtocolHandler {
                 return self
                     .open_with_trust_and_size_check(full_path, line, column, None)
                     .await;
-            } else {
-                bail!(
-                    "File '{}' not found in any workspace and non-workspace files are disabled",
-                    full_path
-                );
             }
+            bail!(
+                "File '{full_path}' not found in any workspace and non-workspace files are disabled"
+            );
         }
 
         if matches.len() == 1 {
@@ -515,41 +859,127 @@ impl ProtocolHandler {
 
         info!("Handling revision path: {}/{} @ {}", workspace, path, rev);
 
-        let full_path = match self.matcher.find_workspace_path(workspace, path).await {
-            Ok(p) => p,
-            Err(WorkspaceLookupError::WorkspaceNotFound(_)) if remote.is_some() => {
-                let remote_url = remote.expect("guard ensures Some");
+        let matched_mapping = match self.resolve_workspace(workspace, remote).await {
+            WorkspaceResolution::Matched(mapping) => {
+                let mapping = *mapping;
+                if mapping.workspace_state != WorkspaceState::Present {
+                    let workspace_path = mapping.normalized_path.as_ref().map_or_else(
+                        || mapping.path.clone(),
+                        |path| path.to_string_lossy().to_string(),
+                    );
+                    return Ok(HandleResult::ShowWorkspaceRepairDialog {
+                        workspace_key: workspace.to_string(),
+                        workspace_path,
+                        workspace_state: mapping.workspace_state,
+                        file_path: path.to_string(),
+                        line,
+                        column,
+                    });
+                }
+                mapping
+            }
+            WorkspaceResolution::RemoteMismatch(existing) => {
+                let remote_url = remote.expect("resolution guarantees remote");
                 let default_folder = self.settings_manager.get_default_workspaces_folder().await;
-                let repo_base = shellexpand::tilde(&default_folder);
-                let clone_path = std::path::PathBuf::from(repo_base.as_ref()).join(workspace);
+                let clone_path =
+                    Self::suggest_clone_path(workspace, &default_folder, remote, &existing);
+                let policy_violation = self
+                    .enforced_clone_policy_violation(workspace, Some(remote_url), &clone_path)
+                    .await;
 
-                info!(
-                    "Workspace '{}' not found, offering to clone from {}",
-                    workspace, remote_url
-                );
-
-                return Ok(HandleResult::ShowCloneDialog {
+                return Ok(HandleResult::ShowWorkspaceConflictDialog {
                     workspace_name: workspace.to_string(),
+                    requested_remote: remote_url.to_string(),
+                    existing_mappings: existing,
                     clone_path: clone_path.to_string_lossy().to_string(),
-                    remote_url: remote_url.to_string(),
                     file_path: path.to_string(),
                     line,
                     column,
                     git_ref: Some(git_ref.clone()),
+                    policy_violation,
                 });
             }
-            Err(e) => return Err(e.into()),
+            WorkspaceResolution::NotConfigured => {
+                if let Some(remote_url) = remote {
+                    let default_folder =
+                        self.settings_manager.get_default_workspaces_folder().await;
+                    let clone_path =
+                        Self::suggest_clone_path(workspace, &default_folder, remote, &[]);
+                    let policy_violation = self
+                        .enforced_clone_policy_violation(workspace, Some(remote_url), &clone_path)
+                        .await;
+
+                    return Ok(HandleResult::ShowCloneDialog {
+                        workspace_name: workspace.to_string(),
+                        clone_path: clone_path.to_string_lossy().to_string(),
+                        remote_url: remote_url.to_string(),
+                        file_path: path.to_string(),
+                        line,
+                        column,
+                        git_ref: Some(git_ref.clone()),
+                        policy_violation,
+                    });
+                }
+
+                return Err(WorkspaceLookupError::WorkspaceNotFound(workspace.to_string()).into());
+            }
         };
 
-        let workspace_path = full_path
-            .parent()
-            .context("Could not determine workspace path")?;
+        let selected_mapping = self
+            .select_workspace_for_revision(&matched_mapping, git_ref)
+            .await
+            .unwrap_or(matched_mapping);
 
-        let git_root = GitHandler::find_git_root(workspace_path).ok_or_else(|| {
-            anyhow::anyhow!(
-                "Could not find git repository for workspace '{}'",
-                workspace
-            )
+        if let Some(policy_violation) = self
+            .enforced_workspace_policy_violation(workspace, &selected_mapping)
+            .await
+        {
+            let requested_remote = remote
+                .map(ToString::to_string)
+                .or_else(|| {
+                    selected_mapping
+                        .repo_identity
+                        .as_ref()
+                        .and_then(|identity| identity.primary_remote.clone())
+                })
+                .unwrap_or_else(|| "not-provided".to_string());
+            let default_folder = self.settings_manager.get_default_workspaces_folder().await;
+            let clone_path = Self::suggest_clone_path(
+                workspace,
+                &default_folder,
+                remote,
+                std::slice::from_ref(&selected_mapping),
+            );
+
+            return Ok(HandleResult::ShowWorkspaceConflictDialog {
+                workspace_name: workspace.to_string(),
+                requested_remote,
+                existing_mappings: vec![selected_mapping],
+                clone_path: clone_path.to_string_lossy().to_string(),
+                file_path: path.to_string(),
+                line,
+                column,
+                git_ref: Some(git_ref.clone()),
+                policy_violation: Some(policy_violation),
+            });
+        }
+
+        let workspace_root = selected_mapping
+            .normalized_path
+            .clone()
+            .unwrap_or_else(|| PathBuf::from(&selected_mapping.path));
+        let full_path = workspace_root.join(path);
+
+        let selected_workspace_key = identity::derive_workspace_key(&selected_mapping);
+        if !selected_workspace_key.eq_ignore_ascii_case(workspace) {
+            info!(
+                "Revision resolution switched workspace from '{}' to '{}'",
+                workspace, selected_workspace_key
+            );
+        }
+
+        let git_root = GitHandler::find_git_root(&workspace_root).ok_or_else(|| {
+            anyhow::anyhow!("Could not find git repository for workspace '{workspace}'")
         })?;
 
         GitHandler::validate_revision(&git_root, rev)?;
@@ -602,43 +1032,37 @@ impl ProtocolHandler {
         );
 
         // Try to find a workspace matching the workspace name
-        match self.matcher.find_workspace_path(workspace_name, path).await {
-            Ok(full_path) => {
-                info!(
-                    "Found matching workspace '{}', opening locally",
-                    workspace_name
-                );
+        if let Ok(full_path) = self.matcher.find_workspace_path(workspace_name, path).await {
+            info!("Found matching workspace '{workspace_name}', opening locally");
 
-                // If git_ref specified, delegate to revision handling
-                if let Some(ref git_ref) = git_ref {
-                    let remote = format!("https://{}", provider);
-                    return self
-                        .handle_revision_path(
-                            workspace_name,
-                            path,
-                            git_ref,
-                            line,
-                            column,
-                            Some(&remote),
-                        )
-                        .await;
-                }
-
-                let file_path_str = full_path.to_string_lossy().to_string();
-                self.open_with_trust_and_size_check(&file_path_str, line, column, None)
-                    .await
+            // If git_ref specified, delegate to revision handling
+            if let Some(ref git_ref) = git_ref {
+                let remote = format!("https://{provider}");
+                return self
+                    .handle_revision_path(
+                        workspace_name,
+                        path,
+                        git_ref,
+                        line,
+                        column,
+                        Some(&remote),
+                    )
+                    .await;
             }
-            Err(_) => {
-                let mut url = String::from("https://srcuri.com/");
-                url.push_str(provider_path.trim_start_matches('/'));
-                if let Some(frag) = fragment {
-                    url.push('#');
-                    url.push_str(frag);
-                }
 
-                info!("No matching workspace, opening in browser: {}", url);
-                Ok(HandleResult::OpenInBrowser { url })
+            let file_path_str = full_path.to_string_lossy().to_string();
+            self.open_with_trust_and_size_check(&file_path_str, line, column, None)
+                .await
+        } else {
+            let mut url = String::from("https://srcuri.com/");
+            url.push_str(provider_path.trim_start_matches('/'));
+            if let Some(frag) = fragment {
+                url.push('#');
+                url.push_str(frag);
             }
+
+            info!("No matching workspace, opening in browser: {url}");
+            Ok(HandleResult::OpenInBrowser { url })
         }
     }
 }
@@ -675,6 +1099,26 @@ pub enum HandleResult {
         line: Option<usize>,
         column: Option<usize>,
         git_ref: Option<GitRef>,
+        policy_violation: Option<String>,
+    },
+    ShowWorkspaceRepairDialog {
+        workspace_key: String,
+        workspace_path: String,
+        workspace_state: WorkspaceState,
+        file_path: String,
+        line: Option<usize>,
+        column: Option<usize>,
+    },
+    ShowWorkspaceConflictDialog {
+        workspace_name: String,
+        requested_remote: String,
+        existing_mappings: Vec<WorkspaceConfig>,
+        clone_path: String,
+        file_path: String,
+        line: Option<usize>,
+        column: Option<usize>,
+        git_ref: Option<GitRef>,
+        policy_violation: Option<String>,
     },
     ShowLargeFileDialog {
         file_path: String,

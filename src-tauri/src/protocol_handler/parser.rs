@@ -1,14 +1,14 @@
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum GitRef {
     Commit(String),
     Branch(String),
     Tag(String),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SrcuriRequest {
     /// Implicit workspace: authority IS the workspace name.
     /// Example: `srcuri://myrepo/path@L42`
@@ -162,7 +162,9 @@ fn is_valid_workspace_name(name: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
 }
 
+#[allow(clippy::option_if_let_else)]
 impl SrcuriParser {
+    #[allow(clippy::missing_errors_doc)]
     pub fn parse(link: &str) -> Result<SrcuriRequest> {
         let link = link.trim();
 
@@ -384,7 +386,7 @@ impl SrcuriParser {
         // Check for UNC path: abs/UNC/server/share/...
         if path.starts_with("UNC/") || path.starts_with("unc/") {
             let unc_path = &path[4..]; // strip "UNC/"
-            return format!("//{}", unc_path);
+            return format!("//{unc_path}");
         }
 
         // Check for Windows drive: C:/ or similar
@@ -397,7 +399,7 @@ impl SrcuriParser {
         if path.starts_with('/') {
             path.to_string()
         } else {
-            format!("/{}", path)
+            format!("/{path}")
         }
     }
 
@@ -415,9 +417,9 @@ impl SrcuriParser {
 
         // Build full URL with query and fragment for srcuri-core parsing
         let full_url = match (query_part, fragment) {
-            (Some(q), Some(f)) => format!("{}?{}#{}", url, q, f),
-            (Some(q), None) => format!("{}?{}", url, q),
-            (None, Some(f)) => format!("{}#{}", url, f),
+            (Some(q), Some(f)) => format!("{url}?{q}#{f}"),
+            (Some(q), None) => format!("{url}?{q}"),
+            (None, Some(f)) => format!("{url}#{f}"),
             (None, None) => url,
         };
 
@@ -450,17 +452,17 @@ impl SrcuriParser {
     fn reconstruct_external_url(path: &str) -> Result<String> {
         // Format 1: scheme already has :// (from srcuri.com)
         if let Some(rest) = path.strip_prefix("https://") {
-            return Ok(format!("https://{}", rest));
+            return Ok(format!("https://{rest}"));
         }
         if let Some(rest) = path.strip_prefix("http://") {
-            return Ok(format!("http://{}", rest));
+            return Ok(format!("http://{rest}"));
         }
         // Format 2: scheme uses / instead of :// (canonical srcuri format)
         if let Some(rest) = path.strip_prefix("https/") {
-            return Ok(format!("https://{}", rest));
+            return Ok(format!("https://{rest}"));
         }
         if let Some(rest) = path.strip_prefix("http/") {
-            return Ok(format!("http://{}", rest));
+            return Ok(format!("http://{rest}"));
         }
         Err(SrcuriParseError::InvalidExternalUrlScheme)
     }
@@ -700,20 +702,18 @@ impl SrcuriParser {
         let file_path = if head.is_empty() {
             base_tail.to_string()
         } else {
-            format!("{}/{}", head, base_tail)
+            format!("{head}/{base_tail}")
         };
 
         Some((file_path, parsed.line, parsed.column))
     }
 
     fn split_last_segment(path: &str) -> (&str, &str) {
-        if let Some(idx) = path.rfind('/') {
-            (&path[..idx], &path[idx + 1..])
-        } else {
-            ("", path)
-        }
+        path.rfind('/')
+            .map_or(("", path), |idx| (&path[..idx], &path[idx + 1..]))
     }
 
+    #[allow(clippy::useless_let_if_seq)]
     fn find_at_marker(tail: &str) -> Option<(usize, usize)> {
         let mut best_idx: Option<(usize, usize)> = None;
 
@@ -839,7 +839,7 @@ impl SrcuriParser {
             return true;
         }
 
-        matches!(bytes.get(colon_idx + 1), Some(b'\\') | Some(b'/'))
+        matches!(bytes.get(colon_idx + 1), Some(b'\\' | b'/'))
     }
 }
 
@@ -850,14 +850,14 @@ struct AtSuffix {
 }
 
 impl AtSuffix {
-    fn new(line: usize, column: Option<usize>) -> Self {
+    const fn new(line: usize, column: Option<usize>) -> Self {
         Self {
             line: Some(line),
             column,
         }
     }
 
-    fn empty() -> Self {
+    const fn empty() -> Self {
         Self {
             line: None,
             column: None,
@@ -937,8 +937,7 @@ mod tests {
 
     #[test]
     fn test_implicit_workspace_with_at_line_and_column() {
-        let request =
-            SrcuriParser::parse("srcuri://myproject/README.md@L25C7").expect("parse URL");
+        let request = SrcuriParser::parse("srcuri://myproject/README.md@L25C7").expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::ImplicitWorkspace {
@@ -954,8 +953,7 @@ mod tests {
 
     #[test]
     fn test_implicit_workspace_with_at_line_and_column_colon() {
-        let request =
-            SrcuriParser::parse("srcuri://myproject/README.md@L25:7").expect("parse URL");
+        let request = SrcuriParser::parse("srcuri://myproject/README.md@L25:7").expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::ImplicitWorkspace {
@@ -1003,8 +1001,7 @@ mod tests {
 
     #[test]
     fn test_implicit_workspace_with_encoded_at_line() {
-        let request =
-            SrcuriParser::parse("srcuri://myproject/README.md%40L25").expect("parse URL");
+        let request = SrcuriParser::parse("srcuri://myproject/README.md%40L25").expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::ImplicitWorkspace {
@@ -1488,7 +1485,7 @@ mod tests {
         let result = SrcuriParser::parse("srcuri:myproject/file.rs");
         assert!(result.is_err());
         assert!(result
-            .unwrap_err()
+            .expect_err("parse should fail for srcuri without //")
             .to_string()
             .contains("expected 'srcuri://'"));
     }
@@ -1510,7 +1507,7 @@ mod tests {
         let result = SrcuriParser::parse("srcuri://ext/github.com/owner/repo");
         assert!(result.is_err());
         assert!(result
-            .unwrap_err()
+            .expect_err("ext mode without scheme should fail")
             .to_string()
             .contains("must start with https/ or http/"));
     }
@@ -1688,7 +1685,7 @@ mod tests {
         let result = SrcuriParser::parse("srcuri://myrepo/file.rs?commit=abc123");
         assert!(result.is_err());
         assert!(result
-            .unwrap_err()
+            .expect_err("short commit hash should fail")
             .to_string()
             .contains("Invalid commit SHA"));
     }
@@ -1766,8 +1763,7 @@ mod tests {
 
     #[test]
     fn test_trailing_colon_abs_mode() {
-        let request =
-            SrcuriParser::parse("srcuri://abs/Users/alice/file.txt:").expect("parse URL");
+        let request = SrcuriParser::parse("srcuri://abs/Users/alice/file.txt:").expect("parse URL");
         assert_eq!(
             request,
             SrcuriRequest::AbsolutePath {

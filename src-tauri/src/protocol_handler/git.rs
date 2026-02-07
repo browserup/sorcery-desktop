@@ -68,6 +68,7 @@ pub struct GitOperationState {
 
 pub struct GitHandler;
 
+#[allow(clippy::missing_errors_doc)]
 impl GitHandler {
     pub fn validate_revision(workspace_path: &Path, rev: &str) -> Result<()> {
         if !Self::is_git_repo(workspace_path) {
@@ -105,32 +106,24 @@ impl GitHandler {
         }
 
         let workspace_str = workspace_path.to_string_lossy();
-        let output = run_git_command(&workspace_str, &["show", &format!("{}:{}", rev, file_path)])
+        let output = run_git_command(&workspace_str, &["show", &format!("{rev}:{file_path}")])
             .context("Failed to execute git show")?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             if stderr.contains("does not exist") || stderr.contains("exists on disk, but not in") {
-                bail!("File '{}' does not exist at revision '{}'", file_path, rev);
+                bail!("File '{file_path}' does not exist at revision '{rev}'");
             }
-            bail!(
-                "Failed to get file '{}' at revision '{}': {}",
-                file_path,
-                rev,
-                stderr
-            );
+            bail!("Failed to get file '{file_path}' at revision '{rev}': {stderr}");
         }
 
         let content =
             String::from_utf8(output.stdout).context("File content is not valid UTF-8")?;
 
-        if content.len() > MAX_FILE_SIZE_BYTES as usize {
-            bail!(
-                "File '{}' is too large ({} bytes, max {} bytes)",
-                file_path,
-                content.len(),
-                MAX_FILE_SIZE_BYTES
-            );
+        let len = content.len();
+        #[allow(clippy::cast_possible_truncation)]
+        if len > MAX_FILE_SIZE_BYTES as usize {
+            bail!("File '{file_path}' is too large ({len} bytes, max {MAX_FILE_SIZE_BYTES} bytes)");
         }
 
         Ok(content)
@@ -301,9 +294,9 @@ impl GitHandler {
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             if stderr.contains("pathspec") && stderr.contains("did not match") {
-                bail!("Revision '{}' not found", rev);
+                bail!("Revision '{rev}' not found");
             }
-            bail!("Failed to checkout '{}': {}", rev, stderr);
+            bail!("Failed to checkout '{rev}': {stderr}");
         }
 
         Ok(())
@@ -324,13 +317,14 @@ impl GitHandler {
         let workspace_str = workspace_path.to_string_lossy();
         let output = run_git_command(
             &workspace_str,
-            &["cat-file", "-e", &format!("{}:{}", rev, file_path)],
+            &["cat-file", "-e", &format!("{rev}:{file_path}")],
         )
         .context("Failed to execute git cat-file")?;
 
         Ok(output.status.success())
     }
 
+    #[must_use]
     pub fn find_git_root(start_path: &Path) -> Option<PathBuf> {
         let mut current = start_path;
         loop {
@@ -348,7 +342,7 @@ impl GitHandler {
 
         let current_ref = Self::get_current_ref(workspace_path)?;
 
-        Ok(current_ref == rev || format!("origin/{}", current_ref) == rev)
+        Ok(current_ref == rev || format!("origin/{current_ref}") == rev)
     }
 
     pub fn get_revision_dialog_state(
@@ -365,7 +359,7 @@ impl GitHandler {
 
         let file_exists = Self::file_exists_at_revision(workspace_path, file_path, rev)?;
         if !file_exists {
-            bail!("File '{}' does not exist at revision '{}'", file_path, rev);
+            bail!("File '{file_path}' does not exist at revision '{rev}'");
         }
 
         let status = Self::get_working_tree_status(workspace_path)?;
@@ -374,13 +368,13 @@ impl GitHandler {
         let (checkout_available, checkout_blocked_reason) = if operation_state.is_blocked {
             (false, operation_state.blocking_reason)
         } else if !status.is_clean {
-            (
-                false,
-                Some(format!(
-                    "{} modified file(s) in working tree",
-                    status.modified_count
-                )),
-            )
+            {
+                let count = status.modified_count;
+                (
+                    false,
+                    Some(format!("{count} modified file(s) in working tree")),
+                )
+            }
         } else {
             (true, None)
         };
@@ -431,7 +425,7 @@ impl GitHandler {
         {
             remote_url.to_string()
         } else {
-            format!("https://{}", remote_url)
+            format!("https://{remote_url}")
         };
 
         let mut cmd = Command::new("git");
@@ -476,8 +470,8 @@ impl GitHandler {
         }
 
         if let Some(GitRef::Commit(commit)) = git_ref {
-            tracing::info!("Checking out commit {} after clone", commit);
-            on_output(&format!("Checking out commit {}...", commit));
+            tracing::info!("Checking out commit {commit} after clone");
+            on_output(&format!("Checking out commit {commit}..."));
             let target_str = target_path.to_string_lossy();
             let checkout = run_git_command(&target_str, &["checkout", commit]).map_err(|e| {
                 CloneError::CheckoutFailed {
@@ -493,14 +487,14 @@ impl GitHandler {
             }
         }
 
-        tracing::info!("Cloned {} to {}", url, target_path.display());
+        let target_display = target_path.display();
+        tracing::info!("Cloned {url} to {target_display}");
         Ok(())
     }
 
-    /// Get the base directory for worktrees: ~/.sorcery/worktrees
+    /// Get the base directory for worktrees under app config storage.
     fn get_worktrees_base_dir() -> Result<PathBuf> {
-        let home = dirs::home_dir().context("Could not find home directory")?;
-        let dir = home.join(".sorcery").join("worktrees");
+        let dir = crate::config_paths::canonical_config_dir()?.join("worktrees");
         std::fs::create_dir_all(&dir).context("Failed to create worktrees directory")?;
         Ok(dir)
     }
@@ -517,7 +511,7 @@ impl GitHandler {
             .context("Failed to resolve commit hash")?;
 
         if !output.status.success() {
-            bail!("Failed to resolve '{}' to commit hash", rev);
+            bail!("Failed to resolve '{rev}' to commit hash");
         }
 
         Ok(String::from_utf8(output.stdout)?.trim().to_string())
@@ -551,7 +545,8 @@ impl GitHandler {
         // Remove oldest entries until we're under the limit
         let to_remove = entries.len() - (MAX_WORKTREES - 1); // -1 to make room for new one
         for (path, _) in entries.into_iter().take(to_remove) {
-            tracing::info!("Removing old worktree: {}", path.display());
+            let path_display = path.display();
+            tracing::info!("Removing old worktree: {path_display}");
 
             // Try git worktree remove first
             let workspace_str = workspace_path.to_string_lossy();
@@ -564,18 +559,14 @@ impl GitHandler {
             let removed = match output {
                 Ok(out) => out.status.success(),
                 Err(e) => {
-                    tracing::debug!("git worktree remove failed: {}", e);
+                    tracing::debug!("git worktree remove failed: {e}");
                     false
                 }
             };
 
             if !removed {
                 if let Err(e) = std::fs::remove_dir_all(&path) {
-                    tracing::warn!(
-                        "Failed to remove worktree directory {}: {}",
-                        path.display(),
-                        e
-                    );
+                    tracing::warn!("Failed to remove worktree directory {path_display}: {e}");
                 }
             }
         }
@@ -610,7 +601,8 @@ impl GitHandler {
 
         // Check if worktree already exists and is valid
         if worktree_path.exists() && worktree_path.join(".git").exists() {
-            tracing::info!("Reusing existing worktree: {}", worktree_path.display());
+            let worktree_display = worktree_path.display();
+            tracing::info!("Reusing existing worktree: {worktree_display}");
             // Touch the directory to update mtime for LRU
             let _ = std::fs::File::create(worktree_path.join(".sorcery_accessed"));
             let _ = std::fs::remove_file(worktree_path.join(".sorcery_accessed"));
@@ -640,7 +632,8 @@ impl GitHandler {
         .context("Failed to execute git worktree add")?;
 
         if output.status.success() {
-            tracing::info!("Created worktree at {}", worktree_path.display());
+            let worktree_display = worktree_path.display();
+            tracing::info!("Created worktree at {worktree_display}");
             return Ok(worktree_path);
         }
 
@@ -658,7 +651,8 @@ impl GitHandler {
             .context("Failed to execute git worktree add --detach")?;
 
             if output.status.success() {
-                tracing::info!("Created detached worktree at {}", worktree_path.display());
+                let worktree_display = worktree_path.display();
+                tracing::info!("Created detached worktree at {worktree_display}");
                 return Ok(worktree_path);
             }
 
@@ -668,7 +662,7 @@ impl GitHandler {
             );
         }
 
-        bail!("Failed to create worktree: {}", stderr);
+        bail!("Failed to create worktree: {stderr}");
     }
 }
 

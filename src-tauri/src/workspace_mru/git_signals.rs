@@ -7,11 +7,8 @@ pub fn head_reflog_time(repo_path: &Path) -> Option<SystemTime> {
     let repo = match Repository::open(repo_path) {
         Ok(r) => r,
         Err(e) => {
-            debug!(
-                "Failed to open Git repository at {}: {}",
-                repo_path.display(),
-                e
-            );
+            let path_display = repo_path.display();
+            debug!("Failed to open Git repository at {path_display}: {e}");
             return None;
         }
     };
@@ -19,7 +16,7 @@ pub fn head_reflog_time(repo_path: &Path) -> Option<SystemTime> {
     let log = match repo.reflog("HEAD") {
         Ok(l) => l,
         Err(e) => {
-            debug!("Failed to read HEAD reflog: {}", e);
+            debug!("Failed to read HEAD reflog: {e}");
             return None;
         }
     };
@@ -31,13 +28,11 @@ pub fn head_reflog_time(repo_path: &Path) -> Option<SystemTime> {
 
     let entry = log.get(log.len() - 1)?;
     let when = entry.committer().when();
+    #[allow(clippy::cast_sign_loss)]
     let timestamp = UNIX_EPOCH + Duration::from_secs(when.seconds() as u64);
 
-    debug!(
-        "Git reflog time for {}: {:?}",
-        repo_path.display(),
-        timestamp
-    );
+    let path_display = repo_path.display();
+    debug!("Git reflog time for {path_display}: {timestamp:?}");
     Some(timestamp)
 }
 

@@ -1,5 +1,8 @@
+#![allow(clippy::panic, clippy::unwrap_used, clippy::clone_on_ref_ptr)]
+// Integration tests intentionally use direct panic/unwrap patterns for compact fixtures.
+
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tempfile::TempDir;
 
@@ -130,9 +133,7 @@ async fn setup() -> (
         .await
         .expect("Failed to save test settings");
 
-    let path_validator = Arc::new(sorcery_desktop::path_validator::PathValidator::new(
-        settings_manager.clone(),
-    ));
+    let path_validator = Arc::new(sorcery_desktop::path_validator::PathValidator::new());
 
     let editor_registry = Arc::new(sorcery_desktop::editors::EditorRegistry::new());
     // Register NullEditor for tests - it's not in the default registry to avoid polluting the UI
@@ -177,10 +178,14 @@ async fn configure_workspace(
         .workspaces
         .push(sorcery_desktop::settings::WorkspaceConfig {
             path: workspace_path.to_string(),
-            name: Some(workspace_name),
+            workspace_key: workspace_name,
             editor: "null".to_string(),
             auto_discovered: false,
             trusted: false,
+            workspace_kind: sorcery_desktop::settings::WorkspaceKind::NonGit,
+            workspace_state: sorcery_desktop::settings::WorkspaceState::Present,
+            repo_identity: None,
+            last_verified_at: None,
             normalized_path: None,
         });
     settings_manager
@@ -428,4 +433,387 @@ async fn test_abs_mode_respects_non_workspace_setting() {
         result.is_err(),
         "Should reject non-workspace files when setting is disabled"
     );
+}
+
+#[tokio::test]
+async fn test_revision_prefers_exact_branch_worktree_match() {
+    let (protocol_handler, settings_manager, temp_dir, _test_file) = setup().await;
+
+    let main_workspace = temp_dir.path().join("repo-main");
+    let feature_workspace = temp_dir.path().join("repo-feature");
+    fs::create_dir(&main_workspace).expect("create main workspace");
+
+    run_git(&main_workspace, &["init"]);
+    run_git(
+        &main_workspace,
+        &["config", "user.email", "test@example.com"],
+    );
+    run_git(&main_workspace, &["config", "user.name", "Test User"]);
+    fs::write(main_workspace.join("README.md"), "main").expect("write readme");
+    run_git(&main_workspace, &["add", "README.md"]);
+    run_git(&main_workspace, &["commit", "-m", "init"]);
+    run_git(&main_workspace, &["branch", "-M", "main"]);
+    run_git(&main_workspace, &["branch", "feature"]);
+    run_git(
+        &main_workspace,
+        &[
+            "worktree",
+            "add",
+            feature_workspace.to_string_lossy().as_ref(),
+            "feature",
+        ],
+    );
+
+    configure_workspace(&settings_manager, main_workspace.to_string_lossy().as_ref()).await;
+    configure_workspace(
+        &settings_manager,
+        feature_workspace.to_string_lossy().as_ref(),
+    )
+    .await;
+
+    let result = protocol_handler
+        .handle_url("srcuri://repo-main/README.md?branch=feature")
+        .await
+        .expect("handle branch URL");
+
+    match result {
+        sorcery_desktop::protocol_handler::HandleResult::Opened { file_path } => {
+            let expected_path = feature_workspace.join("README.md");
+            assert_eq!(PathBuf::from(file_path), expected_path);
+        }
+        other => panic!("Expected Opened result, got {:?}", other),
+    }
+}
+
+#[tokio::test]
+async fn test_revision_uses_mru_within_repo_group_when_no_exact_ref_match() {
+    let (protocol_handler, settings_manager, temp_dir, _test_file) = setup().await;
+
+    let main_workspace = temp_dir.path().join("repo-main");
+    let feature_workspace = temp_dir.path().join("repo-feature");
+    fs::create_dir(&main_workspace).expect("create main workspace");
+
+    run_git(&main_workspace, &["init"]);
+    run_git(
+        &main_workspace,
+        &["config", "user.email", "test@example.com"],
+    );
+    run_git(&main_workspace, &["config", "user.name", "Test User"]);
+    fs::write(main_workspace.join("README.md"), "main").expect("write readme");
+    run_git(&main_workspace, &["add", "README.md"]);
+    run_git(&main_workspace, &["commit", "-m", "init"]);
+    run_git(&main_workspace, &["branch", "-M", "main"]);
+    run_git(&main_workspace, &["branch", "feature"]);
+    run_git(
+        &main_workspace,
+        &[
+            "worktree",
+            "add",
+            feature_workspace.to_string_lossy().as_ref(),
+            "feature",
+        ],
+    );
+    run_git(&main_workspace, &["tag", "v1"]);
+
+    // Make the feature worktree the most-recent candidate by bumping directory mtime.
+    std::thread::sleep(std::time::Duration::from_secs(1));
+    fs::write(feature_workspace.join(".mru_touch"), "recent").expect("touch feature workspace");
+
+    configure_workspace(&settings_manager, main_workspace.to_string_lossy().as_ref()).await;
+    configure_workspace(
+        &settings_manager,
+        feature_workspace.to_string_lossy().as_ref(),
+    )
+    .await;
+
+    let result = protocol_handler
+        .handle_url("srcuri://repo-main/README.md?tag=v1")
+        .await
+        .expect("handle tag URL");
+
+    match result {
+        sorcery_desktop::protocol_handler::HandleResult::ShowRevisionDialog {
+            workspace_path,
+            ..
+        } => {
+            assert_eq!(workspace_path, feature_workspace);
+        }
+        other => panic!("Expected ShowRevisionDialog, got {:?}", other),
+    }
+}
+
+#[tokio::test]
+async fn test_enforced_policy_blocks_non_compliant_workspace_resolution() {
+    let (protocol_handler, settings_manager, temp_dir, _test_file) = setup().await;
+
+    let workspace = temp_dir.path().join("rails");
+    fs::create_dir(&workspace).expect("create workspace");
+    fs::write(workspace.join("README.md"), "policy").expect("write file");
+    run_git(&workspace, &["init"]);
+    run_git(&workspace, &["config", "user.email", "test@example.com"]);
+    run_git(&workspace, &["config", "user.name", "Test User"]);
+    run_git(
+        &workspace,
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/company/rails.git",
+        ],
+    );
+
+    configure_workspace(&settings_manager, workspace.to_string_lossy().as_ref()).await;
+
+    write_policy_file(
+        &settings_manager,
+        r#"
+mode: enforced
+mappings:
+  - workspace_key: rails
+    remote: github.com/rails/rails
+"#,
+    )
+    .await;
+
+    let result = protocol_handler
+        .handle_url("srcuri://rails/README.md")
+        .await
+        .expect("policy should return conflict dialog");
+
+    match result {
+        sorcery_desktop::protocol_handler::HandleResult::ShowWorkspaceConflictDialog {
+            policy_violation: Some(policy_violation),
+            ..
+        } => {
+            assert!(
+                policy_violation.contains("requires remote"),
+                "unexpected policy message: {policy_violation}"
+            );
+        }
+        other => panic!("Expected ShowWorkspaceConflictDialog, got {:?}", other),
+    }
+}
+
+#[tokio::test]
+async fn test_enforced_policy_blocks_clone_resolution() {
+    let (protocol_handler, settings_manager, temp_dir, _test_file) = setup().await;
+
+    let disallowed_default = temp_dir.path().join("clones");
+    fs::create_dir_all(&disallowed_default).expect("create clone dir");
+    let mut settings = settings_manager.get().await;
+    settings.defaults.default_workspaces_folder = disallowed_default.to_string_lossy().to_string();
+    settings_manager
+        .save(settings)
+        .await
+        .expect("save settings");
+
+    let allowed_root = temp_dir.path().join("allowed");
+    fs::create_dir_all(&allowed_root).expect("create allowed root");
+    let policy = format!(
+        r#"
+mode: enforced
+mappings:
+  - workspace_key: myrepo
+    remote: github.com/company/myrepo
+allowed_clone_roots:
+  - {}
+"#,
+        allowed_root.to_string_lossy()
+    );
+    write_policy_file(&settings_manager, &policy).await;
+
+    let result = protocol_handler
+        .handle_url("srcuri://myrepo/README.md?remote=https://github.com/company/myrepo.git")
+        .await
+        .expect("policy should return clone dialog");
+
+    match result {
+        sorcery_desktop::protocol_handler::HandleResult::ShowCloneDialog {
+            policy_violation: Some(policy_violation),
+            ..
+        } => {
+            assert!(
+                policy_violation.contains("outside allowed clone roots"),
+                "unexpected policy message: {policy_violation}"
+            );
+        }
+        other => panic!("Expected ShowCloneDialog, got {:?}", other),
+    }
+}
+
+#[tokio::test]
+async fn test_same_key_same_remote_opens_existing_mapping() {
+    let (protocol_handler, settings_manager, temp_dir, _test_file) = setup().await;
+
+    let workspace = temp_dir.path().join("rails");
+    fs::create_dir(&workspace).expect("create workspace");
+    fs::write(workspace.join("README.md"), "# rails").expect("write file");
+    run_git(&workspace, &["init"]);
+    run_git(&workspace, &["config", "user.email", "test@example.com"]);
+    run_git(&workspace, &["config", "user.name", "Test User"]);
+    run_git(
+        &workspace,
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/company/rails.git",
+        ],
+    );
+
+    configure_workspace(&settings_manager, workspace.to_string_lossy().as_ref()).await;
+
+    let result = protocol_handler
+        .handle_url("srcuri://rails/README.md?remote=https://github.com/company/rails.git")
+        .await
+        .expect("should resolve to existing mapping");
+
+    match result {
+        sorcery_desktop::protocol_handler::HandleResult::Opened { file_path } => {
+            assert_eq!(PathBuf::from(file_path), workspace.join("README.md"));
+        }
+        other => panic!("Expected Opened, got {:?}", other),
+    }
+}
+
+#[tokio::test]
+async fn test_same_key_different_remote_shows_conflict_dialog() {
+    let (protocol_handler, settings_manager, temp_dir, _test_file) = setup().await;
+
+    let workspace = temp_dir.path().join("rails");
+    fs::create_dir(&workspace).expect("create workspace");
+    fs::write(workspace.join("README.md"), "# rails").expect("write file");
+    run_git(&workspace, &["init"]);
+    run_git(&workspace, &["config", "user.email", "test@example.com"]);
+    run_git(&workspace, &["config", "user.name", "Test User"]);
+    run_git(
+        &workspace,
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/company/rails.git",
+        ],
+    );
+
+    configure_workspace(&settings_manager, workspace.to_string_lossy().as_ref()).await;
+
+    let result = protocol_handler
+        .handle_url("srcuri://rails/README.md?remote=https://github.com/rails/rails.git")
+        .await
+        .expect("should show conflict dialog");
+
+    match result {
+        sorcery_desktop::protocol_handler::HandleResult::ShowWorkspaceConflictDialog {
+            requested_remote,
+            existing_mappings,
+            ..
+        } => {
+            assert!(requested_remote.contains("github.com/rails/rails"));
+            assert_eq!(existing_mappings.len(), 1);
+        }
+        other => panic!("Expected ShowWorkspaceConflictDialog, got {:?}", other),
+    }
+}
+
+#[tokio::test]
+async fn test_fork_and_upstream_with_distinct_keys_open_by_key() {
+    let (protocol_handler, settings_manager, temp_dir, _test_file) = setup().await;
+
+    let upstream_workspace = temp_dir.path().join("rails-upstream");
+    let fork_workspace = temp_dir.path().join("rails-fork");
+    fs::create_dir(&upstream_workspace).expect("create upstream workspace");
+    fs::create_dir(&fork_workspace).expect("create fork workspace");
+    fs::write(upstream_workspace.join("README.md"), "upstream").expect("write upstream readme");
+    fs::write(fork_workspace.join("README.md"), "fork").expect("write fork readme");
+
+    run_git(&upstream_workspace, &["init"]);
+    run_git(
+        &upstream_workspace,
+        &["config", "user.email", "test@example.com"],
+    );
+    run_git(&upstream_workspace, &["config", "user.name", "Test User"]);
+    run_git(
+        &upstream_workspace,
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/rails/rails.git",
+        ],
+    );
+
+    run_git(&fork_workspace, &["init"]);
+    run_git(
+        &fork_workspace,
+        &["config", "user.email", "test@example.com"],
+    );
+    run_git(&fork_workspace, &["config", "user.name", "Test User"]);
+    run_git(
+        &fork_workspace,
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/my-org/rails.git",
+        ],
+    );
+
+    configure_workspace(
+        &settings_manager,
+        upstream_workspace.to_string_lossy().as_ref(),
+    )
+    .await;
+    configure_workspace(&settings_manager, fork_workspace.to_string_lossy().as_ref()).await;
+
+    let upstream_result = protocol_handler
+        .handle_url("srcuri://rails-upstream/README.md")
+        .await
+        .expect("open upstream");
+    let fork_result = protocol_handler
+        .handle_url("srcuri://rails-fork/README.md")
+        .await
+        .expect("open fork");
+
+    match upstream_result {
+        sorcery_desktop::protocol_handler::HandleResult::Opened { file_path } => {
+            assert_eq!(
+                PathBuf::from(file_path),
+                upstream_workspace.join("README.md")
+            );
+        }
+        other => panic!("Expected Opened for upstream workspace, got {:?}", other),
+    }
+
+    match fork_result {
+        sorcery_desktop::protocol_handler::HandleResult::Opened { file_path } => {
+            assert_eq!(PathBuf::from(file_path), fork_workspace.join("README.md"));
+        }
+        other => panic!("Expected Opened for fork workspace, got {:?}", other),
+    }
+}
+
+async fn write_policy_file(
+    settings_manager: &Arc<sorcery_desktop::settings::SettingsManager>,
+    yaml: &str,
+) {
+    let policy_path = settings_manager
+        .config_path()
+        .parent()
+        .expect("settings path parent")
+        .join("policy.yaml");
+    fs::write(policy_path, yaml).expect("write policy");
+    settings_manager
+        .reload_policy()
+        .await
+        .expect("reload policy");
+}
+
+fn run_git(dir: &Path, args: &[&str]) {
+    let status = std::process::Command::new("git")
+        .args(args)
+        .current_dir(dir)
+        .status()
+        .expect("run git");
+    assert!(status.success(), "git command failed: {:?}", args);
 }

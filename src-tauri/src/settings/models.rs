@@ -14,6 +14,7 @@ pub struct Settings {
 impl Settings {
     /// Create settings with auto-detected `default_workspaces_folder`.
     /// Only use on first run - scans filesystem to find best candidate.
+    #[must_use]
     pub fn with_detected_workspaces_folder() -> Self {
         Self {
             defaults: DefaultEditorConfig::with_detected_workspaces_folder(),
@@ -23,6 +24,7 @@ impl Settings {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct DefaultEditorConfig {
     #[serde(default = "default_editor")]
     pub editor: String,
@@ -59,7 +61,7 @@ fn default_editor() -> String {
     "vscode".to_string()
 }
 
-fn default_allow_non_workspace_files() -> bool {
+const fn default_allow_non_workspace_files() -> bool {
     false
 }
 
@@ -107,22 +109,22 @@ fn detect_repo_base_dir() -> String {
         }
     }
 
-    best_candidate.map_or_else(|| "~/code".to_string(), |(name, _)| format!("~/{}", name))
+    best_candidate.map_or_else(|| "~/code".to_string(), |(name, _)| format!("~/{name}"))
 }
 
-fn default_auto_switch_clean_branches() -> bool {
+const fn default_auto_switch_clean_branches() -> bool {
     true
 }
 
-fn default_strip_git_diff_prefixes() -> bool {
+const fn default_strip_git_diff_prefixes() -> bool {
     true
 }
 
-fn default_large_file_warning_mb() -> u64 {
+const fn default_large_file_warning_mb() -> u64 {
     5
 }
 
-fn default_max_file_size_mb() -> u64 {
+const fn default_max_file_size_mb() -> u64 {
     50
 }
 
@@ -144,6 +146,7 @@ impl Default for DefaultEditorConfig {
 }
 
 impl DefaultEditorConfig {
+    #[must_use]
     pub fn with_detected_workspaces_folder() -> Self {
         Self {
             default_workspaces_folder: detect_repo_base_dir(),
@@ -152,12 +155,83 @@ impl DefaultEditorConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkspaceKind {
+    Git,
+    #[default]
+    NonGit,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum WorkspaceState {
+    #[default]
+    Present,
+    Missing,
+    Unavailable,
+    IdentityDrift,
+    Conflict,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum PolicyMode {
+    #[default]
+    Advisory,
+    Enforced,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct WorkspacePolicyMapping {
+    pub workspace_key: String,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub remote: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct WorkspacePolicyConfig {
+    #[serde(default)]
+    pub mode: PolicyMode,
+
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub mappings: Vec<WorkspacePolicyMapping>,
+
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub allowed_clone_roots: Vec<String>,
+
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub allowed_remote_hosts: Vec<String>,
+
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub allowed_remote_orgs: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct RepoIdentity {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub primary_remote: Option<String>,
+
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub all_remotes: Vec<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub git_common_dir: Option<PathBuf>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub current_branch: Option<String>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub head_commit: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WorkspaceConfig {
     pub path: String,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
+    #[serde(default)]
+    pub workspace_key: String,
 
     #[serde(default)]
     pub editor: String,
@@ -167,6 +241,18 @@ pub struct WorkspaceConfig {
 
     #[serde(default)]
     pub trusted: bool,
+
+    #[serde(default)]
+    pub workspace_kind: WorkspaceKind,
+
+    #[serde(default)]
+    pub workspace_state: WorkspaceState,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub repo_identity: Option<RepoIdentity>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_verified_at: Option<i64>,
 
     #[serde(skip)]
     pub normalized_path: Option<PathBuf>,
@@ -194,8 +280,8 @@ mod tests {
         std::fs::create_dir_all(&worktree_repo).expect("worktree repo");
         std::fs::write(worktree_repo.join(".git"), "gitdir: /tmp/foo").expect("worktree git file");
 
-        let _non_repo = root.path().join("not_a_repo");
-        std::fs::create_dir(&_non_repo).expect("non repo dir");
+        let non_repo = root.path().join("not_a_repo");
+        std::fs::create_dir(&non_repo).expect("non repo dir");
 
         assert_eq!(count_git_repos(root.path()), 2);
     }

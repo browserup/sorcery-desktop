@@ -8,18 +8,18 @@ use tracing::debug;
 pub struct MicroManager;
 
 impl MicroManager {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self
     }
 }
 
 #[async_trait]
 impl EditorManager for MicroManager {
-    fn id(&self) -> &str {
+    fn id(&self) -> &'static str {
         "micro"
     }
 
-    fn display_name(&self) -> &str {
+    fn display_name(&self) -> &'static str {
         "Micro"
     }
 

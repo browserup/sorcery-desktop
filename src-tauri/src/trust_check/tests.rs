@@ -1,3 +1,6 @@
+#![allow(clippy::unwrap_used)]
+// Test assertions inspect optional fields directly after explicit setup.
+
 use super::*;
 use tempfile::TempDir;
 

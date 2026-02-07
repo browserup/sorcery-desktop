@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use std::process::Command;
 use tracing::debug;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 #[allow(dead_code)]
 pub enum TerminalApp {
     ITerm2,
@@ -49,12 +49,11 @@ impl TerminalApp {
                     if Self::is_installed(&terminal) {
                         debug!("Using preferred terminal: {:?}", terminal);
                         return Some(terminal);
-                    } else {
-                        debug!(
-                            "Preferred terminal {:?} not installed, falling back to auto-detect",
-                            terminal
-                        );
                     }
+                    debug!(
+                        "Preferred terminal {:?} not installed, falling back to auto-detect",
+                        terminal
+                    );
                 }
             }
         }
@@ -103,12 +102,11 @@ impl TerminalApp {
                     if Self::is_installed(&terminal) {
                         debug!("Using preferred terminal: {:?}", terminal);
                         return Some(terminal);
-                    } else {
-                        debug!(
-                            "Preferred terminal {:?} not installed, falling back to auto-detect",
-                            terminal
-                        );
                     }
+                    debug!(
+                        "Preferred terminal {:?} not installed, falling back to auto-detect",
+                        terminal
+                    );
                 }
             }
         }
@@ -205,6 +203,7 @@ impl TerminalApp {
     }
 
     #[cfg(target_os = "macos")]
+    #[allow(clippy::unused_self)]
     fn launch_via_script(
         &self,
         app_name: &str,
@@ -218,7 +217,7 @@ impl TerminalApp {
             .duration_since(UNIX_EPOCH)
             .map(|d| d.as_nanos())
             .unwrap_or(0);
-        let script_path = format!("/tmp/sorcery_launch_{}.sh", timestamp);
+        let script_path = format!("/tmp/sorcery_launch_{timestamp}.sh");
 
         let mut script_content = String::from("#!/bin/bash\n");
         script_content.push_str(&shell_escape::escape(editor.into()));
@@ -229,11 +228,11 @@ impl TerminalApp {
         script_content.push('\n');
 
         let mut file = fs::File::create(&script_path)
-            .map_err(|e| format!("Failed to create launch script: {}", e))?;
+            .map_err(|e| format!("Failed to create launch script: {e}"))?;
         file.write_all(script_content.as_bytes())
-            .map_err(|e| format!("Failed to write launch script: {}", e))?;
+            .map_err(|e| format!("Failed to write launch script: {e}"))?;
         fs::set_permissions(&script_path, fs::Permissions::from_mode(0o755))
-            .map_err(|e| format!("Failed to set script permissions: {}", e))?;
+            .map_err(|e| format!("Failed to set script permissions: {e}"))?;
 
         Command::new("open")
             .arg("-a")
@@ -243,12 +242,13 @@ impl TerminalApp {
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()
-            .map_err(|e| format!("Failed to launch {}: {}", app_name, e))?;
+            .map_err(|e| format!("Failed to launch {app_name}: {e}"))?;
 
         Ok(())
     }
 
     #[cfg(target_os = "macos")]
+    #[allow(clippy::unused_self)]
     fn launch_alacritty_macos_direct(&self, editor: &str, args: &[String]) -> Result<(), String> {
         use std::process::Stdio;
 
@@ -268,12 +268,13 @@ impl TerminalApp {
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()
-            .map_err(|e| format!("Failed to launch Alacritty: {}", e))?;
+            .map_err(|e| format!("Failed to launch Alacritty: {e}"))?;
 
         Ok(())
     }
 
     #[cfg(target_os = "macos")]
+    #[allow(clippy::unused_self)]
     fn launch_kitty_macos_direct(&self, editor: &str, args: &[String]) -> Result<(), String> {
         use std::process::Stdio;
 
@@ -292,12 +293,13 @@ impl TerminalApp {
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()
-            .map_err(|e| format!("Failed to launch Kitty: {}", e))?;
+            .map_err(|e| format!("Failed to launch Kitty: {e}"))?;
 
         Ok(())
     }
 
     #[cfg(target_os = "macos")]
+    #[allow(clippy::unused_self)]
     fn launch_wezterm_macos_direct(&self, editor: &str, args: &[String]) -> Result<(), String> {
         use std::process::Stdio;
 
@@ -318,7 +320,7 @@ impl TerminalApp {
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()
-            .map_err(|e| format!("Failed to launch WezTerm: {}", e))?;
+            .map_err(|e| format!("Failed to launch WezTerm: {e}"))?;
 
         Ok(())
     }
@@ -338,7 +340,7 @@ impl TerminalApp {
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()
-            .map_err(|e| format!("Failed to launch Alacritty: {}", e))?;
+            .map_err(|e| format!("Failed to launch Alacritty: {e}"))?;
 
         Ok(())
     }
@@ -358,7 +360,7 @@ impl TerminalApp {
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()
-            .map_err(|e| format!("Failed to launch Kitty: {}", e))?;
+            .map_err(|e| format!("Failed to launch Kitty: {e}"))?;
 
         Ok(())
     }
@@ -378,7 +380,7 @@ impl TerminalApp {
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()
-            .map_err(|e| format!("Failed to launch WezTerm: {}", e))?;
+            .map_err(|e| format!("Failed to launch WezTerm: {e}"))?;
 
         Ok(())
     }

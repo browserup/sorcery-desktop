@@ -44,10 +44,11 @@ impl VSCodeManager {
         }
     }
 
-    fn cache_ttl() -> Duration {
+    const fn cache_ttl() -> Duration {
         Duration::from_secs(300)
     }
 
+    #[allow(clippy::significant_drop_tightening)]
     fn get_cached_binary(&self) -> Option<PathBuf> {
         let cache = self.cache.read();
         if let Some(cached) = cache.as_ref() {
@@ -67,7 +68,7 @@ impl VSCodeManager {
     }
 
     #[cfg(target_os = "macos")]
-    async fn find_binary_macos(&self) -> Option<PathBuf> {
+    fn find_binary_macos(&self) -> Option<PathBuf> {
         let candidates = vec![
             PathBuf::from(format!(
                 "/Applications/{}.app/Contents/Resources/app/bin/{}",
@@ -191,7 +192,7 @@ impl EditorManager for VSCodeManager {
         }
 
         #[cfg(target_os = "macos")]
-        let result = self.find_binary_macos().await;
+        let result = self.find_binary_macos();
 
         #[cfg(target_os = "windows")]
         let result = self.find_binary_windows().await;
@@ -218,10 +219,10 @@ impl EditorManager for VSCodeManager {
             args.push(format!("--user-data-dir=/tmp/{}-root", self.cli_name));
         }
 
-        if !options.new_window {
-            args.push("--reuse-window".to_string());
-        } else {
+        if options.new_window {
             args.push("--new-window".to_string());
+        } else {
+            args.push("--reuse-window".to_string());
         }
 
         let is_directory = path.is_dir();

@@ -1,4 +1,5 @@
-use crate::settings::SettingsManager;
+use crate::settings::WorkspaceState;
+use crate::settings::{identity, SettingsManager};
 use crate::workspace_mru::ActiveWorkspaceTracker;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
@@ -40,6 +41,8 @@ fn strip_git_diff_prefix(path: &str) -> Option<&str> {
 }
 
 impl PathMatcher {
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)]
     pub fn new(
         settings_manager: Arc<SettingsManager>,
         workspace_tracker: Arc<ActiveWorkspaceTracker>,
@@ -51,12 +54,12 @@ impl PathMatcher {
     }
 
     async fn path_exists_and_valid(path: &PathBuf) -> bool {
-        match tokio::fs::metadata(path).await {
-            Ok(meta) => meta.is_file() || meta.is_dir(),
-            Err(_) => false,
-        }
+        tokio::fs::metadata(path)
+            .await
+            .is_ok_and(|meta| meta.is_file() || meta.is_dir())
     }
 
+    #[allow(clippy::missing_errors_doc)]
     pub async fn find_partial_matches(&self, partial_path: &str) -> Result<Vec<WorkspaceMatch>> {
         let matches = self.find_partial_matches_inner(partial_path).await?;
 
@@ -80,7 +83,6 @@ impl PathMatcher {
         let workspaces = self.settings_manager.get_workspaces().await;
         let mut workspace_in_path_matches = Vec::new();
         let mut suffix_matches = Vec::new();
-        let mut matched_workspace_names = std::collections::HashSet::new();
 
         // Normalize path and split into segments for workspace detection
         let normalized_path = partial_path.replace('\\', "/");
@@ -90,14 +92,10 @@ impl PathMatcher {
             .collect();
 
         for workspace in &workspaces {
-            let ws_name = workspace.name.as_deref().unwrap_or_else(|| {
-                workspace
-                    .normalized_path
-                    .as_ref()
-                    .and_then(|p| p.file_name())
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("")
-            });
+            if workspace.workspace_state != WorkspaceState::Present {
+                continue;
+            }
+            let ws_name = identity::derive_workspace_key(workspace);
 
             let Some(workspace_root) = &workspace.normalized_path else {
                 continue;
@@ -106,25 +104,21 @@ impl PathMatcher {
             // Phase 1: Check if workspace name appears in path segments (highest priority)
             let mut found_workspace_in_path = false;
             for (idx, segment) in path_segments.iter().enumerate() {
-                if segment.eq_ignore_case(ws_name) {
+                if segment.eq_ignore_case(&ws_name) {
                     // Found workspace name - extract relative path from remaining segments
                     let relative_path: PathBuf = path_segments[idx + 1..].iter().collect();
                     let candidate = workspace_root.join(&relative_path);
 
                     if Self::path_exists_and_valid(&candidate).await {
-                        debug!(
-                            "Workspace-in-path match: {} -> {}",
-                            ws_name,
-                            candidate.display()
-                        );
+                        let candidate_display = candidate.display();
+                        debug!("Workspace-in-path match: {ws_name} -> {candidate_display}");
                         workspace_in_path_matches.push(WorkspaceMatch {
-                            workspace_name: ws_name.to_string(),
+                            workspace_name: ws_name.clone(),
                             workspace_path: workspace_root.clone(),
                             full_file_path: candidate,
                             last_seen: None,
                             last_active: None,
                         });
-                        matched_workspace_names.insert(ws_name.to_lowercase());
                         found_workspace_in_path = true;
                     }
                     break; // Use first occurrence of workspace name
@@ -137,7 +131,7 @@ impl PathMatcher {
 
                 if Self::path_exists_and_valid(&candidate).await {
                     suffix_matches.push(WorkspaceMatch {
-                        workspace_name: ws_name.to_string(),
+                        workspace_name: ws_name,
                         workspace_path: workspace_root.clone(),
                         full_file_path: candidate,
                         last_seen: None,
@@ -159,6 +153,7 @@ impl PathMatcher {
         Ok(matches)
     }
 
+    #[allow(clippy::missing_errors_doc)]
     pub async fn find_workspace_path(
         &self,
         workspace_name: &str,
@@ -199,16 +194,14 @@ impl PathMatcher {
         let workspaces = self.settings_manager.get_workspaces().await;
 
         for workspace in &workspaces {
-            let ws_name = workspace.name.as_deref().unwrap_or_else(|| {
-                workspace
-                    .normalized_path
-                    .as_ref()
-                    .and_then(|p| p.file_name())
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("")
-            });
+            let ws_name = identity::derive_workspace_key(workspace);
 
             if ws_name.eq_ignore_case(workspace_name) {
+                if workspace.workspace_state != WorkspaceState::Present {
+                    return Err(WorkspaceLookupError::WorkspaceNotFound(
+                        workspace_name.to_string(),
+                    ));
+                }
                 if let Some(workspace_root) = &workspace.normalized_path {
                     // Check if workspace root directory exists
                     // If not, treat as WorkspaceNotFound so clone dialog can be offered
@@ -232,12 +225,11 @@ impl PathMatcher {
                             full_path.display()
                         );
                         return Ok(full_path);
-                    } else {
-                        return Err(WorkspaceLookupError::PathNotFound(
-                            workspace_name.to_string(),
-                            relative_path.to_string(),
-                        ));
                     }
+                    return Err(WorkspaceLookupError::PathNotFound(
+                        workspace_name.to_string(),
+                        relative_path.to_string(),
+                    ));
                 }
             }
         }
@@ -247,6 +239,7 @@ impl PathMatcher {
         ))
     }
 
+    #[allow(clippy::missing_errors_doc)]
     pub async fn find_full_path_matches(&self, full_path: &str) -> Result<Vec<WorkspaceMatch>> {
         info!("Scanning full path for workspace fragments: {}", full_path);
 
@@ -267,14 +260,10 @@ impl PathMatcher {
             .is_some_and(std::fs::Metadata::is_dir);
 
         for workspace in &workspaces {
-            let ws_name = workspace.name.as_deref().unwrap_or_else(|| {
-                workspace
-                    .normalized_path
-                    .as_ref()
-                    .and_then(|p| p.file_name())
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("")
-            });
+            if workspace.workspace_state != WorkspaceState::Present {
+                continue;
+            }
+            let ws_name = identity::derive_workspace_key(workspace);
 
             let Some(workspace_root) = &workspace.normalized_path else {
                 continue;
@@ -287,7 +276,7 @@ impl PathMatcher {
                 );
 
                 matches.push(WorkspaceMatch {
-                    workspace_name: ws_name.to_string(),
+                    workspace_name: ws_name.clone(),
                     workspace_path: workspace_root.clone(),
                     full_file_path: user_path.clone(),
                     last_seen: None,
@@ -297,7 +286,7 @@ impl PathMatcher {
             }
 
             for (idx, segment) in path_segments.iter().enumerate() {
-                if segment.eq_ignore_case(ws_name) {
+                if segment.eq_ignore_case(&ws_name) {
                     let mut fragment = PathBuf::new();
                     for seg in &path_segments[idx + 1..] {
                         fragment.push(seg);
@@ -308,7 +297,7 @@ impl PathMatcher {
                     if Self::path_exists_and_valid(&candidate).await {
                         info!("Match found: {}", candidate.display());
                         matches.push(WorkspaceMatch {
-                            workspace_name: ws_name.to_string(),
+                            workspace_name: ws_name.clone(),
                             workspace_path: workspace_root.clone(),
                             full_file_path: candidate,
                             last_seen: None,
@@ -408,11 +397,12 @@ impl StrExt for str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::settings::{SettingsManager, WorkspaceConfig};
+    use crate::settings::{SettingsManager, WorkspaceConfig, WorkspaceKind, WorkspaceState};
     use crate::workspace_mru::ActiveWorkspaceTracker;
+    use std::path::Path;
     use tempfile::TempDir;
 
-    async fn build_matcher(workspace_dir: &PathBuf, workspace_name: &str) -> PathMatcher {
+    async fn build_matcher(workspace_dir: &Path, workspace_name: &str) -> PathMatcher {
         let temp_dir = TempDir::new().expect("temp dir");
         let settings_path = temp_dir.path().join("settings.yaml");
         let manager = Arc::new(
@@ -424,15 +414,19 @@ mod tests {
         let mut settings = manager.get().await;
         settings.workspaces.push(WorkspaceConfig {
             path: workspace_dir.to_string_lossy().to_string(),
-            name: Some(workspace_name.to_string()),
+            workspace_key: workspace_name.to_string(),
             editor: String::new(),
             auto_discovered: false,
             trusted: false,
-            normalized_path: Some(workspace_dir.clone()),
+            workspace_kind: WorkspaceKind::NonGit,
+            workspace_state: WorkspaceState::Present,
+            repo_identity: None,
+            last_verified_at: None,
+            normalized_path: Some(workspace_dir.to_path_buf()),
         });
         manager.save(settings).await.expect("save settings");
 
-        let tracker = Arc::new(ActiveWorkspaceTracker::new(manager.clone()));
+        let tracker = Arc::new(ActiveWorkspaceTracker::new(Arc::clone(&manager)));
         PathMatcher::new(manager, tracker)
     }
 
@@ -444,11 +438,7 @@ mod tests {
             .expect("create test dir");
         std::fs::write(&file_path, "fn test_match() {}").expect("write test file");
 
-        let matcher = build_matcher(
-            &workspace_dir.path().to_path_buf(),
-            "workspace-direct-match",
-        )
-        .await;
+        let matcher = build_matcher(workspace_dir.path(), "workspace-direct-match").await;
 
         let matches = matcher
             .find_full_path_matches(&file_path.to_string_lossy())
@@ -468,7 +458,7 @@ mod tests {
             .expect("create test dir");
         std::fs::write(&file_path, "fn main() {}").expect("write test file");
 
-        let matcher = build_matcher(&workspace_dir.path().to_path_buf(), "my-workspace").await;
+        let matcher = build_matcher(workspace_dir.path(), "my-workspace").await;
 
         let remote_path = "D:\\Code\\my-workspace\\src\\main.rs";
         let matches = matcher
@@ -489,7 +479,7 @@ mod tests {
             .expect("create test dir");
         std::fs::write(&file_path, "fn test() {}").expect("write test file");
 
-        let matcher = build_matcher(&workspace_dir.path().to_path_buf(), "test-ws").await;
+        let matcher = build_matcher(workspace_dir.path(), "test-ws").await;
 
         let matches = matcher
             .find_partial_matches("a/src/lib.rs")
@@ -506,7 +496,7 @@ mod tests {
         let file_path = workspace_dir.path().join("README.md");
         std::fs::write(&file_path, "# Test").expect("write test file");
 
-        let matcher = build_matcher(&workspace_dir.path().to_path_buf(), "test-ws").await;
+        let matcher = build_matcher(workspace_dir.path(), "test-ws").await;
 
         let matches = matcher
             .find_partial_matches("b/README.md")
@@ -525,7 +515,7 @@ mod tests {
             .expect("create test dir");
         std::fs::write(&file_path, "fn a() {}").expect("write test file");
 
-        let matcher = build_matcher(&workspace_dir.path().to_path_buf(), "test-ws").await;
+        let matcher = build_matcher(workspace_dir.path(), "test-ws").await;
 
         let matches = matcher
             .find_partial_matches("a/file.rs")
@@ -544,7 +534,7 @@ mod tests {
             .expect("create test dir");
         std::fs::write(&file_path, "fn main() {}").expect("write test file");
 
-        let matcher = build_matcher(&workspace_dir.path().to_path_buf(), "myproject").await;
+        let matcher = build_matcher(workspace_dir.path(), "myproject").await;
 
         let result = matcher
             .find_workspace_path("myproject", "a/src/main.rs")
@@ -572,7 +562,7 @@ mod tests {
             .expect("create test dir");
         std::fs::write(&file_path, "fn main() {}").expect("write test file");
 
-        let matcher = build_matcher(&workspace_dir.path().to_path_buf(), "myproject").await;
+        let matcher = build_matcher(workspace_dir.path(), "myproject").await;
 
         // Path has workspace name in middle - should find it and extract relative path
         let matches = matcher
@@ -591,7 +581,7 @@ mod tests {
         let file_path = workspace_dir.path().join("lib.rs");
         std::fs::write(&file_path, "fn test() {}").expect("write test file");
 
-        let matcher = build_matcher(&workspace_dir.path().to_path_buf(), "myproject").await;
+        let matcher = build_matcher(workspace_dir.path(), "myproject").await;
 
         // Different case should still match
         let matches = matcher
@@ -611,7 +601,7 @@ mod tests {
             .expect("create test dir");
         std::fs::write(&file_path, "fn main() {}").expect("write test file");
 
-        let matcher = build_matcher(&workspace_dir.path().to_path_buf(), "api").await;
+        let matcher = build_matcher(workspace_dir.path(), "api").await;
 
         // "myapi" contains "api" but is not the same segment - should NOT match
         let matches = matcher
@@ -631,7 +621,7 @@ mod tests {
             .expect("create test dir");
         std::fs::write(&file_path, "fn test() {}").expect("write test file");
 
-        let matcher = build_matcher(&workspace_dir.path().to_path_buf(), "myproject").await;
+        let matcher = build_matcher(workspace_dir.path(), "myproject").await;
 
         // Path has "myproject" twice - should use first occurrence
         let matches = matcher
@@ -695,23 +685,31 @@ mod tests {
         let mut settings = manager.get().await;
         settings.workspaces.push(WorkspaceConfig {
             path: workspace1_dir.path().to_string_lossy().to_string(),
-            name: Some("backend".to_string()),
+            workspace_key: "backend".to_string(),
             editor: String::new(),
             auto_discovered: false,
             trusted: false,
+            workspace_kind: WorkspaceKind::NonGit,
+            workspace_state: WorkspaceState::Present,
+            repo_identity: None,
+            last_verified_at: None,
             normalized_path: Some(workspace1_dir.path().to_path_buf()),
         });
         settings.workspaces.push(WorkspaceConfig {
             path: workspace2_dir.path().to_string_lossy().to_string(),
-            name: Some("frontend".to_string()),
+            workspace_key: "frontend".to_string(),
             editor: String::new(),
             auto_discovered: false,
             trusted: false,
+            workspace_kind: WorkspaceKind::NonGit,
+            workspace_state: WorkspaceState::Present,
+            repo_identity: None,
+            last_verified_at: None,
             normalized_path: Some(workspace2_dir.path().to_path_buf()),
         });
         manager.save(settings).await.expect("save settings");
 
-        let tracker = Arc::new(ActiveWorkspaceTracker::new(manager.clone()));
+        let tracker = Arc::new(ActiveWorkspaceTracker::new(Arc::clone(&manager)));
         let matcher = PathMatcher::new(manager, tracker);
 
         // Search with workspace name in path - should prioritize that workspace

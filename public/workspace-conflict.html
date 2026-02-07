@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Workspace Conflict</title>
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --bg-primary: #101217;
+      --bg-surface: #171a21;
+      --bg-elevated: #212635;
+      --text-primary: #f8fafc;
+      --text-secondary: #b8c2d1;
+      --border: #2e3648;
+      --warning: #f59e0b;
+      --warning-bg: rgba(245, 158, 11, 0.14);
+      --danger: #ef4444;
+      --danger-hover: #dc2626;
+      --danger-bg: rgba(239, 68, 68, 0.14);
+    }
+
+    html, body {
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg-primary);
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: var(--text-primary);
+      padding: 1.15rem;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .container {
+      max-width: 760px;
+      margin: 0 auto;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    h1 {
+      font-size: 1.18rem;
+      font-weight: 650;
+    }
+
+    .subtitle {
+      color: var(--text-secondary);
+      font-size: 0.88rem;
+      line-height: 1.45;
+    }
+
+    .alert {
+      background: var(--warning-bg);
+      border: 1px solid rgba(245, 158, 11, 0.4);
+      color: #fcd34d;
+      border-radius: 8px;
+      padding: 0.68rem 0.8rem;
+      font-size: 0.84rem;
+    }
+
+    .alert.policy {
+      background: var(--danger-bg);
+      border-color: rgba(239, 68, 68, 0.4);
+      color: #fecaca;
+    }
+
+    .info-grid {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.8rem;
+      display: grid;
+      grid-template-columns: 130px 1fr;
+      gap: 0.55rem 0.7rem;
+    }
+
+    .label {
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      font-size: 0.68rem;
+      font-weight: 650;
+      padding-top: 0.1rem;
+    }
+
+    .value {
+      color: var(--text-primary);
+      font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
+      font-size: 0.78rem;
+      line-height: 1.45;
+      word-break: break-word;
+    }
+
+    .list {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: auto;
+      flex: 1;
+      min-height: 180px;
+    }
+
+    .item {
+      border-bottom: 1px solid var(--border);
+      padding: 0.72rem 0.85rem;
+    }
+
+    .item:last-child {
+      border-bottom: none;
+    }
+
+    .item label {
+      display: flex;
+      gap: 0.6rem;
+      cursor: pointer;
+      align-items: flex-start;
+    }
+
+    .item input {
+      margin-top: 0.2rem;
+      accent-color: var(--primary);
+    }
+
+    .meta {
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
+      width: 100%;
+    }
+
+    .meta-top {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .pill {
+      border-radius: 999px;
+      padding: 0.1rem 0.52rem;
+      font-size: 0.7rem;
+      font-weight: 600;
+      border: 1px solid transparent;
+    }
+
+    .pill.healthy {
+      color: #86efac;
+      background: rgba(34, 197, 94, 0.14);
+      border-color: rgba(34, 197, 94, 0.4);
+    }
+
+    .pill.warning {
+      color: #fcd34d;
+      background: var(--warning-bg);
+      border-color: rgba(245, 158, 11, 0.4);
+    }
+
+    .path, .remote {
+      font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
+      font-size: 0.76rem;
+      color: var(--text-secondary);
+      word-break: break-word;
+    }
+
+    .status {
+      min-height: 1.2rem;
+      color: var(--text-secondary);
+      font-size: 0.83rem;
+    }
+
+    .status.error {
+      color: #fca5a5;
+    }
+
+    .button-group {
+      margin-top: auto;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.62rem;
+      justify-content: flex-end;
+    }
+
+    .button {
+      border: 1px solid var(--border);
+      background: var(--bg-elevated);
+      color: var(--text-primary);
+      border-radius: 6px;
+      padding: 0.48rem 0.9rem;
+      font-size: 0.83rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .button:hover:not(:disabled) {
+      border-color: #3c4660;
+      background: #2a3144;
+    }
+
+    .button.primary {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: white;
+    }
+
+    .button.primary:hover:not(:disabled) {
+      background: var(--primary-hover);
+      border-color: var(--primary-hover);
+    }
+
+    .button.danger {
+      background: var(--danger-bg);
+      border-color: rgba(239, 68, 68, 0.35);
+      color: #fca5a5;
+    }
+
+    .button.danger:hover:not(:disabled) {
+      background: var(--danger);
+      border-color: var(--danger-hover);
+      color: white;
+    }
+
+    .button:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Workspace Conflict</h1>
+    <p class="subtitle">
+      A workspace with this key already exists, but the requested remote points to a different repository.
+    </p>
+
+    <div class="alert">
+      Choose an existing mapping to open, or clone the requested remote as a new mapping.
+    </div>
+
+    <div class="alert policy" id="policy-alert" style="display:none;"></div>
+
+    <div class="info-grid">
+      <div class="label">Workspace Key</div>
+      <div class="value" id="workspace-key">loading...</div>
+      <div class="label">Requested Remote</div>
+      <div class="value" id="requested-remote">loading...</div>
+      <div class="label">Requested File</div>
+      <div class="value" id="file-path">loading...</div>
+      <div class="label">Clone Suggestion</div>
+      <div class="value" id="clone-path">loading...</div>
+      <div class="label" id="ref-label" style="display:none;">Reference</div>
+      <div class="value" id="git-ref" style="display:none;"></div>
+    </div>
+
+    <div class="list" id="candidate-list"></div>
+    <div class="status" id="status"></div>
+
+    <div class="button-group">
+      <button class="button" onclick="cancel()">Cancel</button>
+      <button class="button" id="rebind-btn" onclick="rebindSelected()">Rebind Selected Mapping</button>
+      <button class="button danger" id="open-existing-btn" onclick="openExisting()">Open Selected Mapping</button>
+      <button class="button primary" id="clone-btn" onclick="openCloneDialog()">Clone Requested Remote</button>
+    </div>
+  </div>
+
+  <script>
+    const { invoke } = window.__TAURI__.core;
+    const { open } = window.__TAURI_PLUGIN_DIALOG__;
+    let dialogData = null;
+    let selectedIndex = 0;
+    let busy = false;
+
+    function setBusy(isBusy) {
+      busy = isBusy;
+      document.getElementById('rebind-btn').disabled = isBusy;
+      document.getElementById('open-existing-btn').disabled = isBusy;
+      document.getElementById('clone-btn').disabled = isBusy;
+    }
+
+    function setStatus(message, isError = false) {
+      const status = document.getElementById('status');
+      status.textContent = message || '';
+      status.className = isError ? 'status error' : 'status';
+    }
+
+    function statePillClass(state) {
+      return state === 'present' ? 'healthy' : 'warning';
+    }
+
+    function renderCandidates() {
+      const container = document.getElementById('candidate-list');
+      if (!dialogData?.candidates?.length) {
+        container.innerHTML = '<div class="item"><div class="meta"><div class="path">No existing mappings were found.</div></div></div>';
+        document.getElementById('open-existing-btn').disabled = true;
+        document.getElementById('rebind-btn').disabled = true;
+        return;
+      }
+
+      document.getElementById('open-existing-btn').disabled = false;
+      document.getElementById('rebind-btn').disabled = false;
+      container.innerHTML = dialogData.candidates.map((candidate, index) => `
+        <div class="item">
+          <label>
+            <input type="radio" name="candidate" value="${index}" ${index === selectedIndex ? 'checked' : ''} onchange="selectCandidate(${index})">
+            <div class="meta">
+              <div class="meta-top">
+                <span class="pill ${statePillClass(candidate.workspace_state)}">${candidate.workspace_state}</span>
+                <span class="value">${candidate.workspace_key}</span>
+              </div>
+              <div class="path">${candidate.workspace_path}</div>
+              <div class="remote">${candidate.primary_remote || 'remote: not available'}</div>
+            </div>
+          </label>
+        </div>
+      `).join('');
+    }
+
+    function selectCandidate(index) {
+      selectedIndex = index;
+    }
+
+    async function init() {
+      try {
+        dialogData = await invoke('get_workspace_conflict_dialog_data');
+        document.getElementById('workspace-key').textContent = dialogData.workspace_key;
+        document.getElementById('requested-remote').textContent = dialogData.normalized_remote || dialogData.requested_remote;
+        document.getElementById('file-path').textContent = dialogData.file_path;
+        document.getElementById('clone-path').textContent = dialogData.clone_path;
+
+        if (dialogData.policy_violation) {
+          const policyAlert = document.getElementById('policy-alert');
+          policyAlert.style.display = '';
+          policyAlert.textContent = `Policy restriction: ${dialogData.policy_violation}`;
+        }
+
+        if (dialogData.git_ref) {
+          document.getElementById('ref-label').style.display = '';
+          document.getElementById('git-ref').style.display = '';
+          document.getElementById('git-ref').textContent = dialogData.git_ref;
+        }
+
+        renderCandidates();
+      } catch (error) {
+        setStatus(`Failed to load conflict data: ${error}`, true);
+      }
+    }
+
+    async function openExisting() {
+      if (busy || !dialogData?.candidates?.length) return;
+      const selected = dialogData.candidates[selectedIndex];
+      if (!selected) return;
+
+      setBusy(true);
+      setStatus('Opening selected mapping...', false);
+      try {
+        await invoke('workspace_conflict_open_existing', {
+          workspace_path: selected.workspace_path,
+          file_path: dialogData.file_path,
+          line: dialogData.line,
+          column: dialogData.column
+        });
+        window.close();
+      } catch (error) {
+        setStatus(`Failed to open selected mapping: ${error}`, true);
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    async function rebindSelected() {
+      if (busy || !dialogData?.candidates?.length) return;
+      const selected = dialogData.candidates[selectedIndex];
+      if (!selected) return;
+
+      const chosenPath = await open({
+        directory: true,
+        multiple: false,
+        defaultPath: selected.workspace_path,
+        title: `Select folder for ${selected.workspace_key}`
+      });
+
+      if (!chosenPath) return;
+
+      setBusy(true);
+      setStatus('Rebinding workspace mapping...', false);
+      try {
+        await invoke('rebind_workspace_path', {
+          workspace_key: selected.workspace_key,
+          new_path: chosenPath
+        });
+
+        selected.workspace_path = chosenPath;
+        selected.workspace_state = 'present';
+        renderCandidates();
+
+        setStatus('Mapping updated. Opening selected mapping...', false);
+        await invoke('workspace_conflict_open_existing', {
+          workspace_path: chosenPath,
+          file_path: dialogData.file_path,
+          line: dialogData.line,
+          column: dialogData.column
+        });
+        window.close();
+      } catch (error) {
+        setStatus(`Failed to rebind mapping: ${error}`, true);
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    async function openCloneDialog() {
+      if (busy) return;
+      setBusy(true);
+      setStatus('Opening clone dialog...', false);
+      try {
+        await invoke('workspace_conflict_open_clone_dialog');
+        window.close();
+      } catch (error) {
+        setStatus(`Failed to open clone dialog: ${error}`, true);
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    function cancel() {
+      window.close();
+    }
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && !busy) {
+        cancel();
+      }
+    });
+
+    init();
+  </script>
+</body>
+</html>

@@ -8,18 +8,18 @@ use tracing::debug;
 pub struct VimManager;
 
 impl VimManager {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self
     }
 }
 
 #[async_trait]
 impl EditorManager for VimManager {
-    fn id(&self) -> &str {
+    fn id(&self) -> &'static str {
         "vim"
     }
 
-    fn display_name(&self) -> &str {
+    fn display_name(&self) -> &'static str {
         "Vim"
     }
 
@@ -83,10 +83,10 @@ impl EditorManager for VimManager {
         match (options.line, options.column) {
             (Some(line), Some(column)) => {
                 vim_args.push("-c".to_string());
-                vim_args.push(format!("call cursor({},{})", line, column));
+                vim_args.push(format!("call cursor({line},{column})"));
             }
             (Some(line), None) => {
-                vim_args.push(format!("+{}", line));
+                vim_args.push(format!("+{line}"));
             }
             _ => {}
         }

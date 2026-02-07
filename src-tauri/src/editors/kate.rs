@@ -7,18 +7,18 @@ use tracing::debug;
 pub struct KateManager;
 
 impl KateManager {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self
     }
 }
 
 #[async_trait]
 impl EditorManager for KateManager {
-    fn id(&self) -> &str {
+    fn id(&self) -> &'static str {
         "kate"
     }
 
-    fn display_name(&self) -> &str {
+    fn display_name(&self) -> &'static str {
         "Kate"
     }
 

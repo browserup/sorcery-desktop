@@ -19,10 +19,12 @@ pub struct ActiveWorkspaceTracker {
     settings_manager: Arc<SettingsManager>,
 }
 
+#[allow(clippy::missing_errors_doc, clippy::significant_drop_tightening)]
 impl ActiveWorkspaceTracker {
+    #[must_use]
     pub fn new(settings_manager: Arc<SettingsManager>) -> Self {
         let mru_path = Self::get_mru_path()
-            .unwrap_or_else(|_| PathBuf::from("/tmp/sorcery_desktop_workspace_mru.yaml"));
+            .unwrap_or_else(|_| PathBuf::from("/tmp/sorcery_workspace_mru.yaml"));
 
         Self {
             mru_data: Arc::new(RwLock::new(WorkspaceMruData::default())),
@@ -32,13 +34,7 @@ impl ActiveWorkspaceTracker {
     }
 
     fn get_mru_path() -> Result<PathBuf> {
-        let config_dir = dirs::config_dir().context("Could not find config directory")?;
-
-        let sorcery_dir = config_dir.join("sorcery");
-        std::fs::create_dir_all(&sorcery_dir)
-            .context("Failed to create sorcery config directory")?;
-
-        Ok(sorcery_dir.join("workspace_mru.yaml"))
+        Ok(crate::config_paths::canonical_config_dir()?.join("workspace_mru.yaml"))
     }
 
     pub async fn load(&self) -> Result<()> {
@@ -119,6 +115,7 @@ impl ActiveWorkspaceTracker {
         }
     }
 
+    #[must_use]
     pub fn get_folder_mtime(workspace_path: &Path) -> Option<SystemTime> {
         std::fs::metadata(workspace_path).ok()?.modified().ok()
     }

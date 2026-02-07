@@ -20,10 +20,11 @@ pub struct ActiveEditorTracker {
     workspace_tracker: Option<Arc<ActiveWorkspaceTracker>>,
 }
 
+#[allow(clippy::missing_errors_doc, clippy::significant_drop_tightening)]
 impl ActiveEditorTracker {
     pub fn new(registry: Arc<EditorRegistry>) -> Self {
         let last_seen_path = Self::get_last_seen_path()
-            .unwrap_or_else(|_| PathBuf::from("/tmp/sorcery_desktop_last_seen.yaml"));
+            .unwrap_or_else(|_| PathBuf::from("/tmp/sorcery_last_seen.yaml"));
 
         Self {
             last_seen: Arc::new(RwLock::new(LastSeenData::default())),
@@ -34,6 +35,7 @@ impl ActiveEditorTracker {
         }
     }
 
+    #[must_use]
     pub fn with_workspace_tracking(
         mut self,
         settings_manager: Arc<SettingsManager>,
@@ -45,13 +47,7 @@ impl ActiveEditorTracker {
     }
 
     fn get_last_seen_path() -> Result<PathBuf> {
-        let config_dir = dirs::config_dir().context("Could not find config directory")?;
-
-        let sorcery_dir = config_dir.join("sorcery");
-        std::fs::create_dir_all(&sorcery_dir)
-            .context("Failed to create sorcery config directory")?;
-
-        Ok(sorcery_dir.join("last_seen.yaml"))
+        Ok(crate::config_paths::canonical_config_dir()?.join("last_seen.yaml"))
     }
 
     pub async fn load(&self) -> Result<()> {
@@ -148,10 +144,9 @@ impl ActiveEditorTracker {
         let title_lower = title.to_lowercase();
 
         for ws in settings_manager.get_workspaces().await {
-            if let Some(ref name) = ws.name {
-                if title_lower.contains(&name.to_lowercase()) {
-                    return ws.normalized_path.clone();
-                }
+            let workspace_key = crate::settings::identity::derive_workspace_key(&ws);
+            if title_lower.contains(&workspace_key.to_lowercase()) {
+                return ws.normalized_path.clone();
             }
         }
         None

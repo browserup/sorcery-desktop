@@ -8,18 +8,18 @@ use tracing::debug;
 pub struct NanoManager;
 
 impl NanoManager {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self
     }
 }
 
 #[async_trait]
 impl EditorManager for NanoManager {
-    fn id(&self) -> &str {
+    fn id(&self) -> &'static str {
         "nano"
     }
 
-    fn display_name(&self) -> &str {
+    fn display_name(&self) -> &'static str {
         "Nano"
     }
 
@@ -77,7 +77,7 @@ impl EditorManager for NanoManager {
 
         let mut nano_args: Vec<String> = vec![];
         if let Some(line) = options.line {
-            nano_args.push(format!("+{}", line));
+            nano_args.push(format!("+{line}"));
         }
         nano_args.push(path.display().to_string());
 

@@ -3,6 +3,7 @@
 
 mod browser_detection;
 mod commands;
+mod config_paths;
 mod dialog_state;
 mod dispatcher;
 mod editors;
@@ -27,6 +28,7 @@ use tauri::{
 };
 #[cfg(target_os = "macos")]
 use tauri_plugin_deep_link::DeepLinkExt;
+use tokio::time::timeout;
 use tracing_subscriber::EnvFilter;
 
 use crate::git_command_log::GIT_COMMAND_LOG;
@@ -55,7 +57,8 @@ use dialog_state::DialogState;
 use ui_utils::{activate_app, set_dark_titlebar};
 use ui_utils::{build_dialog, DialogConfig};
 
-async fn handle_protocol_result(
+#[allow(clippy::too_many_lines)] // Complex orchestration function with many dialog handlers
+fn handle_protocol_result(
     result: Result<protocol_handler::HandleResult, anyhow::Error>,
     app_handle: &AppHandle,
     url: &str,
@@ -88,7 +91,7 @@ async fn handle_protocol_result(
                 url,
                 true,
                 "chooser",
-                &format!("{} matching workspaces found", match_count),
+                &format!("{match_count} matching workspaces found"),
                 duration,
             );
             dialog_state.set_workspace_chooser(dialog_state::WorkspaceChooserData {
@@ -98,7 +101,7 @@ async fn handle_protocol_result(
             });
             let _ = build_dialog(
                 app_handle,
-                DialogConfig {
+                &DialogConfig {
                     id: "workspace-chooser",
                     html_file: "workspace-chooser.html",
                     title: "Choose Workspace",
@@ -126,7 +129,7 @@ async fn handle_protocol_result(
                 url,
                 true,
                 "revision_dialog",
-                &format!("Revision {} requires checkout", rev),
+                &format!("Revision {rev} requires checkout"),
                 duration,
             );
             dialog_state.set_revision_dialog(dialog_state::RevisionDialogData {
@@ -145,7 +148,7 @@ async fn handle_protocol_result(
             });
             let _ = build_dialog(
                 app_handle,
-                DialogConfig {
+                &DialogConfig {
                     id: "revision-handler",
                     html_file: "revision-handler.html",
                     title: "Open File at Revision",
@@ -162,6 +165,7 @@ async fn handle_protocol_result(
             line,
             column,
             git_ref,
+            policy_violation,
         }) => {
             tracing::info!(
                 "Request: showing clone dialog for {} from {}",
@@ -173,8 +177,7 @@ async fn handle_protocol_result(
                 true,
                 "clone_dialog",
                 &format!(
-                    "Workspace '{}' not found, offering clone from {}",
-                    workspace_name, remote_url
+                    "Workspace '{workspace_name}' not found, offering clone from {remote_url}"
                 ),
                 duration,
             );
@@ -183,20 +186,136 @@ async fn handle_protocol_result(
                 workspace_name,
                 clone_path,
                 remote_url,
+                normalized_remote: None,
+                policy_violation,
                 file_path,
                 line,
                 column,
                 git_ref: git_ref_str,
-                git_ref_kind: git_ref.clone(),
+                clone_allowed: true,
+                clone_validation_message: None,
+                suggested_workspace_key: None,
+                git_ref_kind: git_ref,
             });
             let _ = build_dialog(
                 app_handle,
-                DialogConfig {
+                &DialogConfig {
                     id: "clone-dialog",
                     html_file: "clone-dialog.html",
                     title: "Clone Repository",
                     width: 520.0,
                     height: 380.0,
+                },
+            );
+        }
+        Ok(protocol_handler::HandleResult::ShowWorkspaceRepairDialog {
+            workspace_key,
+            workspace_path,
+            workspace_state,
+            file_path,
+            line,
+            column,
+        }) => {
+            let workspace_state_label = format!("{workspace_state:?}").to_lowercase();
+            tracing::info!(
+                "Request: showing workspace repair dialog for '{}' in state '{}'",
+                workspace_key,
+                workspace_state_label
+            );
+            GIT_COMMAND_LOG.log_request(
+                url,
+                true,
+                "workspace_repair_dialog",
+                &format!("Workspace '{workspace_key}' is '{workspace_state_label}'"),
+                duration,
+            );
+            dialog_state.set_workspace_repair_dialog(dialog_state::WorkspaceRepairDialogData {
+                workspace_key,
+                workspace_path,
+                workspace_state: workspace_state_label,
+                file_path,
+                line,
+                column,
+                original_url: Some(url.to_string()),
+            });
+            let _ = build_dialog(
+                app_handle,
+                &DialogConfig {
+                    id: "workspace-repair",
+                    html_file: "workspace-repair.html",
+                    title: "Workspace Needs Repair",
+                    width: 620.0,
+                    height: 440.0,
+                },
+            );
+        }
+        Ok(protocol_handler::HandleResult::ShowWorkspaceConflictDialog {
+            workspace_name,
+            requested_remote,
+            existing_mappings,
+            clone_path,
+            file_path,
+            line,
+            column,
+            git_ref,
+            policy_violation,
+        }) => {
+            tracing::info!(
+                "Request: showing workspace conflict dialog for '{}' and remote '{}'",
+                workspace_name,
+                requested_remote
+            );
+            GIT_COMMAND_LOG.log_request(
+                url,
+                true,
+                "workspace_conflict_dialog",
+                &format!(
+                    "Workspace '{}' conflicts with existing mapping for remote '{}'",
+                    workspace_name, requested_remote
+                ),
+                duration,
+            );
+
+            let candidates = existing_mappings
+                .into_iter()
+                .map(|workspace| dialog_state::WorkspaceConflictCandidateData {
+                    workspace_key: crate::settings::identity::derive_workspace_key(&workspace),
+                    workspace_path: workspace
+                        .normalized_path
+                        .as_ref()
+                        .map(|path| path.to_string_lossy().to_string())
+                        .unwrap_or(workspace.path),
+                    workspace_state: format!("{:?}", workspace.workspace_state).to_lowercase(),
+                    primary_remote: workspace
+                        .repo_identity
+                        .as_ref()
+                        .and_then(|identity| identity.primary_remote.clone()),
+                })
+                .collect();
+
+            dialog_state.set_workspace_conflict_dialog(dialog_state::WorkspaceConflictDialogData {
+                workspace_key: workspace_name,
+                requested_remote: requested_remote.clone(),
+                normalized_remote: crate::settings::identity::normalize_remote_identity(
+                    &requested_remote,
+                ),
+                policy_violation,
+                clone_path,
+                file_path,
+                line,
+                column,
+                git_ref: git_ref.as_ref().map(dialog_state::git_ref_display),
+                candidates,
+                git_ref_kind: git_ref,
+            });
+            let _ = build_dialog(
+                app_handle,
+                &DialogConfig {
+                    id: "workspace-conflict",
+                    html_file: "workspace-conflict.html",
+                    title: "Workspace Conflict",
+                    width: 660.0,
+                    height: 500.0,
                 },
             );
         }
@@ -207,6 +326,7 @@ async fn handle_protocol_result(
             column,
             editor_hint,
         }) => {
+            #[allow(clippy::cast_precision_loss)] // Precision loss acceptable for display
             let size_mb = file_size_bytes as f64 / (1024.0 * 1024.0);
             tracing::info!(
                 "Request: showing large file warning for {} ({:.1} MB)",
@@ -217,7 +337,7 @@ async fn handle_protocol_result(
                 url,
                 true,
                 "large_file_dialog",
-                &format!("File is {:.1} MB, requesting confirmation", size_mb),
+                &format!("File is {size_mb:.1} MB, requesting confirmation"),
                 duration,
             );
             dialog_state.set_large_file_dialog(dialog_state::LargeFileDialogData {
@@ -229,7 +349,7 @@ async fn handle_protocol_result(
             });
             let _ = build_dialog(
                 app_handle,
-                DialogConfig {
+                &DialogConfig {
                     id: "large-file-confirm",
                     html_file: "large-file-confirm.html",
                     title: "Large File Warning",
@@ -268,8 +388,7 @@ async fn handle_protocol_result(
                 true,
                 "trust_dialog",
                 &format!(
-                    "Workspace '{}' has {} auto-run tasks, {} vim rc files, {} dangerous files, {} dangerous settings, requesting trust confirmation",
-                    workspace_name, task_count, vim_rc_count, dangerous_files_count, dangerous_settings_count
+                    "Workspace '{workspace_name}' has {task_count} auto-run tasks, {vim_rc_count} vim rc files, {dangerous_files_count} dangerous files, {dangerous_settings_count} dangerous settings, requesting trust confirmation"
                 ),
                 duration,
             );
@@ -300,7 +419,7 @@ async fn handle_protocol_result(
             });
             let _ = build_dialog(
                 app_handle,
-                DialogConfig {
+                &DialogConfig {
                     id: "trust-warning",
                     html_file: "trust-warning.html",
                     title: "Security Warning",
@@ -315,7 +434,7 @@ async fn handle_protocol_result(
                 url,
                 true,
                 "browser",
-                &format!("Opening in browser: {}", browser_url),
+                &format!("Opening in browser: {browser_url}"),
                 duration,
             );
             if let Err(e) = open::that(&browser_url) {
@@ -333,7 +452,7 @@ async fn handle_protocol_result(
                 url,
                 true,
                 "hello",
-                &format!("Extension version {} registered", version_str),
+                &format!("Extension version {version_str} registered"),
                 duration,
             );
         }
@@ -353,6 +472,7 @@ struct DeepLinkThrottle {
 }
 
 impl DeepLinkThrottle {
+    #[allow(clippy::missing_const_for_fn)] // Mutex::new is not const
     fn new(min_interval: Duration) -> Self {
         Self {
             min_interval,
@@ -378,7 +498,22 @@ impl DeepLinkThrottle {
     }
 }
 
+async fn reconcile_and_emit_workspace_health(
+    settings_manager: &Arc<settings::SettingsManager>,
+    app_handle: &AppHandle,
+) -> Result<(), anyhow::Error> {
+    let changed = settings_manager.reconcile_workspace_states().await?;
+    if !changed {
+        return Ok(());
+    }
+
+    let counts = settings_manager.get_workspace_health_counts().await;
+    app_handle.emit("workspace-health-updated", counts)?;
+    Ok(())
+}
+
 #[tokio::main]
+#[allow(clippy::too_many_lines, clippy::large_stack_frames)] // App initialization and tauri macro
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env())
@@ -387,9 +522,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!("Starting Sorcery Desktop...");
 
     let settings_manager = Arc::new(settings::SettingsManager::new().await?);
-    let path_validator = Arc::new(path_validator::PathValidator::new(Arc::clone(
-        &settings_manager,
-    )));
+    let path_validator = Arc::new(path_validator::PathValidator::new());
     let editor_registry = Arc::new(editors::EditorRegistry::new());
     let workspace_tracker = Arc::new(workspace_mru::ActiveWorkspaceTracker::new(Arc::clone(
         &settings_manager,
@@ -429,6 +562,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Err(e) = workspace_sync.sync().await {
         tracing::warn!("Failed to sync workspaces: {}", e);
     }
+
+    if let Err(e) = settings_manager.reconcile_workspace_states().await {
+        tracing::warn!("Failed to reconcile workspace states: {}", e);
+    }
+
+    let (workspace_change_tx, workspace_change_rx) = tokio::sync::mpsc::unbounded_channel();
+    let workspace_watch_service = match settings::WorkspaceWatchService::new(
+        Arc::clone(&settings_manager),
+        workspace_change_tx,
+    )
+    .await
+    {
+        Ok(service) => Some(Arc::new(tokio::sync::Mutex::new(service))),
+        Err(error) => {
+            tracing::warn!("Failed to start workspace file watcher: {}", error);
+            None
+        }
+    };
 
     tracker.load().await?;
     tracing::info!("Last seen data loaded");
@@ -494,11 +645,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let protocol_handler_clone = Arc::clone(&protocol_handler);
     let deep_link_throttle_for_setup = Arc::clone(&deep_link_throttle);
     let tray_state_for_setup = Arc::clone(&tray_state);
+    let settings_manager_for_setup = Arc::clone(&settings_manager);
+    let workspace_watch_service_for_setup = workspace_watch_service.clone();
     let setup_needed = settings_manager.is_setup_needed().await;
 
     tauri::Builder::default()
         .setup(move |app| {
             let deep_link_throttle = Arc::clone(&deep_link_throttle_for_setup);
+            let settings_manager_for_setup = Arc::clone(&settings_manager_for_setup);
+            let mut workspace_change_rx = workspace_change_rx;
             tracing::info!("Setting up Tauri app...");
 
             // Show setup wizard if this is first run
@@ -512,7 +667,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     "setup",
                     tauri::WebviewUrl::App("setup.html".into()),
                 )
-                .title("Welcome to Sorcery")
+                .title("Welcome to Sorcery Desktop")
                 .inner_size(500.0, 550.0)
                 .center()
                 .resizable(false)
@@ -546,6 +701,64 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let ph = Arc::clone(&protocol_handler_clone);
             #[cfg(target_os = "macos")]
             let ph_cold_start = Arc::clone(&protocol_handler_clone);
+
+            let settings_manager_for_periodic = Arc::clone(&settings_manager_for_setup);
+            let app_handle_for_periodic = app_handle.clone();
+            tauri::async_runtime::spawn(async move {
+                let mut ticker = tokio::time::interval(Duration::from_secs(60));
+                loop {
+                    ticker.tick().await;
+                    if let Err(error) = reconcile_and_emit_workspace_health(
+                        &settings_manager_for_periodic,
+                        &app_handle_for_periodic,
+                    )
+                    .await
+                    {
+                        tracing::warn!("Background workspace reconciliation failed: {}", error);
+                    }
+                }
+            });
+
+            if let Some(workspace_watch_service) = workspace_watch_service_for_setup.as_ref() {
+                let workspace_watch_service = Arc::clone(workspace_watch_service);
+                let settings_manager_for_watch_refresh = Arc::clone(&settings_manager_for_setup);
+                tauri::async_runtime::spawn(async move {
+                    let mut ticker = tokio::time::interval(Duration::from_secs(30));
+                    loop {
+                        ticker.tick().await;
+                        let settings = settings_manager_for_watch_refresh.get().await;
+                        let mut watcher = workspace_watch_service.lock().await;
+                        watcher.refresh_watch_roots_for_settings(&settings);
+                    }
+                });
+            }
+
+            let app_handle_for_watch_events = app_handle.clone();
+            let settings_manager_for_watch_events = Arc::clone(&settings_manager_for_setup);
+            tauri::async_runtime::spawn(async move {
+                const WORKSPACE_WATCH_DEBOUNCE: Duration = Duration::from_millis(750);
+                while workspace_change_rx.recv().await.is_some() {
+                    loop {
+                        match timeout(WORKSPACE_WATCH_DEBOUNCE, workspace_change_rx.recv()).await {
+                            Ok(Some(_)) => continue,
+                            Ok(None) => return,
+                            Err(_) => break,
+                        }
+                    }
+
+                    if let Err(error) = reconcile_and_emit_workspace_health(
+                        &settings_manager_for_watch_events,
+                        &app_handle_for_watch_events,
+                    )
+                    .await
+                    {
+                        tracing::warn!(
+                            "Workspace watch reconciliation failed after filesystem event: {}",
+                            error
+                        );
+                    }
+                }
+            });
 
             let throttle_for_listener = Arc::clone(&deep_link_throttle);
             app.handle().listen("deep-link://new-url", move |event| {
@@ -598,7 +811,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         start.elapsed(),
                         result.is_ok()
                     );
-                    handle_protocol_result(result, &app_handle, &url, start.elapsed()).await;
+                    handle_protocol_result(result, &app_handle, &url, start.elapsed());
                 });
             });
 
@@ -614,28 +827,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     if let Some(url) = urls.first() {
                         let url_str = url.to_string();
                         tracing::info!("Processing cold-start URL: {}", url_str);
-                        if !throttle_for_cold_start.allow() {
-                            tracing::warn!(
-                                "Dropping cold-start deep-link URL due to 200ms rate limit: {}",
-                                url_str
-                            );
-                        } else {
+                        if throttle_for_cold_start.allow() {
                             hide_app();
                             let app_handle = app.handle().clone();
                             let ph = Arc::clone(&ph_cold_start);
                             tauri::async_runtime::spawn(async move {
                                 let start = std::time::Instant::now();
                                 let result = ph.handle_url(&url_str).await;
-                                handle_protocol_result(result, &app_handle, &url_str, start.elapsed())
-                                    .await;
+                                handle_protocol_result(result, &app_handle, &url_str, start.elapsed());
                             });
+                        } else {
+                            tracing::warn!(
+                                "Dropping cold-start deep-link URL due to 200ms rate limit: {}",
+                                url_str
+                            );
                         }
                     }
                 }
             }
 
             let settings_item =
-                MenuItem::with_id(app, "settings", "Open Sorcery", true, None::<&str>)?;
+                MenuItem::with_id(app, "settings", "Open Sorcery Desktop", true, None::<&str>)?;
             let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
 
             let menu = Menu::with_items(app, &[&settings_item, &quit_item])?;
@@ -720,19 +932,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             if args.len() > 1 {
                 if let Some(url) = args.get(1) {
                     if url.starts_with("srcuri://") {
-                        if !throttle.allow() {
-                            handled_url = true;
-                            tracing::warn!(
-                                "Dropping single-instance deep-link URL due to 200ms rate limit: {}",
-                                url
-                            );
-                        } else {
+                        if throttle.allow() {
                             tracing::debug!("Forwarding URL to existing instance: {}", url);
                             if let Err(e) = app.emit("deep-link://new-url", vec![url.clone()]) {
                                 tracing::error!("Failed to emit deep-link event: {}", e);
                             } else {
                                 handled_url = true;
                             }
+                        } else {
+                            handled_url = true;
+                            tracing::warn!(
+                                "Dropping single-instance deep-link URL due to 200ms rate limit: {}",
+                                url
+                            );
                         }
                     }
                 }
@@ -763,6 +975,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             commands::get_app_version,
             commands::save_settings,
             commands::get_all_workspaces,
+            commands::get_workspace_health_summary,
+            commands::reconcile_workspace_states,
             commands::promote_workspace,
             commands::sync_workspaces,
             commands::delete_workspace,
@@ -785,6 +999,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             commands::clone_and_open,
             commands::update_clone_path,
             commands::clone_cancelled,
+            commands::get_workspace_repair_dialog_data,
+            commands::rename_workspace_key,
+            commands::rebind_workspace_path,
+            commands::forget_workspace_by_key,
+            commands::get_workspace_conflict_dialog_data,
+            commands::workspace_conflict_open_existing,
+            commands::workspace_conflict_open_clone_dialog,
             commands::get_protocol_registration_status,
             commands::reregister_protocol,
             commands::get_logs_directory,

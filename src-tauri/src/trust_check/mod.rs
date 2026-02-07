@@ -71,7 +71,7 @@ fn scan_for_dangerous_files(workspace_path: &Path) -> Vec<DangerousFile> {
                 }
             }
             Err(e) => {
-                warn!("Invalid glob pattern '{}': {}", pattern, e);
+                warn!("Invalid glob pattern '{pattern}': {e}");
             }
         }
     }
@@ -88,24 +88,21 @@ fn scan_for_dangerous_settings(workspace_path: &Path) -> Vec<DangerousSetting> {
     let metadata = match fs::metadata(&settings_file) {
         Ok(m) => m,
         Err(e) => {
-            warn!("Failed to read settings.json metadata: {}", e);
+            warn!("Failed to read settings.json metadata: {e}");
             return Vec::new();
         }
     };
 
-    if metadata.len() > MAX_SETTINGS_FILE_SIZE {
-        warn!(
-            "settings.json exceeds maximum size ({} bytes > {} bytes)",
-            metadata.len(),
-            MAX_SETTINGS_FILE_SIZE
-        );
+    let len = metadata.len();
+    if len > MAX_SETTINGS_FILE_SIZE {
+        warn!("settings.json exceeds maximum size ({len} bytes > {MAX_SETTINGS_FILE_SIZE} bytes)");
         return Vec::new();
     }
 
     let content = match fs::read_to_string(&settings_file) {
         Ok(c) => c,
         Err(e) => {
-            warn!("Failed to read settings.json: {}", e);
+            warn!("Failed to read settings.json: {e}");
             return Vec::new();
         }
     };
@@ -114,18 +111,18 @@ fn scan_for_dangerous_settings(workspace_path: &Path) -> Vec<DangerousSetting> {
 }
 
 fn parse_settings_for_dangerous_keys(content: &str) -> Vec<DangerousSetting> {
-    let parsed = match jsonc_parser::parse_to_serde_value(content, &Default::default()) {
-        Ok(Some(value)) => value,
-        Ok(None) => return Vec::new(),
-        Err(e) => {
-            warn!("Failed to parse settings.json: {}", e);
-            return Vec::new();
-        }
-    };
+    let parsed =
+        match jsonc_parser::parse_to_serde_value(content, &jsonc_parser::ParseOptions::default()) {
+            Ok(Some(value)) => value,
+            Ok(None) => return Vec::new(),
+            Err(e) => {
+                warn!("Failed to parse settings.json: {e}");
+                return Vec::new();
+            }
+        };
 
-    let obj = match parsed.as_object() {
-        Some(o) => o,
-        None => return Vec::new(),
+    let Some(obj) = parsed.as_object() else {
+        return Vec::new();
     };
 
     let mut results = Vec::new();
@@ -166,24 +163,21 @@ pub fn scan_workspace_for_auto_tasks(workspace_path: &Path) -> TrustScanResult {
     let metadata = match fs::metadata(&tasks_file) {
         Ok(m) => m,
         Err(e) => {
-            warn!("Failed to read tasks.json metadata: {}", e);
+            warn!("Failed to read tasks.json metadata: {e}");
             return TrustScanResult {
                 has_auto_tasks: true,
                 task_labels: Vec::new(),
                 vim_local_rc_files,
                 dangerous_files,
                 dangerous_settings,
-                scan_error: Some(format!("Failed to read tasks.json: {}", e)),
+                scan_error: Some(format!("Failed to read tasks.json: {e}")),
             };
         }
     };
 
-    if metadata.len() > MAX_TASKS_FILE_SIZE {
-        warn!(
-            "tasks.json exceeds maximum size ({} bytes > {} bytes)",
-            metadata.len(),
-            MAX_TASKS_FILE_SIZE
-        );
+    let len = metadata.len();
+    if len > MAX_TASKS_FILE_SIZE {
+        warn!("tasks.json exceeds maximum size ({len} bytes > {MAX_TASKS_FILE_SIZE} bytes)");
         return TrustScanResult {
             has_auto_tasks: true,
             task_labels: Vec::new(),
@@ -197,14 +191,14 @@ pub fn scan_workspace_for_auto_tasks(workspace_path: &Path) -> TrustScanResult {
     let content = match fs::read_to_string(&tasks_file) {
         Ok(c) => c,
         Err(e) => {
-            warn!("Failed to read tasks.json: {}", e);
+            warn!("Failed to read tasks.json: {e}");
             return TrustScanResult {
                 has_auto_tasks: true,
                 task_labels: Vec::new(),
                 vim_local_rc_files,
                 dangerous_files,
                 dangerous_settings,
-                scan_error: Some(format!("Failed to read tasks.json: {}", e)),
+                scan_error: Some(format!("Failed to read tasks.json: {e}")),
             };
         }
     };
@@ -217,43 +211,41 @@ pub fn scan_workspace_for_auto_tasks(workspace_path: &Path) -> TrustScanResult {
 }
 
 fn parse_tasks_json(content: &str) -> TrustScanResult {
-    let parsed = match jsonc_parser::parse_to_serde_value(content, &Default::default()) {
-        Ok(Some(value)) => value,
-        Ok(None) => {
-            return TrustScanResult {
-                has_auto_tasks: false,
-                task_labels: Vec::new(),
-                vim_local_rc_files: Vec::new(),
-                dangerous_files: Vec::new(),
-                dangerous_settings: Vec::new(),
-                scan_error: None,
-            };
-        }
-        Err(e) => {
-            warn!("Failed to parse tasks.json: {}", e);
-            return TrustScanResult {
-                has_auto_tasks: true,
-                task_labels: Vec::new(),
-                vim_local_rc_files: Vec::new(),
-                dangerous_files: Vec::new(),
-                dangerous_settings: Vec::new(),
-                scan_error: Some(format!("Invalid JSON in tasks.json: {}", e)),
-            };
-        }
-    };
+    let parsed =
+        match jsonc_parser::parse_to_serde_value(content, &jsonc_parser::ParseOptions::default()) {
+            Ok(Some(value)) => value,
+            Ok(None) => {
+                return TrustScanResult {
+                    has_auto_tasks: false,
+                    task_labels: Vec::new(),
+                    vim_local_rc_files: Vec::new(),
+                    dangerous_files: Vec::new(),
+                    dangerous_settings: Vec::new(),
+                    scan_error: None,
+                };
+            }
+            Err(e) => {
+                warn!("Failed to parse tasks.json: {e}");
+                return TrustScanResult {
+                    has_auto_tasks: true,
+                    task_labels: Vec::new(),
+                    vim_local_rc_files: Vec::new(),
+                    dangerous_files: Vec::new(),
+                    dangerous_settings: Vec::new(),
+                    scan_error: Some(format!("Invalid JSON in tasks.json: {e}")),
+                };
+            }
+        };
 
-    let tasks = match parsed.get("tasks") {
-        Some(serde_json::Value::Array(arr)) => arr,
-        _ => {
-            return TrustScanResult {
-                has_auto_tasks: false,
-                task_labels: Vec::new(),
-                vim_local_rc_files: Vec::new(),
-                dangerous_files: Vec::new(),
-                dangerous_settings: Vec::new(),
-                scan_error: None,
-            };
-        }
+    let Some(serde_json::Value::Array(tasks)) = parsed.get("tasks") else {
+        return TrustScanResult {
+            has_auto_tasks: false,
+            task_labels: Vec::new(),
+            vim_local_rc_files: Vec::new(),
+            dangerous_files: Vec::new(),
+            dangerous_settings: Vec::new(),
+            scan_error: None,
+        };
     };
 
     let mut auto_task_labels = Vec::new();

@@ -45,8 +45,10 @@ pub enum EditorDispatchError {
 
 type Result<T> = std::result::Result<T, EditorDispatchError>;
 
+#[allow(clippy::missing_errors_doc)]
 impl EditorDispatcher {
-    pub fn new(
+    #[must_use]
+    pub const fn new(
         settings_manager: Arc<SettingsManager>,
         path_validator: Arc<PathValidator>,
         editor_registry: Arc<EditorRegistry>,
@@ -60,6 +62,7 @@ impl EditorDispatcher {
         }
     }
 
+    #[allow(clippy::too_many_lines)]
     pub async fn open(
         &self,
         path_str: &str,
@@ -120,8 +123,7 @@ impl EditorDispatcher {
                 workspace_root.as_deref(),
                 false,
                 Some(&format!(
-                    "Editor '{}' does not support opening folders",
-                    editor_id
+                    "Editor '{editor_id}' does not support opening folders"
                 )),
                 duration,
             );
@@ -142,7 +144,7 @@ impl EditorDispatcher {
                 line,
                 workspace_root.as_deref(),
                 false,
-                Some(&format!("Editor '{}' is not installed", editor_id)),
+                Some(&format!("Editor '{editor_id}' is not installed")),
                 duration,
             );
             return Err(EditorDispatchError::EditorNotInstalled {
@@ -166,7 +168,7 @@ impl EditorDispatcher {
         let duration = start.elapsed();
 
         match &result {
-            Ok(_) => {
+            Ok(()) => {
                 info!(
                     "Successfully opened {} in {}",
                     validated_path.display(),
@@ -207,6 +209,12 @@ impl EditorDispatcher {
         editor_hint: Option<String>,
         workspace: Option<&WorkspaceConfig>,
     ) -> Result<String> {
+        let in_workspace = workspace.is_some();
+
+        if !in_workspace && !self.settings_manager.allows_non_workspace_files().await {
+            return Err(EditorDispatchError::NonWorkspaceFilesDisabled);
+        }
+
         if let Some(hint) = editor_hint {
             if hint == "most-recent" {
                 if let Some(recent) = self.tracker.get_most_recent_editor().await {
@@ -219,23 +227,73 @@ impl EditorDispatcher {
             }
         }
 
-        let in_workspace = if let Some(ws) = workspace {
+        if let Some(ws) = workspace {
             if !ws.editor.is_empty() {
                 debug!("Using workspace editor: {} for path {:?}", ws.editor, path);
                 return Ok(ws.editor.clone());
             }
             debug!("Workspace editor is empty, falling back to default");
-            true
-        } else {
-            false
-        };
-
-        if !in_workspace && !self.settings_manager.allows_non_workspace_files().await {
-            return Err(EditorDispatchError::NonWorkspaceFilesDisabled);
         }
 
         let default_editor = self.settings_manager.get_default_editor().await;
         debug!("Using default editor: {}", default_editor);
         Ok(default_editor)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::path_validator::PathValidator;
+    use crate::settings::Settings;
+    use tempfile::TempDir;
+
+    async fn build_dispatcher(allow_non_workspace_files: bool) -> EditorDispatcher {
+        let temp_dir = TempDir::new().expect("temp dir");
+        let settings_path = temp_dir.path().join("settings.yaml");
+        let settings_manager = Arc::new(
+            SettingsManager::new_with_path(settings_path)
+                .await
+                .expect("settings manager"),
+        );
+
+        let mut settings = Settings::default();
+        settings.defaults.allow_non_workspace_files = allow_non_workspace_files;
+        settings_manager
+            .save(settings)
+            .await
+            .expect("save settings");
+
+        let path_validator = Arc::new(PathValidator::new());
+        let editor_registry = Arc::new(EditorRegistry::new());
+        let tracker = Arc::new(ActiveEditorTracker::new(Arc::clone(&editor_registry)));
+
+        EditorDispatcher::new(settings_manager, path_validator, editor_registry, tracker)
+    }
+
+    #[tokio::test]
+    async fn editor_hint_does_not_bypass_non_workspace_policy() {
+        let dispatcher = build_dispatcher(false).await;
+
+        let result = dispatcher
+            .determine_editor(Path::new("/tmp/file.rs"), Some("vscode".to_string()), None)
+            .await;
+
+        assert!(matches!(
+            result,
+            Err(EditorDispatchError::NonWorkspaceFilesDisabled)
+        ));
+    }
+
+    #[tokio::test]
+    async fn editor_hint_is_used_when_non_workspace_allowed() {
+        let dispatcher = build_dispatcher(true).await;
+
+        let result = dispatcher
+            .determine_editor(Path::new("/tmp/file.rs"), Some("vscode".to_string()), None)
+            .await
+            .expect("editor should resolve");
+
+        assert_eq!(result, "vscode");
     }
 }

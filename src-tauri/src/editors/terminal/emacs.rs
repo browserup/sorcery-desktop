@@ -7,18 +7,18 @@ use tracing::debug;
 pub struct EmacsManager;
 
 impl EmacsManager {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self
     }
 }
 
 #[async_trait]
 impl EditorManager for EmacsManager {
-    fn id(&self) -> &str {
+    fn id(&self) -> &'static str {
         "emacs"
     }
 
-    fn display_name(&self) -> &str {
+    fn display_name(&self) -> &'static str {
         "Emacs"
     }
 
@@ -75,6 +75,7 @@ impl EditorManager for EmacsManager {
         None
     }
 
+    #[allow(clippy::too_many_lines)]
     async fn open(&self, path: &Path, options: &OpenOptions) -> EditorResult<()> {
         use std::process::Stdio;
 
@@ -82,10 +83,10 @@ impl EditorManager for EmacsManager {
 
         match (options.line, options.column) {
             (Some(line), Some(column)) => {
-                args.push(format!("+{}:{}", line, column));
+                args.push(format!("+{line}:{column}"));
             }
             (Some(line), None) => {
-                args.push(format!("+{}", line));
+                args.push(format!("+{line}"));
             }
             _ => {}
         }
@@ -141,7 +142,7 @@ impl EditorManager for EmacsManager {
                 .stderr(Stdio::null())
                 .spawn()
                 .map_err(|e| {
-                    EditorError::LaunchFailed(format!("All Emacs launch attempts failed: {}", e))
+                    EditorError::LaunchFailed(format!("All Emacs launch attempts failed: {e}"))
                 })?;
 
             return Ok(());
@@ -175,7 +176,7 @@ impl EditorManager for EmacsManager {
                 .stderr(Stdio::null())
                 .spawn()
                 .map_err(|e| {
-                    EditorError::LaunchFailed(format!("All Emacs launch attempts failed: {}", e))
+                    EditorError::LaunchFailed(format!("All Emacs launch attempts failed: {e}"))
                 })?;
 
             return Ok(());
@@ -229,7 +230,7 @@ impl EditorManager for EmacsManager {
                 .stderr(Stdio::null())
                 .spawn()
                 .map_err(|e| {
-                    EditorError::LaunchFailed(format!("All Emacs launch attempts failed: {}", e))
+                    EditorError::LaunchFailed(format!("All Emacs launch attempts failed: {e}"))
                 })?;
 
             return Ok(());

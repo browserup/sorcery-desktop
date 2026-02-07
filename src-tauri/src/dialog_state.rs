@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 pub fn git_ref_display(git_ref: &GitRef) -> String {
     match git_ref {
         GitRef::Branch(value) => value.clone(),
-        GitRef::Tag(value) => format!("tag {}", value),
-        GitRef::Commit(value) => format!("commit {}", value),
+        GitRef::Tag(value) => format!("tag {value}"),
+        GitRef::Commit(value) => format!("commit {value}"),
     }
 }
 
@@ -38,10 +38,63 @@ pub struct CloneDialogData {
     pub workspace_name: String,
     pub clone_path: String,
     pub remote_url: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub normalized_remote: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub policy_violation: Option<String>,
     pub file_path: String,
     pub line: Option<usize>,
     pub column: Option<usize>,
     pub git_ref: Option<String>,
+    #[serde(default = "default_clone_allowed")]
+    pub clone_allowed: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub clone_validation_message: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub suggested_workspace_key: Option<String>,
+    #[serde(skip)]
+    pub git_ref_kind: Option<GitRef>,
+}
+
+const fn default_clone_allowed() -> bool {
+    true
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkspaceRepairDialogData {
+    pub workspace_key: String,
+    pub workspace_path: String,
+    pub workspace_state: String,
+    pub file_path: String,
+    pub line: Option<usize>,
+    pub column: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub original_url: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkspaceConflictCandidateData {
+    pub workspace_key: String,
+    pub workspace_path: String,
+    pub workspace_state: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub primary_remote: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkspaceConflictDialogData {
+    pub workspace_key: String,
+    pub requested_remote: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub normalized_remote: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub policy_violation: Option<String>,
+    pub clone_path: String,
+    pub file_path: String,
+    pub line: Option<usize>,
+    pub column: Option<usize>,
+    pub git_ref: Option<String>,
+    pub candidates: Vec<WorkspaceConflictCandidateData>,
     #[serde(skip)]
     pub git_ref_kind: Option<GitRef>,
 }
@@ -86,16 +139,21 @@ pub struct DialogState {
     workspace_chooser: Mutex<Option<WorkspaceChooserData>>,
     revision_dialog: Mutex<Option<RevisionDialogData>>,
     clone_dialog: Mutex<Option<CloneDialogData>>,
+    workspace_repair_dialog: Mutex<Option<WorkspaceRepairDialogData>>,
+    workspace_conflict_dialog: Mutex<Option<WorkspaceConflictDialogData>>,
     large_file_dialog: Mutex<Option<LargeFileDialogData>>,
     trust_dialog: Mutex<Option<TrustDialogData>>,
 }
 
 impl DialogState {
+    #[allow(clippy::missing_const_for_fn)] // Mutex::new is not const
     pub fn new() -> Self {
         Self {
             workspace_chooser: Mutex::new(None),
             revision_dialog: Mutex::new(None),
             clone_dialog: Mutex::new(None),
+            workspace_repair_dialog: Mutex::new(None),
+            workspace_conflict_dialog: Mutex::new(None),
             large_file_dialog: Mutex::new(None),
             trust_dialog: Mutex::new(None),
         }
@@ -137,6 +195,26 @@ impl DialogState {
         } else {
             false
         }
+    }
+
+    pub fn set_workspace_repair_dialog(&self, data: WorkspaceRepairDialogData) {
+        *self.workspace_repair_dialog.lock() = Some(data);
+    }
+
+    pub fn take_workspace_repair_dialog(&self) -> Option<WorkspaceRepairDialogData> {
+        self.workspace_repair_dialog.lock().take()
+    }
+
+    pub fn set_workspace_conflict_dialog(&self, data: WorkspaceConflictDialogData) {
+        *self.workspace_conflict_dialog.lock() = Some(data);
+    }
+
+    pub fn take_workspace_conflict_dialog(&self) -> Option<WorkspaceConflictDialogData> {
+        self.workspace_conflict_dialog.lock().take()
+    }
+
+    pub fn peek_workspace_conflict_dialog(&self) -> Option<WorkspaceConflictDialogData> {
+        self.workspace_conflict_dialog.lock().clone()
     }
 
     pub fn set_large_file_dialog(&self, data: LargeFileDialogData) {

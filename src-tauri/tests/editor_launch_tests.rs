@@ -1,7 +1,5 @@
 #![cfg(any(feature = "docker-tests", target_os = "linux"))]
 
-extern crate libc;
-
 use sorcery_desktop::editors::{EditorRegistry, OpenOptions};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -13,10 +11,6 @@ use tempfile::TempDir;
 /// Test helper utilities
 mod test_utils {
     use super::*;
-
-    pub fn is_root() -> bool {
-        unsafe { libc::geteuid() == 0 }
-    }
 
     pub fn is_process_running(process_name: &str) -> bool {
         let output = Command::new("pgrep")
@@ -87,7 +81,7 @@ impl Drop for ProcessGuard {
     }
 }
 
-/// Tests that verify Sorcery Desktop's EditorManager implementations
+/// Tests that verify Sorcery's `EditorManager` implementations
 /// correctly launch editors with the proper arguments.
 mod manager_tests {
     use super::*;
@@ -389,7 +383,7 @@ mod manager_tests {
     }
 }
 
-/// Tests that verify EditorManagers correctly detect installed editors
+/// Tests that verify `EditorManager` implementations correctly detect installed editors
 mod detection_tests {
     use super::*;
 
@@ -403,9 +397,7 @@ mod detection_tests {
         ];
 
         for editor_id in expected_installed {
-            let manager = registry
-                .get(editor_id)
-                .expect(&format!("{} manager not found", editor_id));
+            let manager = registry.get(editor_id).expect("editor manager not found");
             assert!(
                 manager.is_installed().await,
                 "{} should be detected as installed",
@@ -427,12 +419,10 @@ mod detection_tests {
         ];
 
         for (editor_id, expected_name) in editors_to_check {
-            let manager = registry
-                .get(editor_id)
-                .expect(&format!("{} manager not found", editor_id));
+            let manager = registry.get(editor_id).expect("editor manager not found");
             let binary = manager.find_binary().await;
             assert!(binary.is_some(), "{} binary should be found", editor_id);
-            let path = binary.unwrap();
+            let path = binary.expect("asserted Some(binary) above");
             assert!(
                 path.exists(),
                 "{} binary path should exist: {:?}",
