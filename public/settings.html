@@ -37,15 +37,15 @@
       height: 8px;
     }
     ::-webkit-scrollbar-track {
-      background: var(--bg-primary);
+      background: #1a1a1a;
     }
     ::-webkit-scrollbar-thumb {
-      background: #404040;
+      background: #5a5a5a;
       border-radius: 4px;
-      border: 1px solid #505050;
+      border: 1px solid #6a6a6a;
     }
     ::-webkit-scrollbar-thumb:hover {
-      background: #505050;
+      background: #6a6a6a;
     }
 
     body {
@@ -365,15 +365,95 @@
       color: var(--primary);
     }
 
+    .promote-btn.is-busy {
+      border-color: var(--primary);
+      color: var(--primary);
+      cursor: wait;
+      opacity: 0.8;
+    }
+
+    .promote-btn.is-done {
+      border-color: var(--success);
+      color: var(--success-light);
+    }
+
     .refresh-icon-btn {
-      width: 30px;
-      height: 30px;
+      width: 44px;
+      height: 44px;
       padding: 0;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      font-size: 0.95rem;
       line-height: 1;
+      border-radius: 6px;
+    }
+
+    .refresh-icon-glyph {
+      display: block;
+      font-size: 1.35rem;
+      line-height: 1;
+    }
+
+    .refresh-icon-btn.is-busy {
+      border-color: var(--primary);
+      color: var(--primary);
+      cursor: wait;
+    }
+
+    .refresh-icon-btn.is-busy .refresh-icon-glyph {
+      animation: spin 0.8s linear infinite;
+    }
+
+    .refresh-icon-btn.is-done {
+      border-color: var(--success);
+      color: var(--success-light);
+    }
+
+    .tooltip {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      color: var(--text-tertiary);
+      font-size: 0.65rem;
+      line-height: 1;
+      cursor: help;
+    }
+
+    .tooltip::after {
+      content: attr(data-tooltip);
+      position: absolute;
+      left: 50%;
+      bottom: 100%;
+      transform: translate(-50%, -2px);
+      background: var(--bg-elevated);
+      color: var(--text-primary);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.4rem 0.6rem;
+      font-size: 0.75rem;
+      white-space: normal;
+      width: 260px;
+      box-shadow: 0 6px 14px rgba(0, 0, 0, 0.45);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.15s ease, transform 0.15s ease;
+      z-index: 10;
+    }
+
+    .tooltip:hover::after,
+    .tooltip:focus::after {
+      opacity: 1;
+      transform: translate(-50%, -8px);
+    }
+
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
     }
 
     .discovered-section-header {
@@ -448,6 +528,13 @@
       justify-content: flex-end;
     }
 
+    .workspace-inline-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.375rem;
+      align-self: flex-end;
+    }
+
     .workspace-btn {
       background: transparent;
       border: 1px solid var(--border);
@@ -496,6 +583,19 @@
 
     .add-workspace-btn:hover {
       background: var(--success-hover);
+    }
+
+    .workspace-header-actions {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+    }
+
+    .workspace-header-actions .add-workspace-btn {
+      margin-top: 0;
+      height: 44px;
+      display: inline-flex;
+      align-items: center;
     }
 
     .remove-btn {
@@ -899,8 +999,12 @@
             <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
               <input type="checkbox" id="strip-git-diff-prefixes" style="width: auto; cursor: pointer;" checked>
               <span>Strip git diff prefixes</span>
-              <span style="color: var(--text-tertiary); cursor: help;"
-                    title="Automatically strip a/ and b/ prefixes from paths like a/README.md or b/src/main.rs. These prefixes are added by git diff output.">ⓘ</span>
+              <span
+                class="tooltip"
+                tabindex="0"
+                aria-label="Automatically strip a/ and b/ prefixes from paths like a/README.md or b/src/main.rs. These prefixes are added by git diff output."
+                data-tooltip="Automatically strip a/ and b/ prefixes from paths like a/README.md or b/src/main.rs. These prefixes are added by git diff output."
+              >?</span>
             </label>
           </div>
           <div class="form-group">
@@ -989,14 +1093,14 @@
         <div class="section">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
             <h2>Workspace Mappings</h2>
-            <div style="display: flex; gap: 0.5rem;">
+            <div class="workspace-header-actions">
               <button
                 class="promote-btn refresh-icon-btn"
-                onclick="reconcileWorkspaceHealth()"
+                onclick="reconcileWorkspaceHealth(this)"
                 title="Refresh Status"
                 aria-label="Refresh Status"
               >
-                ⟳
+                <span class="refresh-icon-glyph">⟳</span>
               </button>
               <button class="add-workspace-btn" onclick="addWorkspace()">+ Add Workspace</button>
             </div>
@@ -1011,7 +1115,7 @@
             </div>
             <div class="workspace-health-actions">
               <button onclick="reviewWorkspaceIssues()">Review</button>
-              <button onclick="reconcileWorkspaceHealth()">Reconcile</button>
+              <button onclick="reconcileWorkspaceHealth(this)">Reconcile</button>
             </div>
           </div>
           <div id="workspaces-list"></div>
@@ -1350,8 +1454,6 @@
 
     async function loadSettings() {
       try {
-        await loadInstalledEditors();
-
         const settings = await window.__TAURI__.core.invoke('get_settings');
         const allWorkspaces = settings.workspaces || [];
         persistedAutoDiscoveredWorkspaces = allWorkspaces.filter(ws => ws.auto_discovered);
@@ -1387,9 +1489,51 @@
         renderWorkspaces();
         await loadDiscoveredWorkspaces();
         renderIgnoredWorkspaces();
+
+        // Load editor detection last; then refresh editor-dependent UI.
+        await loadInstalledEditors();
+        populateEditorDropdown(document.getElementById('default-editor'), defaultEditor);
+        renderWorkspaces();
+        renderDiscoveredWorkspaces();
       } catch (e) {
         showStatus('Error loading settings: ' + e, 'error');
       }
+    }
+
+    function markButtonBusy(button, busyLabel) {
+      if (!button) return;
+      if (busyLabel) {
+        button.dataset.originalLabel = button.textContent.trim();
+        button.textContent = busyLabel;
+      }
+      button.disabled = true;
+      button.classList.add('is-busy');
+    }
+
+    function clearButtonBusy(button) {
+      if (!button) return;
+      if (button.dataset.originalLabel) {
+        button.textContent = button.dataset.originalLabel;
+        delete button.dataset.originalLabel;
+      }
+      button.disabled = false;
+      button.classList.remove('is-busy');
+    }
+
+    function flashButtonDone(button, doneLabel) {
+      if (!button) return;
+      let previousText = null;
+      if (doneLabel) {
+        previousText = button.textContent.trim();
+        button.textContent = doneLabel;
+      }
+      button.classList.add('is-done');
+      setTimeout(() => {
+        button.classList.remove('is-done');
+        if (doneLabel && previousText !== null) {
+          button.textContent = previousText;
+        }
+      }, 1200);
     }
 
     async function refreshWorkspaceHealth(showToast = false) {
@@ -1425,14 +1569,25 @@
       banner.style.display = 'flex';
     }
 
-    async function reconcileWorkspaceHealth() {
+    async function reconcileWorkspaceHealth(button) {
+      const isIconButton = button?.classList?.contains('refresh-icon-btn');
+      if (button) {
+        markButtonBusy(button, isIconButton ? null : 'Reconciling...');
+      }
       try {
         workspaceHealth = await window.__TAURI__.core.invoke('reconcile_workspace_states');
         renderWorkspaceHealthBanner();
         await loadSettings();
         showWorkspacesStatus('Workspace reconciliation complete', 'success');
+        if (button) {
+          flashButtonDone(button, isIconButton ? null : 'Done');
+        }
       } catch (e) {
         showWorkspacesStatus('Failed to reconcile workspace state: ' + e, 'error');
+      } finally {
+        if (button) {
+          clearButtonBusy(button);
+        }
       }
     }
 
@@ -1791,8 +1946,16 @@
               <div class="field-label">Editor</div>
               <div style="padding: 0.375rem 0; color: var(--text-secondary);">${defaultEditorName} (default)</div>
             </div>
-            <button class="promote-btn" onclick="promoteWorkspace(${idx})" style="align-self: flex-end;">Add as explicit</button>
-            <button class="remove-btn" onclick="deleteDiscoveredWorkspace(${idx})" title="Remove (adds to ignored list)" style="align-self: flex-end;">×</button>
+            <div class="workspace-inline-actions">
+              <button class="promote-btn" onclick="promoteWorkspace(${idx}, this)">Customize</button>
+              <span
+                class="tooltip"
+                tabindex="0"
+                aria-label="Move this workspace to the main list so you can edit its name and editor."
+                data-tooltip="Move this workspace to the main list so you can edit its name and editor."
+              >?</span>
+              <button class="remove-btn" onclick="deleteDiscoveredWorkspace(${idx})" title="Remove (adds to ignored list)">×</button>
+            </div>
           </div>
           <div class="workspace-row">
             <div class="field-group path-field">
@@ -1819,20 +1982,30 @@
       }
     }
 
-    async function promoteWorkspace(idx) {
+    async function promoteWorkspace(idx, button) {
       const ws = discoveredWorkspaces[idx];
       if (!ws) return;
 
+      if (button) {
+        markButtonBusy(button, 'Customizing...');
+      }
       try {
         await window.__TAURI__.core.invoke('promote_workspace', {
           path: ws.path,
           workspace_key: ws.workspace_key
         });
-        showWorkspacesStatus('Workspace promoted to explicit mapping', 'success');
+        showWorkspacesStatus('Workspace moved to the main list', 'success');
         // Reload both lists
         await loadSettings();
+        if (button) {
+          flashButtonDone(button, 'Ready');
+        }
       } catch (e) {
         showWorkspacesStatus('Failed to promote workspace: ' + e, 'error');
+      } finally {
+        if (button) {
+          clearButtonBusy(button);
+        }
       }
     }
 
