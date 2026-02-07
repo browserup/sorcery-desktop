@@ -190,23 +190,47 @@ pub async fn promote_workspace(
     path: String,
     workspace_key: String,
 ) -> Result<(), String> {
+    promote_workspace_impl(&settings_manager, &path, &workspace_key).await
+}
+
+async fn promote_workspace_impl(
+    settings_manager: &SettingsManager,
+    path: &str,
+    workspace_key: &str,
+) -> Result<(), String> {
     let mut settings = settings_manager.get().await;
 
-    // Check if already exists
     let normalized_path = shellexpand::tilde(&path);
     let target_path = PathBuf::from(normalized_path.as_ref());
 
-    for ws in &settings.workspaces {
-        if let Some(ref existing) = ws.normalized_path {
-            if existing == &target_path {
-                return Err("Workspace already exists in explicit mappings".to_string());
-            }
+    for workspace in &mut settings.workspaces {
+        let matches_path = workspace
+            .normalized_path
+            .as_ref()
+            .is_some_and(|existing| existing == &target_path)
+            || PathBuf::from(shellexpand::tilde(&workspace.path).as_ref()) == target_path;
+
+        if !matches_path {
+            continue;
         }
+
+        if !workspace.auto_discovered {
+            return Err("Workspace already exists in explicit mappings".to_string());
+        }
+
+        workspace.auto_discovered = false;
+        workspace.workspace_key = workspace_key.to_string();
+        workspace.normalized_path = Some(target_path);
+
+        return settings_manager
+            .save(settings)
+            .await
+            .map_err(|e| e.to_string());
     }
 
     settings.workspaces.push(crate::settings::WorkspaceConfig {
-        path,
-        workspace_key,
+        path: path.to_string(),
+        workspace_key: workspace_key.to_string(),
         editor: String::new(),
         auto_discovered: false,
         trusted: false,
@@ -2018,7 +2042,7 @@ pub fn detect_browsers() -> Vec<crate::browser_detection::BrowserInfo> {
 #[cfg(test)]
 mod tests {
     use super::{
-        ensure_workspace_policy_allows_path, forget_workspace_by_key_impl,
+        ensure_workspace_policy_allows_path, forget_workspace_by_key_impl, promote_workspace_impl,
         rebind_workspace_path_impl, rename_workspace_key_impl, resolve_conflict_open_target_path,
     };
     use crate::settings::{
@@ -2160,6 +2184,52 @@ mod tests {
             .await
             .expect_err("missing key should fail");
         assert!(error.contains("not found"));
+    }
+
+    #[tokio::test]
+    async fn promote_workspace_converts_discovered_mapping_to_explicit() {
+        let temp_dir = tempfile::TempDir::new().expect("temp dir");
+        let workspace_path = temp_dir.path().join("repo");
+        std::fs::create_dir_all(&workspace_path).expect("workspace path");
+
+        let mut discovered_workspace = explicit_workspace(&workspace_path, "repo");
+        discovered_workspace.auto_discovered = true;
+        discovered_workspace.normalized_path = Some(workspace_path.clone());
+
+        let (_temp_dir, manager) = initialize_manager(vec![discovered_workspace]).await;
+
+        let target_path = path_string(&workspace_path);
+        let promoted_key = "repo-explicit".to_string();
+        let expanded = shellexpand::tilde(&target_path);
+        let target_normalized = PathBuf::from(expanded.as_ref());
+
+        promote_workspace_impl(&manager, &target_path, &promoted_key)
+            .await
+            .expect("promote workspace");
+
+        let saved = manager.get().await;
+        assert_eq!(saved.workspaces.len(), 1);
+        assert!(!saved.workspaces[0].auto_discovered);
+        assert_eq!(saved.workspaces[0].workspace_key, promoted_key);
+        assert_eq!(
+            saved.workspaces[0].normalized_path.as_ref(),
+            Some(&target_normalized)
+        );
+    }
+
+    #[tokio::test]
+    async fn promote_workspace_rejects_existing_explicit_mapping() {
+        let temp_dir = tempfile::TempDir::new().expect("temp dir");
+        let workspace_path = temp_dir.path().join("repo");
+        std::fs::create_dir_all(&workspace_path).expect("workspace path");
+
+        let (_temp_dir, manager) =
+            initialize_manager(vec![explicit_workspace(&workspace_path, "repo")]).await;
+
+        let error = promote_workspace_impl(&manager, &path_string(&workspace_path), "repo")
+            .await
+            .expect_err("existing explicit mapping should fail");
+        assert!(error.contains("already exists in explicit mappings"));
     }
 
     #[tokio::test]
