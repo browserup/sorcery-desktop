@@ -1,4 +1,4 @@
-# Sorcery Desktop: Porting from Node.js to Tauri
+# Sorcery: Porting from Node.js to Tauri
 
 > **Historical Note**: This document describes the initial port from the original Node.js implementation to Tauri. The port is now complete. This is kept for reference.
 
@@ -82,7 +82,7 @@ Each manager handles:
 - HTML files served from /public
 
 **Target (Tauri):**
-- Sorcery Desktop registered as URL protocol handler (srcuri://)
+- Sorcery registered as URL protocol handler (srcuri://)
 - Deep linking plugin handles srcuri:// URLs (Sorcery protocol)
 - Backend Rust code for:
   - Active editor tracking

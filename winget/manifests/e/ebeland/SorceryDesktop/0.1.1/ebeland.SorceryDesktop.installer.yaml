@@ -15,7 +15,7 @@ Protocols:
 FileExtensions: []
 Installers:
   - Architecture: x64
-    InstallerUrl: https://github.com/browserup/sorcery-desktop/releases/download/v0.1.1/Sorcery.Desktop_0.1.1_x64-setup.msi
+    InstallerUrl: https://github.com/ebeland/sorcery-desktop/releases/download/v0.1.1/Sorcery.Desktop_0.1.1_x64-setup.msi
     InstallerSha256: PLACEHOLDER_SHA256
     ProductCode: '{PLACEHOLDER-PRODUCT-CODE}'
 ManifestType: installer

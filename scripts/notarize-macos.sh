@@ -20,7 +20,7 @@ if [ -z "$APPLE_ID" ] || [ -z "$APPLE_PASSWORD" ] || [ -z "$APPLE_TEAM_ID" ]; th
 fi
 
 echo "==> Creating zip for notarization..."
-ZIP_PATH="/tmp/sorcery-desktop-notarize.zip"
+ZIP_PATH="/tmp/sorcery-notarize.zip"
 ditto -c -k --keepParent "$APP_PATH" "$ZIP_PATH"
 
 echo "==> Submitting to Apple for notarization..."

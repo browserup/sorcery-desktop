@@ -661,10 +661,10 @@ Create `test-protocol.html`:
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Sorcery Protocol Test</title>
+    <title>Sorcery Desktop Protocol Test</title>
 </head>
 <body>
-    <h1>Sorcery Protocol Handler Test</h1>
+    <h1>Sorcery Desktop Protocol Handler Test</h1>
 
     <h2>Test Links</h2>
     <ul>

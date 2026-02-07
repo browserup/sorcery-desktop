@@ -8,7 +8,7 @@ This doc captures flow, protocol shapes, and open questions. It links into the t
 
 ## Components and roles
 
-- Sorcery Desktop: registers `srcuri://`, parses requests, and resolves workspace/line/column. srcuri://sorcery-desktop/src-tauri/src/protocol_handler/parser.rs@L165
+- Sorcery: registers `srcuri://`, parses requests, and resolves workspace/line/column. srcuri://sorcery/src-tauri/src/protocol_handler/parser.rs@L165
 - Sorcery Server: HTTPS gateway for web contexts and provider passthrough. srcuri://sorcery-server/README.md@L7
 - Sorcery Extension: detects file references in web pages and opens `srcuri://` links with a modifier click. srcuri://sorcery-extension/README.md@L44 and srcuri://sorcery-extension/src/content/cs.ts@L25
 
@@ -16,7 +16,7 @@ This doc captures flow, protocol shapes, and open questions. It links into the t
 
 ### 1. Direct protocol (desktop)
 
-- `srcuri://...` is parsed and dispatched by the desktop handler. srcuri://sorcery-desktop/src-tauri/src/protocol_handler/parser.rs@L165
+- `srcuri://...` is parsed and dispatched by the desktop handler. srcuri://sorcery/src-tauri/src/protocol_handler/parser.rs@L165
 
 ### 2. Web gateway (srcuri.com)
 
@@ -33,15 +33,15 @@ This doc captures flow, protocol shapes, and open questions. It links into the t
 
 ## Protocol format (draft spec)
 
-- Canonical format: `srcuri://<authority>/<path>[@Lline[Ccol]][?<query>][#<fragment>]` with legacy `:line[:col]` accepted. srcuri://sorcery-desktop/dev/srcuri-protocol-spec-v1.md@L79
-- Modes: implicit workspace, `wks`, `rel`, `any`, `abs`, `ext`. srcuri://sorcery-desktop/dev/srcuri-protocol-spec-v1.md@L110
-- `ext` mode encodes a provider URL, and its `?query`/`#fragment` belong to the upstream URL. srcuri://sorcery-desktop/dev/srcuri-protocol-spec-v1.md@L481
-- Line/column rules prefer `@Lline[Ccol]` on the final path segment. srcuri://sorcery-desktop/dev/srcuri-protocol-spec-v1.md@L580
+- Canonical format: `srcuri://<authority>/<path>[@Lline[Ccol]][?<query>][#<fragment>]` with `:line[:col]` also accepted. srcuri://sorcery/dev/srcuri-protocol-spec-v1.md@L79
+- Modes: implicit workspace, `wks`, `rel`, `any`, `abs`, `ext`. srcuri://sorcery/dev/srcuri-protocol-spec-v1.md@L110
+- `ext` mode encodes a provider URL, and its `?query`/`#fragment` belong to the upstream URL. srcuri://sorcery/dev/srcuri-protocol-spec-v1.md@L481
+- Line/column rules prefer `@Lline[Ccol]` on the final path segment. srcuri://sorcery/dev/srcuri-protocol-spec-v1.md@L580
 
 ## Provider parsing and line extraction
 
-- `srcuri-core` parses provider URLs and extracts `@L`, `:N`, and `#L` fragments. srcuri://sorcery-desktop/srcuri-core/src/parser.rs@L4
-- Desktop also parses provider fragments (`#L10`, `#L10C5`, `#lines-5`). srcuri://sorcery-desktop/src-tauri/src/protocol_handler/parser.rs@L477
+- `srcuri-core` parses provider URLs and extracts `@L`, `:N`, and `#L` fragments. srcuri://sorcery/srcuri-core/src/parser.rs@L4
+- Desktop also parses provider fragments (`#L10`, `#L10C5`, `#lines-5`). srcuri://sorcery/src-tauri/src/protocol_handler/parser.rs@L477
 
 ## Sources and formats we handle
 
@@ -50,20 +50,20 @@ This doc captures flow, protocol shapes, and open questions. It links into the t
 
 ## Anchors and fragments
 
-- Browser fragments are not sent to servers; provider passthrough must read `window.location.hash` client-side. srcuri://sorcery-desktop/srcuri-core/README.md@L36
+- Browser fragments are not sent to servers; provider passthrough must read `window.location.hash` client-side. srcuri://sorcery/srcuri-core/README.md@L36
 - Server JS parses `window.location.hash` and builds `srcuri://` URLs. srcuri://sorcery-server/src/templates/provider.html@L945
 
 ## Linkification surfaces
 
 - Slack/Jira/Teams/markdown: `https://srcuri.com/...@L` is the shareable shape; OG previews can include `@L` for direct gateway links, but not for provider passthrough fragments. srcuri://sorcery-server/README.md@L225
-- Chrome DevTools console: observed to drop `:line` (legacy). `@L` should avoid port parsing; verify.
+- Chrome DevTools console: observed to drop `:line` (alternate form). `@L` should avoid port parsing; verify.
 - Terminals: `file:line` is common, so keep `:line` parsing for compatibility.
 
 ## Notes from current debate
 
-- Canonical line syntax is `@L` (emit uppercase). Accept `@l`, `%40L`, and legacy `:line` on input.
+- Canonical line syntax is `@L` (emit uppercase). Accept `@l`, `%40L`, and `:line` on input.
 - Empty marker `@L` is accepted to allow template-based link construction without conditionals.
-- Columns: emit `@LlineCcol`; accept `@Lline:col` and legacy `:line:col`.
+- Columns: emit `@LlineCcol`; accept `@Lline:col` and `:line:col`.
 - `ext` remains the one-step provider on-ramp; `@L` inside the path is converted to `#L` when needed.
 
 ## Broad-strokes changes to explore

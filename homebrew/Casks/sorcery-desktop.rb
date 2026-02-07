@@ -5,7 +5,7 @@ cask "sorcery-desktop" do
   sha256 arm:   "PLACEHOLDER_ARM64_SHA256",
          intel: "PLACEHOLDER_X64_SHA256"
 
-  url "https://github.com/browserup/sorcery-desktop/releases/download/v#{version}/Sorcery.Desktop_#{version}_#{arch}.dmg"
+  url "https://github.com/ebeland/sorcery-desktop/releases/download/v#{version}/Sorcery.Desktop_#{version}_#{arch}.dmg"
   name "Sorcery Desktop"
   desc "Editor-independent code linking via srcuri:// protocol"
   homepage "https://getsorcery.com"

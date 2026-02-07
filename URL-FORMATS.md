@@ -2,7 +2,7 @@
 
 ## Overview
 
-Sorcery Desktop uses the `srcuri://` protocol (also known as the Sorcery protocol) to open files in your configured editor. This protocol enables editor-agnostic code linking that works across teams and platforms.
+Sorcery uses the `srcuri://` protocol (also known as the Sorcery protocol) to open files in your configured editor. This protocol enables editor-agnostic code linking that works across teams and platforms.
 
 **Note:** The protocol uses `srcuri://` (NOT `file://`) as its URL scheme. For the complete protocol specification, visit [srcuri.com](https://srcuri.com).
 
@@ -12,7 +12,7 @@ Sorcery Desktop uses the `srcuri://` protocol (also known as the Sorcery protoco
 srcuri://<authority>/<path>[@L<line>[C<column>]]
 ```
 
-Preferred line syntax uses `@L<line>` and optional `C<column>`. Legacy `:line[:column]` is accepted for compatibility.
+Preferred line syntax uses `@L<line>` and optional `C<column>`. The `:line[:column]` form is also accepted.
 
 The **authority** determines how the link is interpreted:
 - A **workspace name** (most common) — opens file relative to that workspace
@@ -478,7 +478,7 @@ These words cannot be used as workspace names:
 
 ## Platform Differences
 
-Sorcery Desktop registers the `srcuri://` protocol handler on all platforms:
+Sorcery registers the `srcuri://` protocol handler on all platforms:
 
 ### macOS
 - Protocol handler registered via `Info.plist`

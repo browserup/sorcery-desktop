@@ -165,7 +165,7 @@ macOS LaunchServices
     ↓
     Passes URL as argument OR fires deep-link event
     ↓
-Sorcery Desktop processes URL
+Sorcery processes URL
     ↓
     Opens file in configured editor
 ```
@@ -189,11 +189,11 @@ Sorcery Desktop processes URL
 </array>
 ```
 
-**Linux:** `/usr/share/applications/sorcery-desktop.desktop` or `~/.local/share/applications/sorcery-desktop.desktop`
+**Linux:** `/usr/share/applications/sorcery.desktop` or `~/.local/share/applications/sorcery.desktop`
 ```ini
 [Desktop Entry]
 MimeType=x-scheme-handler/srcuri;
-Exec=/usr/bin/sorcery-desktop %u
+Exec=/usr/bin/sorcery %u
 ```
 
 **Windows:** Registry key `HKEY_CLASSES_ROOT\srcuri`
@@ -244,7 +244,7 @@ cd tests/docker
 cd src-tauri
 cargo tauri build --target universal-apple-darwin
 
-# Output: target/release/bundle/dmg/Sorcery Desktop_0.1.0_universal.dmg
+# Output: target/release/bundle/dmg/Sorcery_0.1.0_universal.dmg
 ```
 
 ### Linux
@@ -253,7 +253,7 @@ cargo tauri build --target universal-apple-darwin
 # Build DEB package
 cargo tauri build
 
-# Output: target/release/bundle/deb/sorcery-desktop_0.1.0_amd64.deb
+# Output: target/release/bundle/deb/sorcery_0.1.0_amd64.deb
 ```
 
 ### Windows
@@ -262,7 +262,7 @@ cargo tauri build
 # Build MSI installer
 cargo tauri build
 
-# Output: target/release/bundle/msi/Sorcery Desktop_0.1.0_x64_en-US.msi
+# Output: target/release/bundle/msi/Sorcery_0.1.0_x64_en-US.msi
 ```
 
 ## Development Tips
@@ -271,7 +271,7 @@ cargo tauri build
 
 2. **Check logs** - the app logs to stdout/stderr when run from terminal:
    ```bash
-   /Applications/Sorcery\ Desktop.app/Contents/MacOS/sorcery-desktop
+   /Applications/Sorcery\ Desktop.app/Contents/MacOS/sorcery
    ```
 
 3. **Test both launch modes**:
@@ -280,7 +280,7 @@ cargo tauri build
 
 4. **Kill background instances** before testing:
    ```bash
-   pkill -9 sorcery-desktop
+   pkill -9 sorcery
    ```
 
 5. **Verify protocol registration**:

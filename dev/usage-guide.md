@@ -14,7 +14,7 @@ https://srcuri.com/myrepo/src/main.rs@L42
 ```
 
 Everything after the prefix is identical. You can convert between them mechanically.
-Preferred line syntax uses `@L`. Legacy `:line` is accepted for compatibility.
+Preferred line syntax uses `@L`. The `:line` form is also accepted.
 
 ### When to use which
 

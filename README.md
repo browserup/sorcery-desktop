@@ -19,11 +19,11 @@ Use it in your onboarding docs, too.
 * Command-Click on stack trace lines in your browser in your dev env, and jump to the file/line in your editor
 * Command-click on source code lines in github/gitlab and jump to the file/line
 
-Sorcery Desktop is an open source tool, built on the open-source srcuri:// protocol
+Sorcery is an open source tool, built on the open-source srcuri:// protocol
 
     scuri:// pronounced Sorcery, gives you a URI to source code that opens in your editor
 
-Sorcery Desktop provides the local protocol handler component for srcuri:// links. 
+Sorcery Desktop provides the local protocol handler component for srcuri:// links.
 It routes srcuri:// protocol links to your editor or IDE of choice.
 
 
@@ -53,7 +53,7 @@ With one click, you're on *that line* in **your** local editor and repo.
 
 How it works:
 
-An editor agnostic protocol backed by Sorcery Desktop - a Free, Open Source, MIT Licensed
+An editor agnostic protocol backed by Sorcery - a Free, Open Source, MIT Licensed
 launcher you install locally.
 
 * Open Source, MIT Licensed
@@ -192,7 +192,7 @@ Key features per editor type:
 ```
 1. Deep link clicked: srcuri://project/file.rs@L42
    ↓
-2. OS routes to sorcery application
+2. OS routes to Sorcery Desktop application
    ↓
 3. Dispatcher.open(file, line, column, hint)
    ↓

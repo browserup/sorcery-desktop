@@ -1,6 +1,6 @@
 # Security Model
 
-Sorcery Desktop handles external URLs (`srcuri://`) that can open files in local editors. This document describes the security measures in place.
+Sorcery handles external URLs (`srcuri://`) that can open files in local editors. This document describes the security measures in place.
 
 ## Core Principle: No Code Execution
 

@@ -62,7 +62,7 @@ DMG_FILE=$(ls "$DMG_DIR"/*.dmg 2>/dev/null | head -1)
 if [ -z "$DMG_FILE" ]; then
     echo "==> DMG bundler failed, creating DMG manually..."
     mkdir -p "$DMG_DIR"
-    DMG_NAME="Sorcery Desktop_$(grep '"version"' ../src-tauri/tauri.conf.json | head -1 | sed 's/.*: *"\(.*\)".*/\1/')_universal.dmg"
+    DMG_NAME="Sorcery_$(grep '"version"' ../src-tauri/tauri.conf.json | head -1 | sed 's/.*: *"\(.*\)".*/\1/')_universal.dmg"
     hdiutil create -volname "Sorcery Desktop" -srcfolder "$APP_DIR/Sorcery Desktop.app" -ov -format UDZO "$BUNDLE_DIR/$DMG_NAME"
     DMG_FILE="$BUNDLE_DIR/$DMG_NAME"
     echo "  Created: $DMG_FILE"

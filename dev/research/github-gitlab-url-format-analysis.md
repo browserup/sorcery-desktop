@@ -205,7 +205,7 @@ This is a GitLab-specific convention not used by GitHub.
 |----------|-------------|------------|-------|
 | **GitHub** | `#L42` | `#L10-L20` | Both numbers have `L` prefix |
 | **GitLab** | `#L42` | `#L10-20` | Only start has `L` prefix |
-| **srcuri** | `@L42` | Not supported | Suffix-based, legacy `:line` accepted |
+| **srcuri** | `@L42` | Not supported | Suffix-based, `:line` also accepted |
 
 ---
 
@@ -273,7 +273,7 @@ srcuri://myproject/file.txt@L10?tag=v1.0.0
 | Aspect | GitHub/GitLab | srcuri |
 |--------|---------------|-------|
 | **Git ref location** | Path-based (`/blob/{ref}/`) | Query parameter (`?commit=`, `?branch=`) |
-| **Line syntax** | Fragment (`#L42`) | `@L42` (legacy `:42`) |
+| **Line syntax** | Fragment (`#L42`) | `@L42` (`:42` also accepted) |
 | **Column support** | None | Yes (`@L42C10`) |
 | **Workspace concept** | None (always owner/repo) | Yes (maps to local paths) |
 | **Absolute paths** | Not supported | Yes (`srcuri:///abs/path@L42`) |

@@ -3,7 +3,7 @@ use url::Url;
 
 /// Parse a remote URL in various formats:
 /// - Full URL: `https://github.com/owner/repo/blob/main/file.rs#L42`
-/// - Path-style: `github.com/owner/repo/blob/main/file.rs@L42` (legacy `:42` accepted)
+/// - Path-style: `github.com/owner/repo/blob/main/file.rs@L42` (`:42` also accepted)
 /// - With https:// in path: `https://github.com/owner/repo/...`
 ///
 /// # Errors

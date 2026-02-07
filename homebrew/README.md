@@ -6,10 +6,10 @@ This directory contains Homebrew cask formulas for Sorcery Desktop.
 
 ```bash
 # Add the tap
-brew tap ebeland/sorcery https://github.com/ebeland/sorcery-desktop
+brew tap ebeland/sorcery-desktop https://github.com/ebeland/sorcery-desktop
 
 # Install Sorcery Desktop
-brew install --cask ebeland/sorcery/sorcery-desktop
+brew install --cask ebeland/sorcery-desktop/sorcery-desktop
 ```
 
 Or install directly without adding the tap:

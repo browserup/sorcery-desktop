@@ -36,7 +36,7 @@ The app includes Tauri's updater plugin. Users receive update notifications when
 
 ```bash
 # Generate a new key pair
-cargo tauri signer generate -w ~/.tauri/sorcery-desktop.key
+cargo tauri signer generate -w ~/.tauri/sorcery.key
 
 # This outputs:
 # - Private key (save to TAURI_SIGNING_PRIVATE_KEY secret)
@@ -106,8 +106,8 @@ GitHub Actions will:
 Each release includes:
 - `Sorcery.Desktop_X.Y.Z_aarch64.dmg` (macOS ARM)
 - `Sorcery.Desktop_X.Y.Z_x64.dmg` (macOS Intel)
-- `sorcery-desktop_X.Y.Z_amd64.deb` (Linux)
-- `sorcery-desktop_X.Y.Z_amd64.rpm` (Linux)
-- `sorcery-desktop_X.Y.Z_amd64.AppImage` (Linux)
+- `sorcery_X.Y.Z_amd64.deb` (Linux)
+- `sorcery_X.Y.Z_amd64.rpm` (Linux)
+- `sorcery_X.Y.Z_amd64.AppImage` (Linux)
 - `Sorcery.Desktop_X.Y.Z_x64_en-US.msi` (Windows)
 - `latest.json` (updater manifest)

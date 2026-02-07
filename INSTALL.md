@@ -82,10 +82,10 @@ The app uses single-instance mode - only one copy can run at a time:
 **App won't open after install:**
 ```bash
 # Check if it's running
-ps aux | grep sorcery-desktop
+ps aux | grep sorcery
 
 # Kill any stuck instances
-pkill -f sorcery-desktop
+pkill -f sorcery
 
 # Try installing again
 ./install-dev.sh

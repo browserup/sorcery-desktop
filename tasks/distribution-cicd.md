@@ -56,11 +56,11 @@ Create `.github/workflows/release.yml`:
 - [ ] Build all platforms (reuse build jobs)
 - [ ] Create GitHub Release
 - [ ] Upload artifacts:
-  - `sorcery-desktop_X.Y.Z_amd64.deb`
-  - `sorcery-desktop-X.Y.Z-1.x86_64.rpm`
-  - `sorcery-desktop_X.Y.Z_amd64.AppImage`
-  - `Sorcery Desktop.dmg` (macOS)
-  - `Sorcery Desktop_X.Y.Z_x64_en-US.msi` (Windows)
+  - `sorcery_X.Y.Z_amd64.deb`
+  - `sorcery-X.Y.Z-1.x86_64.rpm`
+  - `sorcery_X.Y.Z_amd64.AppImage`
+  - `Sorcery.Desktop_X.Y.Z_*.dmg` (macOS)
+  - `Sorcery_X.Y.Z_x64_en-US.msi` (Windows)
 - [ ] Generate release notes from commits
 
 ---

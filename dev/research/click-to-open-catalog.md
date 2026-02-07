@@ -4,7 +4,7 @@ Dynatrace — very strong enterprise penetration; ~4,100 customers (as of Mar 31
 
 New Relic — longstanding APM/observability player with high verified review volume.
 
-AppDynamics (Cisco) — large legacy/enterprise deployment footprint, still heavily used.
+AppDynamics (Cisco) — large long-lived enterprise deployment footprint, still heavily used.
 
 Grafana Labs (Grafana Cloud / Enterprise Stack) — big commercial growth ($400M+ ARR and 7,000 customers) plus enormous OSS ecosystem halo.
 

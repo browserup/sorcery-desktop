@@ -1,4 +1,4 @@
-# Sorcery Desktop Use Cases
+# Sorcery Use Cases
 
 > **Maintenance**: When adding a feature that represents a new use case, add it here. Use the "As a..." format. This document serves two purposes: (1) a testing checklist and (2) source material for marketing. Only add major use cases here, not minor behavioral improvements.
 
@@ -27,6 +27,18 @@
 **As a developer with multiple projects**, I want partial-path links to find the right workspace automatically, so I don't need to specify full paths.
 
 **As a developer working across languages**, I want different editors per workspace (PyCharm for Python, WebStorm for JS), so links open in the appropriate IDE.
+
+## Workspace Lifecycle and Governance
+
+**As a developer with fork and upstream clones**, I want Sorcery to use remote identity to pick the right workspace, so same-name repos do not open the wrong code.
+
+**As a developer who renamed, moved, or deleted a workspace folder**, I want Sorcery to detect drift and guide me through repair actions, so links keep working safely.
+
+**As a developer receiving a link with a conflicting remote**, I want a clear conflict dialog that lets me open an existing mapping or clone the requested remote, so I can resolve ambiguity quickly.
+
+**As a developer using git worktrees**, I want branch-aware workspace selection, so links open in the worktree that matches the requested ref.
+
+**As an enterprise admin**, I want to define canonical workspace key and remote mappings, so users resolve links consistently and within policy.
 
 ## Link Creation & Web Integration
 

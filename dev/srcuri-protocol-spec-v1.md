@@ -85,7 +85,7 @@ srcuri://<authority>/<path>[<line-suffix>][?<query>][#<fragment>]
 ```
 
 **Line suffix** (preferred): `@L<line>[C<column>]`  
-**Legacy line suffix**: `:line[:column]` (accepted for compatibility)
+**Alternate line suffix**: `:line[:column]` (accepted)
 
 The **authority** field determines the link mode:
 - If authority is a **reserved token** (`wks`, `rel`, `any`, `abs`, `ext`) → explicit mode
@@ -582,7 +582,7 @@ When a revision path is opened, the protocol handler:
 - **Formats**:
   - `@Lline` (preferred for URL stability)
   - `@L` (empty line marker; treated as no line)
-  - `:line` (legacy)
+  - `:line` (alternate form)
 - **Case**: `@L` is case-insensitive on input; emit uppercase `@L` in new links
 - **Indexing**: 1-indexed (first line is line 1)
 - **Range**: No upper limit (limited only by file size)
@@ -607,7 +607,7 @@ srcuri://myproject/file.rs@Labc      → Invalid, ignored (opens at top)
 
 - **Formats**:
   - `C<column>` following `@L<line>` (preferred)
-  - `:<column>` following `@L<line>` or legacy `:line`
+  - `:<column>` following `@L<line>` or `:line`
 - **Case**: `C` is case-insensitive on input; emit uppercase `C` in new links
 - **Indexing**: 1-indexed (first column is column 1)
 - **Range**: 0-120 (values above 120 ignore the column)
@@ -1072,12 +1072,12 @@ Recommended error object:
 ### Workspace (implicit)
 **Input:**
 ```
-srcuri://sorcery-desktop/app-core/src/lib.rs@L33
+srcuri://sorcery/app-core/src/lib.rs@L33
 ```
 
 **Parsed:**
 - mode: `workspace` (implicit)
-- workspace: `sorcery-desktop`
+- workspace: `sorcery`
 - relpath: `app-core/src/lib.rs`
 - line: `33`
 
@@ -1105,14 +1105,14 @@ srcuri://rel/config/routes.rb
 
 **Input:**
 ```
-srcuri://rel/app-core/src/lib.rs@L33?workspaceHint=sorcery-desktop
+srcuri://rel/app-core/src/lib.rs@L33?workspaceHint=sorcery
 ```
 
 **Parsed:**
 - mode: `rel`
 - path: `app-core/src/lib.rs`
 - line: `33`
-- workspaceHint: `sorcery-desktop`
+- workspaceHint: `sorcery`
 
 ### Any (best-effort)
 **Input:**

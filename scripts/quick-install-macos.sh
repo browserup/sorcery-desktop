@@ -21,8 +21,8 @@ fi
 
 # Kill any running instances (try multiple patterns to be thorough)
 echo "==> Stopping any running instances..."
-pkill -9 -f "sorcery-desktop" 2>/dev/null || true
-pkill -9 -f "Sorcery Desktop" 2>/dev/null || true
+pkill -9 -f "sorcery" 2>/dev/null || true
+pkill -9 -f "Sorcery" 2>/dev/null || true
 sleep 1
 
 # Remove old version

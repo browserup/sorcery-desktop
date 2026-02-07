@@ -4,7 +4,7 @@ set -euo pipefail
 # Sorcery Desktop Installer
 # Usage: curl -fsSL https://getsorcery.com/install.sh | sh
 
-REPO="browserup/sorcery-desktop"
+REPO="ebeland/sorcery-desktop"
 APP_NAME="Sorcery Desktop"
 
 # Colors for output
@@ -146,23 +146,23 @@ get_artifact_url() {
             case "$format" in
                 deb)
                     if [ "$arch" = "arm64" ]; then
-                        echo "$base_url/sorcery-desktop_${version_num}_arm64.deb"
+                        echo "$base_url/sorcery_${version_num}_arm64.deb"
                     else
-                        echo "$base_url/sorcery-desktop_${version_num}_amd64.deb"
+                        echo "$base_url/sorcery_${version_num}_amd64.deb"
                     fi
                     ;;
                 rpm)
                     if [ "$arch" = "arm64" ]; then
-                        echo "$base_url/sorcery-desktop-${version_num}-1.aarch64.rpm"
+                        echo "$base_url/sorcery-${version_num}-1.aarch64.rpm"
                     else
-                        echo "$base_url/sorcery-desktop-${version_num}-1.x86_64.rpm"
+                        echo "$base_url/sorcery-${version_num}-1.x86_64.rpm"
                     fi
                     ;;
                 appimage)
                     if [ "$arch" = "arm64" ]; then
-                        echo "$base_url/sorcery-desktop_${version_num}_aarch64.AppImage"
+                        echo "$base_url/sorcery_${version_num}_aarch64.AppImage"
                     else
-                        echo "$base_url/sorcery-desktop_${version_num}_amd64.AppImage"
+                        echo "$base_url/sorcery_${version_num}_amd64.AppImage"
                     fi
                     ;;
             esac
@@ -231,7 +231,7 @@ install_linux_rpm() {
 install_linux_appimage() {
     local appimage_path="$1"
     local install_dir="$HOME/.local/bin"
-    local app_path="$install_dir/sorcery-desktop"
+    local app_path="$install_dir/sorcery"
 
     mkdir -p "$install_dir"
 
@@ -240,7 +240,7 @@ install_linux_appimage() {
     chmod +x "$app_path"
 
     if [[ ":$PATH:" != *":$install_dir:"* ]]; then
-        warn "Add $install_dir to your PATH to run sorcery-desktop from anywhere"
+        warn "Add $install_dir to your PATH to run sorcery from anywhere"
     fi
 
     success "$APP_NAME installed to $app_path"
@@ -256,12 +256,12 @@ launch_app() {
             open -a "$APP_NAME"
             ;;
         linux)
-            if command -v sorcery-desktop >/dev/null 2>&1; then
-                sorcery-desktop &
-            elif [ -x "$HOME/.local/bin/sorcery-desktop" ]; then
-                "$HOME/.local/bin/sorcery-desktop" &
+            if command -v sorcery >/dev/null 2>&1; then
+                sorcery &
+            elif [ -x "$HOME/.local/bin/sorcery" ]; then
+                "$HOME/.local/bin/sorcery" &
             else
-                warn "Could not find sorcery-desktop binary to launch"
+                warn "Could not find sorcery binary to launch"
             fi
             ;;
     esac
@@ -270,7 +270,7 @@ launch_app() {
 main() {
     echo ""
     printf "${GREEN}╔════════════════════════════════════════╗${NC}\n"
-    printf "${GREEN}║${NC}     ${BLUE}Sorcery Desktop Installer${NC}         ${GREEN}║${NC}\n"
+    printf "${GREEN}║${NC}   ${BLUE}Sorcery Desktop Installer${NC}   ${GREEN}║${NC}\n"
     printf "${GREEN}╚════════════════════════════════════════╝${NC}\n"
     echo ""
 

@@ -1,4 +1,4 @@
-# Sorcery Desktop Features
+# Sorcery Features
 
 > **Maintenance**: When adding a new feature, update this document as a final step. Add the feature under the appropriate section and update the table of contents if adding a new section.
 
@@ -177,6 +177,16 @@ Workspaces map project names to filesystem paths, enabling portable, partial-pat
 - Displays workspace names, paths, and last-seen times
 - Single-click selection
 
+### Workspace Identity and Health
+
+- Deterministic workspace keys (unique key per active mapping)
+- Git and non-git workspaces are both first-class mappings
+- Remote-aware disambiguation for fork/upstream collisions
+- Drift detection for deleted, moved, or identity-changed workspaces
+- Repair workflows: rebind path, rename key, resolve conflict, forget mapping
+- Enterprise policy mode (advisory/enforced) for canonical key/remote controls
+- Detailed design spec: `dev/workspace-identity-resolution-spec.md`
+
 ---
 
 ## Settings
@@ -234,6 +244,7 @@ Git-aware features for working with code at specific revisions.
 ### Clone Support
 
 - Clone dialog when workspace not found
+- Conflict-aware clone suggestions when workspace key and remote differ
 - Repository URL from `?remote=` parameter
 - Configurable clone destination
 - One-click clone and open workflow
@@ -249,6 +260,7 @@ Dark-themed UI components for user interactions.
 - Tabbed interface for configuration
 - Installed editors list with status
 - Workspace management (add/edit/remove)
+- Workspace health banner (missing, unavailable, drifted, conflict)
 - Default editor selection
 - Terminal preference configuration
 
@@ -270,6 +282,21 @@ Dark-themed UI components for user interactions.
 - Repository clone prompt
 - URL and destination configuration
 - Progress indication
+- Preflight validation and key-collision hints
+
+### Workspace Repair Dialog
+
+- Shown when a mapped workspace is missing, unavailable, drifted, or conflicted
+- Rebind workspace path from folder picker
+- Retry link open after repair
+- Forget mapping option
+
+### Workspace Conflict Dialog
+
+- Shown when workspace key matches but `?remote=` points to a different repository
+- Lists existing mappings with state and primary remote
+- Open selected existing mapping
+- Continue to clone flow for requested remote
 
 ### Flash Message
 
@@ -318,7 +345,7 @@ Special protocol URLs for browser extension integration.
 srcuri://ping
 ```
 
-Used by the browser extension to check if Sorcery Desktop is installed and running. Returns immediately—no UI shown.
+Used by the browser extension to check if Sorcery is installed and running. Returns immediately—no UI shown.
 
 ### Hello
 
@@ -412,8 +439,8 @@ The installer:
 
 | Manager | Platform | Command |
 |---------|----------|---------|
-| Homebrew | macOS | `brew install --cask ebeland/sorcery/sorcery-desktop` |
+| Homebrew | macOS | `brew install --cask ebeland/sorcery-desktop/sorcery-desktop` |
 | WinGet | Windows | `winget install ebeland.SorceryDesktop` |
-| AUR | Arch Linux | `yay -S sorcery-desktop-bin` |
+| AUR | Arch Linux | `yay -S sorcery-bin` |
 
 Package manager manifests are automatically updated on each release via GitHub Actions.
