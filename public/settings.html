@@ -1546,11 +1546,8 @@
         await loadDiscoveredWorkspaces();
         renderIgnoredWorkspaces();
 
-        // Load editor detection last; then refresh editor-dependent UI.
-        await loadInstalledEditors();
-        populateEditorDropdown(document.getElementById('default-editor'), defaultEditor);
-        renderWorkspaces();
-        renderDiscoveredWorkspaces();
+        // Editor detection is handled by loadEditorsTabData() which runs concurrently.
+        // It populates installedEditors and refreshes editor-dependent UI.
       } catch (e) {
         showStatus('Error loading settings: ' + e, 'error');
       }
@@ -1633,9 +1630,9 @@
       try {
         workspaceHealth = await window.__TAURI__.core.invoke('refresh_workspace_states');
         renderWorkspaceHealthBanner();
-        await loadSettings();
-        showWorkspacesStatus('Status refreshed', 'success');
         if (button) {
+          await loadSettings();
+          showWorkspacesStatus('Status refreshed', 'success');
           flashButtonDone(button, isIconButton ? null : 'Done');
         }
       } catch (e) {
@@ -1915,7 +1912,11 @@
     function renderWorkspaces() {
       const container = document.getElementById('workspaces-list');
       if (workspaces.length === 0) {
-        container.innerHTML = '<div class="empty-state">No workspaces configured yet</div>';
+        if (discoveredWorkspaces.length > 0) {
+          container.innerHTML = '';
+        } else {
+          container.innerHTML = '<div class="empty-state">No workspaces yet. Click "+ Add Folder" or set a source folder below.</div>';
+        }
         return;
       }
 
@@ -2019,15 +2020,13 @@
               <div class="field-label">Editor</div>
               <div style="padding: 0.375rem 0; color: var(--text-secondary);">${defaultEditorName} (default)</div>
             </div>
-            <div class="workspace-inline-actions">
-              <button class="promote-btn" onclick="promoteWorkspace(${idx}, this)">Add</button>
-              <span
-                class="tooltip"
-                tabindex="0"
-                aria-label="Add to your workspaces so you can customize the name and editor."
-                data-tooltip="Add to your workspaces so you can customize the name and editor."
-              >?</span>
-              <button class="remove-btn" onclick="deleteDiscoveredWorkspace(${idx})" title="Remove (adds to ignored list)">×</button>
+            <div class="workspace-overflow">
+              <button class="workspace-overflow-btn" onclick="toggleOverflowMenu(event, 'disc-${idx}')" aria-label="More actions">⋯</button>
+              <div class="workspace-overflow-menu" id="overflow-menu-disc-${idx}">
+                <button onclick="promoteWorkspace(${idx}, null)">Configure</button>
+                <div class="menu-divider"></div>
+                <button class="menu-danger" onclick="deleteDiscoveredWorkspace(${idx})">Ignore</button>
+              </div>
             </div>
           </div>
           <div class="workspace-row">
@@ -2060,21 +2059,21 @@
       if (!ws) return;
 
       if (button) {
-        markButtonBusy(button, 'Adding...');
+        markButtonBusy(button, 'Configuring...');
       }
       try {
         await window.__TAURI__.core.invoke('promote_workspace', {
           path: ws.path,
           name: ws.name
         });
-        showWorkspacesStatus('Added to your workspaces', 'success');
+        showWorkspacesStatus('Workspace configured', 'success');
         // Reload both lists
         await loadSettings();
         if (button) {
           flashButtonDone(button, 'Ready');
         }
       } catch (e) {
-        showWorkspacesStatus('Failed to add workspace: ' + e, 'error');
+        showWorkspacesStatus('Failed to configure workspace: ' + e, 'error');
       } finally {
         if (button) {
           clearButtonBusy(button);
@@ -2240,6 +2239,13 @@
         displayEditors(data.editors, data.most_recent);
         displayTracking(data.last_seen, data.most_recent);
         displaySettings(data.settings);
+
+        installedEditors = data.editors
+          .filter(e => e.is_installed)
+          .sort((a, b) => a.display_name.localeCompare(b.display_name));
+        populateEditorDropdown(document.getElementById('default-editor'), defaultEditor);
+        renderWorkspaces();
+        renderDiscoveredWorkspaces();
       } catch (err) {
         document.getElementById('editor-list').innerHTML =
           `<div class="empty-state">Error loading data: ${err}</div>`;
