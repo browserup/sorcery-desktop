@@ -1081,25 +1081,25 @@
     }
 
     .sidenav-toggle {
-      display: flex;
+      display: inline-flex;
       border: 1px solid var(--border);
-      border-radius: 4px;
+      border-radius: 6px;
       overflow: hidden;
     }
 
     .sidenav-toggle button {
-      flex: 1;
-      padding: 0.3rem 0;
+      padding: 0.35rem 0.75rem;
       background: none;
       border: none;
+      border-right: 1px solid var(--border);
       color: var(--text-secondary);
       font-size: 0.75rem;
       cursor: pointer;
       transition: all 0.15s;
     }
 
-    .sidenav-toggle button:first-child {
-      border-right: 1px solid var(--border);
+    .sidenav-toggle button:last-child {
+      border-right: none;
     }
 
     .sidenav-toggle button.active {
@@ -1353,20 +1353,18 @@
         <nav class="sidenav">
           <button class="sidenav-item active" data-editors-view="editors" onclick="switchEditorsView('editors')">Editors</button>
           <button class="sidenav-item" data-editors-view="debug" onclick="switchEditorsView('debug')">Debug Info</button>
-          <div class="sidenav-separator"></div>
-          <div class="sidenav-control">
-            <div class="sidenav-control-label">Filter</div>
-            <div class="sidenav-toggle">
-              <button id="filter-installed" class="active" onclick="setEditorFilter('installed')">Installed</button>
-              <button id="filter-all" onclick="setEditorFilter('all')">All</button>
-            </div>
-          </div>
         </nav>
         <div class="sidenav-content">
           <div id="editors-view-editors" class="editors-view-content">
             <div class="pane-content">
-              <div class="help-text" style="margin-bottom: 1rem;">
-                <span style="color: var(--success);">●</span> = running | <span style="color: var(--success);">✓</span> = installed
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                <div class="help-text">
+                  <span style="color: var(--success);">●</span> = running | <span style="color: var(--success);">✓</span> = installed
+                </div>
+                <div class="sidenav-toggle">
+                  <button id="filter-installed" class="active" onclick="setEditorFilter('installed')">Installed</button>
+                  <button id="filter-all" onclick="setEditorFilter('all')">All</button>
+                </div>
               </div>
               <div id="editor-list" class="editor-list">
                 <div class="empty-state">Loading editor information...</div>
