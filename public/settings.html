@@ -972,6 +972,145 @@
       max-height: 200px;
       overflow-y: auto;
     }
+
+    .pane-with-sidenav {
+      display: flex;
+      margin: -1.5rem;
+      min-height: calc(100% + 3rem);
+      flex: 1;
+    }
+
+    .tab-pane.active:has(.pane-with-sidenav) {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .sidenav {
+      width: 170px;
+      flex-shrink: 0;
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      padding: 0.75rem 0;
+      background: var(--bg-surface);
+    }
+
+    .sidenav-content {
+      flex: 1;
+      padding: 1.5rem;
+      overflow-y: auto;
+      min-width: 0;
+    }
+
+    .sidenav-item {
+      display: block;
+      width: 100%;
+      padding: 0.5rem 1rem;
+      background: none;
+      border: none;
+      border-left: 3px solid transparent;
+      color: var(--text-secondary);
+      font-size: 0.8125rem;
+      text-align: left;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .sidenav-item:hover {
+      color: var(--text-primary);
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .sidenav-item.active {
+      color: var(--text-primary);
+      border-left-color: var(--primary);
+      background: rgba(99, 102, 241, 0.08);
+    }
+
+    .sidenav-action {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      width: 100%;
+      padding: 0.5rem 1rem;
+      background: none;
+      border: none;
+      border-left: 3px solid transparent;
+      color: var(--text-secondary);
+      font-size: 0.8125rem;
+      text-align: left;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .sidenav-action:hover {
+      color: var(--text-primary);
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .sidenav-action.is-busy {
+      color: var(--primary);
+      cursor: wait;
+    }
+
+    .sidenav-action.is-busy .sidenav-action-icon {
+      animation: spin 0.8s linear infinite;
+    }
+
+    .sidenav-action.is-done {
+      color: var(--success-light);
+    }
+
+    .sidenav-separator {
+      height: 1px;
+      background: var(--border);
+      margin: 0.5rem 1rem;
+    }
+
+    .sidenav-control {
+      padding: 0.5rem 1rem;
+    }
+
+    .sidenav-control-label {
+      font-size: 0.625rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-tertiary);
+      margin-bottom: 0.375rem;
+    }
+
+    .sidenav-toggle {
+      display: flex;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .sidenav-toggle button {
+      flex: 1;
+      padding: 0.3rem 0;
+      background: none;
+      border: none;
+      color: var(--text-secondary);
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .sidenav-toggle button:first-child {
+      border-right: 1px solid var(--border);
+    }
+
+    .sidenav-toggle button.active {
+      background: rgba(99, 102, 241, 0.15);
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+
+    .sidenav-toggle button:hover:not(.active) {
+      background: rgba(255, 255, 255, 0.04);
+    }
   </style>
 </head>
 <body>
@@ -985,13 +1124,14 @@
   <div class="tab-content">
     <!-- Settings Tab -->
     <div id="settings-pane" class="tab-pane active">
-      <div style="max-width: 1000px; margin: 0 auto;">
-        <!-- Settings sub-tabs -->
-        <div style="display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 1rem;">
-          <button class="settings-subtab active" data-subtab="general" onclick="switchSettingsSubtab('general')" style="padding: 0.5rem 1rem; background: none; border: none; border-bottom: 2px solid var(--primary); color: var(--text-primary); cursor: pointer; font-size: 0.875rem;">General</button>
-          <button class="settings-subtab" data-subtab="info" onclick="switchSettingsSubtab('info')" style="padding: 0.5rem 1rem; background: none; border: none; border-bottom: 2px solid transparent; color: var(--text-secondary); cursor: pointer; font-size: 0.875rem;">Info</button>
-          <button class="settings-subtab" data-subtab="protocol" onclick="switchSettingsSubtab('protocol')" style="padding: 0.5rem 1rem; background: none; border: none; border-bottom: 2px solid transparent; color: var(--text-secondary); cursor: pointer; font-size: 0.875rem;">Protocol</button>
-        </div>
+      <div class="pane-with-sidenav">
+        <nav class="sidenav">
+          <button class="sidenav-item active" data-settings-view="general" onclick="switchSettingsSubtab('general')">General</button>
+          <button class="sidenav-item" data-settings-view="terminal" onclick="switchSettingsSubtab('terminal')">Terminal</button>
+          <button class="sidenav-item" data-settings-view="info" onclick="switchSettingsSubtab('info')">Info</button>
+          <button class="sidenav-item" data-settings-view="protocol" onclick="switchSettingsSubtab('protocol')">Protocol</button>
+        </nav>
+        <div class="sidenav-content">
 
         <!-- General sub-tab -->
         <div id="settings-subtab-general" class="settings-subtab-content">
@@ -1002,38 +1142,6 @@
               <option value="">Loading installed editors...</option>
             </select>
             <p class="help-text">Fallback when no workspace matches</p>
-          </div>
-          <div class="form-group">
-            <label for="preferred-terminal">Terminal for Vim/Neovim</label>
-            <select id="preferred-terminal">
-              <option value="auto">Auto-detect</option>
-              <option value="iterm2">iTerm2</option>
-              <option value="alacritty">Alacritty</option>
-              <option value="kitty">Kitty</option>
-              <option value="wezterm">WezTerm</option>
-              <option value="terminal">Terminal.app</option>
-              <option value="gnome-terminal">GNOME Terminal</option>
-              <option value="konsole">Konsole</option>
-              <option value="xterm">Xterm</option>
-            </select>
-            <div style="margin-top: 0.5rem;">
-              <button class="button" onclick="toggleItermSetup()" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" id="iterm-setup-btn">iTerm2 Setup...</button>
-            </div>
-            <div id="iterm-setup-panel" style="display: none; margin-top: 0.75rem; padding: 0.75rem; background: var(--bg-elevated); border-radius: 6px; border: 1px solid var(--border);">
-              <div style="font-size: 0.8125rem; color: var(--text-secondary); margin-bottom: 0.25rem;">
-                Profiles → Default → Advanced → Semantic History → Run command:
-              </div>
-              <div style="background: var(--bg-primary); border: 1px solid var(--border); border-radius: 6px; padding: 0.5rem 0.75rem; display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;">
-                <code style="color: var(--success-light); font-family: 'SF Mono', Monaco, monospace; font-size: 0.875rem;">open "srcuri://\1@L\2"</code>
-                <button class="button" onclick="copyItermCommand(this)" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">Copy</button>
-              </div>
-              <div style="margin-top: 0.5rem;">
-                <a href="#" onclick="toggleItermScreenshot(); return false;" style="color: var(--text-secondary); font-size: 0.75rem;" id="iterm-screenshot-toggle">Show screenshot</a>
-              </div>
-              <div id="iterm-screenshot" style="display: none; margin-top: 0.5rem;">
-                <img src="assets/setup/iterm-semantic-history-setting.png" alt="iTerm2 Semantic History setting" style="max-width: 100%; border-radius: 4px; border: 1px solid var(--border);">
-              </div>
-            </div>
           </div>
           <div class="form-group">
             <label for="default-workspaces-folder">Default Workspaces Folder</label>
@@ -1073,6 +1181,44 @@
             <label for="max-file-size-mb">Maximum File Size (MB)</label>
             <input type="number" id="max-file-size-mb" min="1" max="10000" value="50" style="width: 120px;">
             <p class="help-text">Refuse to open files larger than this size</p>
+          </div>
+          </div>
+        </div>
+
+        <!-- Terminal sub-tab -->
+        <div id="settings-subtab-terminal" class="settings-subtab-content" style="display: none;">
+          <div class="pane-content">
+          <div class="form-group">
+            <label for="preferred-terminal">Terminal for Vim/Neovim</label>
+            <select id="preferred-terminal">
+              <option value="auto">Auto-detect</option>
+              <option value="iterm2">iTerm2</option>
+              <option value="alacritty">Alacritty</option>
+              <option value="kitty">Kitty</option>
+              <option value="wezterm">WezTerm</option>
+              <option value="terminal">Terminal.app</option>
+              <option value="gnome-terminal">GNOME Terminal</option>
+              <option value="konsole">Konsole</option>
+              <option value="xterm">Xterm</option>
+            </select>
+            <div style="margin-top: 0.5rem;">
+              <button class="button" onclick="toggleItermSetup()" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" id="iterm-setup-btn">iTerm2 Setup...</button>
+            </div>
+            <div id="iterm-setup-panel" style="display: none; margin-top: 0.75rem; padding: 0.75rem; background: var(--bg-elevated); border-radius: 6px; border: 1px solid var(--border);">
+              <div style="font-size: 0.8125rem; color: var(--text-secondary); margin-bottom: 0.25rem;">
+                Profiles → Default → Advanced → Semantic History → Run command:
+              </div>
+              <div style="background: var(--bg-primary); border: 1px solid var(--border); border-radius: 6px; padding: 0.5rem 0.75rem; display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;">
+                <code style="color: var(--success-light); font-family: 'SF Mono', Monaco, monospace; font-size: 0.875rem;">open "srcuri://\1@L\2"</code>
+                <button class="button" onclick="copyItermCommand(this)" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">Copy</button>
+              </div>
+              <div style="margin-top: 0.5rem;">
+                <a href="#" onclick="toggleItermScreenshot(); return false;" style="color: var(--text-secondary); font-size: 0.75rem;" id="iterm-screenshot-toggle">Show screenshot</a>
+              </div>
+              <div id="iterm-screenshot" style="display: none; margin-top: 0.5rem;">
+                <img src="assets/setup/iterm-semantic-history-setting.png" alt="iTerm2 Semantic History setting" style="max-width: 100%; border-radius: 4px; border: 1px solid var(--border);">
+              </div>
+            </div>
           </div>
           </div>
         </div>
@@ -1141,95 +1287,97 @@
         </div>
 
         <div id="status-message" class="status-message"></div>
+        </div>
       </div>
     </div>
 
     <!-- Workspaces Tab -->
     <div id="workspaces-pane" class="tab-pane">
-      <div style="max-width: 1000px; margin: 0 auto;">
-        <div class="pane-content">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+      <div class="pane-with-sidenav">
+        <nav class="sidenav">
+          <button class="sidenav-action" onclick="refreshWorkspaceHealth(this)" title="Refresh Status">
+            <span class="sidenav-action-icon">⟳</span> Refresh
+          </button>
+          <button class="sidenav-action" onclick="addWorkspace()">
+            <span>+</span> Add Folder
+          </button>
+        </nav>
+        <div class="sidenav-content">
+          <div class="pane-content">
             <h2>Workspaces</h2>
-            <div class="workspace-header-actions">
-              <button
-                class="promote-btn refresh-icon-btn"
-                onclick="refreshWorkspaceHealth(this)"
-                title="Refresh Status"
-                aria-label="Refresh Status"
+            <p class="help-text" style="margin-bottom: 0.75rem;">
+              Folders where your projects live. Links open in the editor you choose.
+            </p>
+            <div id="workspace-health-banner" class="workspace-health-banner">
+              <div>
+                <strong>Some workspaces need attention</strong>
+                <div id="workspace-health-summary" class="summary"></div>
+              </div>
+              <div class="workspace-health-actions">
+                <button onclick="reviewWorkspaceIssues()">Review</button>
+                <button onclick="refreshWorkspaceHealth(this)">Refresh</button>
+              </div>
+            </div>
+            <div id="workspaces-list"></div>
+            <div id="discovered-workspaces-section" style="display: none;">
+              <div class="discovered-section-header">
+                <span class="divider"></span>
+                <span>Auto-discovered workspaces</span>
+                <span class="divider"></span>
+              </div>
+              <div id="discovered-workspaces-list"></div>
+            </div>
+            <div style="margin-top: 0.5rem;">
+              <a
+                href="#"
+                id="ignored-workspaces-toggle"
+                onclick="toggleIgnoredWorkspaces(); return false;"
+                style="display: none; color: var(--text-secondary); font-size: 0.8125rem;"
               >
-                <span class="refresh-icon-glyph">⟳</span>
-              </button>
-              <button class="add-workspace-btn" onclick="addWorkspace()">+ Add Folder</button>
+                Ignored Items (0)
+              </a>
+            </div>
+            <div id="ignored-workspaces-section" style="display: none; margin-top: 0.5rem;">
+              <div id="ignored-workspaces-list"></div>
             </div>
           </div>
-          <p class="help-text" style="margin-bottom: 0.75rem;">
-            Folders where your projects live. Links open in the editor you choose.
-          </p>
-          <div id="workspace-health-banner" class="workspace-health-banner">
-            <div>
-              <strong>Some workspaces need attention</strong>
-              <div id="workspace-health-summary" class="summary"></div>
-            </div>
-            <div class="workspace-health-actions">
-              <button onclick="reviewWorkspaceIssues()">Review</button>
-              <button onclick="refreshWorkspaceHealth(this)">Refresh</button>
-            </div>
-          </div>
-          <div id="workspaces-list"></div>
-          <div id="discovered-workspaces-section" style="display: none;">
-            <div class="discovered-section-header">
-              <span class="divider"></span>
-              <span>Auto-discovered workspaces</span>
-              <span class="divider"></span>
-            </div>
-            <div id="discovered-workspaces-list"></div>
-          </div>
-          <div style="margin-top: 0.5rem;">
-            <a
-              href="#"
-              id="ignored-workspaces-toggle"
-              onclick="toggleIgnoredWorkspaces(); return false;"
-              style="display: none; color: var(--text-secondary); font-size: 0.8125rem;"
-            >
-              Ignored Items (0)
-            </a>
-          </div>
-          <div id="ignored-workspaces-section" style="display: none; margin-top: 0.5rem;">
-            <div id="ignored-workspaces-list"></div>
-          </div>
-        </div>
 
-        <div id="workspaces-status-message" class="status-message"></div>
+          <div id="workspaces-status-message" class="status-message"></div>
+        </div>
       </div>
     </div>
 
     <!-- Testbed Tab -->
     <div id="testbed-pane" class="tab-pane">
-      <div style="max-width: 1200px; margin: 0 auto;">
-        <div class="pane-content">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-            <div class="help-text">
-              <span style="color: var(--success);">●</span> = running | <span style="color: var(--success);">✓</span> = installed
-            </div>
-            <div style="display: flex; gap: 0.5rem; font-size: 0.875rem;">
-              <a href="#" id="filter-installed" onclick="setEditorFilter('installed'); return false;" style="color: var(--text-primary); font-weight: 600;">installed</a>
-              <span style="color: var(--text-secondary);">|</span>
-              <a href="#" id="filter-all" onclick="setEditorFilter('all'); return false;" style="color: var(--text-secondary);">all</a>
+      <div class="pane-with-sidenav">
+        <nav class="sidenav">
+          <button class="sidenav-item active" data-editors-view="editors" onclick="switchEditorsView('editors')">Editors</button>
+          <button class="sidenav-item" data-editors-view="debug" onclick="switchEditorsView('debug')">Debug Info</button>
+          <div class="sidenav-separator"></div>
+          <div class="sidenav-control">
+            <div class="sidenav-control-label">Filter</div>
+            <div class="sidenav-toggle">
+              <button id="filter-installed" class="active" onclick="setEditorFilter('installed')">Installed</button>
+              <button id="filter-all" onclick="setEditorFilter('all')">All</button>
             </div>
           </div>
-          <div id="editor-list" class="editor-list">
-            <div class="empty-state">Loading editor information...</div>
+        </nav>
+        <div class="sidenav-content">
+          <div id="editors-view-editors" class="editors-view-content">
+            <div class="pane-content">
+              <div class="help-text" style="margin-bottom: 1rem;">
+                <span style="color: var(--success);">●</span> = running | <span style="color: var(--success);">✓</span> = installed
+              </div>
+              <div id="editor-list" class="editor-list">
+                <div class="empty-state">Loading editor information...</div>
+              </div>
+            </div>
+            <div style="margin-top: 1rem; font-size: 0.875rem;">
+              <span style="color: var(--text-secondary);">Most Recent Editor:</span>
+              <span id="most-recent-editor" style="color: var(--success-light); font-weight: 500;">none</span>
+            </div>
           </div>
-        </div>
-
-        <div style="margin-top: 1rem; font-size: 0.875rem;">
-          <span style="color: var(--text-secondary);">Most Recent Editor:</span>
-          <span id="most-recent-editor" style="color: var(--success-light); font-weight: 500;">none</span>
-        </div>
-
-        <div style="margin-top: 1.5rem;">
-          <a href="#" onclick="toggleDebugInfo(); return false;" style="color: var(--text-tertiary); font-size: 0.8125rem;" id="debug-toggle-link">Show debug info</a>
-          <div id="debug-info" style="display: none; margin-top: 1rem;">
+          <div id="editors-view-debug" class="editors-view-content" style="display: none;">
             <div class="section">
               <h2>Last Seen Data</h2>
               <pre id="last-seen-data">{}</pre>
@@ -1312,22 +1460,15 @@
 
     // Settings sub-tab switching
     function switchSettingsSubtab(subtabName) {
-      document.querySelectorAll('.settings-subtab').forEach(btn => {
-        btn.classList.remove('active');
-        btn.style.borderBottomColor = 'transparent';
-        btn.style.color = 'var(--text-secondary)';
+      document.querySelectorAll('[data-settings-view]').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.settingsView === subtabName);
       });
-      const activeBtn = document.querySelector(`.settings-subtab[data-subtab="${subtabName}"]`);
-      activeBtn.classList.add('active');
-      activeBtn.style.borderBottomColor = 'var(--primary)';
-      activeBtn.style.color = 'var(--text-primary)';
 
       document.querySelectorAll('.settings-subtab-content').forEach(content => {
         content.style.display = 'none';
       });
       document.getElementById(`settings-subtab-${subtabName}`).style.display = 'block';
 
-      // Load data for the sub-tab
       if (subtabName === 'info') {
         loadAppVersion();
         loadSettingsPath();
@@ -1624,7 +1765,7 @@
     }
 
     async function refreshWorkspaceHealth(button) {
-      const isIconButton = button?.classList?.contains('refresh-icon-btn');
+      const isIconButton = button?.classList?.contains('refresh-icon-btn') || button?.classList?.contains('sidenav-action');
       if (button) {
         markButtonBusy(button, isIconButton ? null : 'Refreshing...');
       }
@@ -2225,11 +2366,19 @@
 
     function setEditorFilter(filter) {
       editorFilter = filter;
-      document.getElementById('filter-installed').style.fontWeight = filter === 'installed' ? '600' : 'normal';
-      document.getElementById('filter-installed').style.color = filter === 'installed' ? 'var(--text-primary)' : 'var(--text-secondary)';
-      document.getElementById('filter-all').style.fontWeight = filter === 'all' ? '600' : 'normal';
-      document.getElementById('filter-all').style.color = filter === 'all' ? 'var(--text-primary)' : 'var(--text-secondary)';
+      document.getElementById('filter-installed').classList.toggle('active', filter === 'installed');
+      document.getElementById('filter-all').classList.toggle('active', filter === 'all');
       displayEditors(allEditors, currentMostRecent);
+    }
+
+    function switchEditorsView(viewName) {
+      document.querySelectorAll('[data-editors-view]').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.editorsView === viewName);
+      });
+      document.querySelectorAll('.editors-view-content').forEach(panel => {
+        panel.style.display = 'none';
+      });
+      document.getElementById(`editors-view-${viewName}`).style.display = 'block';
     }
 
     async function loadEditorsTabData() {
@@ -2321,18 +2470,6 @@
     function displayTracking(lastSeen, mostRecent) {
       document.getElementById('most-recent-editor').textContent = mostRecent || 'none';
       document.getElementById('last-seen-data').textContent = JSON.stringify(lastSeen, null, 2);
-    }
-
-    function toggleDebugInfo() {
-      const debugInfo = document.getElementById('debug-info');
-      const link = document.getElementById('debug-toggle-link');
-      if (debugInfo.style.display === 'none') {
-        debugInfo.style.display = 'block';
-        link.textContent = 'Hide debug info';
-      } else {
-        debugInfo.style.display = 'none';
-        link.textContent = 'Show debug info';
-      }
     }
 
     function displaySettings(settings) {
