@@ -593,6 +593,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tracker_handle.start_polling().await;
     });
 
+    let registry_handle = Arc::clone(&editor_registry);
+    tokio::spawn(async move {
+        let ids = registry_handle.list_editors();
+        let futs: Vec<_> = ids
+            .into_iter()
+            .filter_map(|id| {
+                let manager = registry_handle.get(&id)?;
+                Some(async move {
+                    manager.is_installed().await;
+                })
+            })
+            .collect();
+        futures::future::join_all(futs).await;
+        tracing::info!("Editor binary cache warmed");
+    });
+
     tracing::info!("All services initialized");
 
     // Check protocol registration status on startup

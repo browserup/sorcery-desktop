@@ -300,29 +300,35 @@ pub async fn get_editor_testbed_data(
     tracker: State<'_, Arc<ActiveEditorTracker>>,
     settings_manager: State<'_, Arc<SettingsManager>>,
 ) -> Result<EditorTestbedData, String> {
-    let mut editors = Vec::new();
     let last_seen_data = tracker.get_last_seen_data().await;
     let settings = settings_manager.get().await;
 
-    for editor_id in registry.list_editors() {
-        if let Some(manager) = registry.get(&editor_id) {
-            let is_installed = manager.is_installed().await;
-            let instances = manager
-                .get_running_instances()
-                .await
-                .ok()
-                .unwrap_or_default();
+    let futures: Vec<_> = registry
+        .list_editors()
+        .into_iter()
+        .filter_map(|editor_id| {
+            let manager = registry.get(&editor_id)?;
+            let last_seen = last_seen_data.editors.get(&editor_id).copied();
+            Some(async move {
+                let is_installed = manager.is_installed().await;
+                let instances = manager
+                    .get_running_instances()
+                    .await
+                    .ok()
+                    .unwrap_or_default();
+                EditorInfo {
+                    editor_id,
+                    display_name: manager.display_name().to_string(),
+                    is_installed,
+                    detected: !instances.is_empty(),
+                    workspace: instances.first().and_then(|inst| inst.workspace.clone()),
+                    last_seen,
+                }
+            })
+        })
+        .collect();
 
-            editors.push(EditorInfo {
-                editor_id: editor_id.clone(),
-                display_name: manager.display_name().to_string(),
-                is_installed,
-                detected: !instances.is_empty(),
-                workspace: instances.first().and_then(|inst| inst.workspace.clone()),
-                last_seen: last_seen_data.editors.get(&editor_id).copied(),
-            });
-        }
-    }
+    let editors = futures::future::join_all(futures).await;
 
     Ok(EditorTestbedData {
         editors,
@@ -1923,17 +1929,23 @@ pub async fn get_setup_data(
 ) -> Result<SetupData, String> {
     let settings = settings_manager.get().await;
 
-    let mut editors = Vec::new();
-    for editor_id in registry.list_editors() {
-        if let Some(manager) = registry.get(&editor_id) {
-            let is_installed = manager.is_installed().await;
-            editors.push(SetupEditorInfo {
-                editor_id: editor_id.clone(),
-                display_name: manager.display_name().to_string(),
-                is_installed,
-            });
-        }
-    }
+    let futures: Vec<_> = registry
+        .list_editors()
+        .into_iter()
+        .filter_map(|editor_id| {
+            let manager = registry.get(&editor_id)?;
+            Some(async move {
+                let is_installed = manager.is_installed().await;
+                SetupEditorInfo {
+                    editor_id,
+                    display_name: manager.display_name().to_string(),
+                    is_installed,
+                }
+            })
+        })
+        .collect();
+
+    let mut editors = futures::future::join_all(futures).await;
 
     // Sort: installed first, then alphabetically by display name
     editors.sort_by(|a, b| match (a.is_installed, b.is_installed) {
