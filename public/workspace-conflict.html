@@ -265,10 +265,10 @@
     <div class="status" id="status"></div>
 
     <div class="button-group">
-      <button class="button" onclick="cancel()">Cancel</button>
-      <button class="button" id="change-folder-btn" onclick="changeSelectedFolder()">Change Folder…</button>
-      <button class="button danger" id="open-existing-btn" onclick="openExisting()">Open Selected</button>
-      <button class="button primary" id="clone-btn" onclick="openCloneDialog()">Clone & Open</button>
+      <button class="button" id="cancel-btn">Cancel</button>
+      <button class="button" id="change-folder-btn">Change Folder…</button>
+      <button class="button danger" id="open-existing-btn">Open Selected</button>
+      <button class="button primary" id="clone-btn">Clone & Open</button>
     </div>
   </div>
 
@@ -307,6 +307,12 @@
       return labels[state] || state;
     }
 
+    function escapeHtml(value) {
+      const div = document.createElement('div');
+      div.textContent = String(value ?? '');
+      return div.innerHTML;
+    }
+
     function renderCandidates() {
       const container = document.getElementById('candidate-list');
       if (!dialogData?.candidates?.length) {
@@ -318,21 +324,44 @@
 
       document.getElementById('open-existing-btn').disabled = false;
       document.getElementById('change-folder-btn').disabled = false;
-      container.innerHTML = dialogData.candidates.map((candidate, index) => `
-        <div class="item">
-          <label>
-            <input type="radio" name="candidate" value="${index}" ${index === selectedIndex ? 'checked' : ''} onchange="selectCandidate(${index})">
-            <div class="meta">
-              <div class="meta-top">
-                <span class="pill ${statePillClass(candidate.workspace_state)}">${statePillLabel(candidate.workspace_state)}</span>
-                <span class="value">${candidate.name}</span>
+      container.innerHTML = dialogData.candidates.map((candidate, index) => {
+        const stateLabel = escapeHtml(statePillLabel(candidate.workspace_state));
+        const name = escapeHtml(candidate.name);
+        const workspacePath = escapeHtml(candidate.workspace_path);
+        const primaryRemote = escapeHtml(candidate.primary_remote || 'remote: not available');
+        return `
+          <div class="item">
+            <label>
+              <input type="radio" name="candidate" value="${index}" ${index === selectedIndex ? 'checked' : ''}>
+              <div class="meta">
+                <div class="meta-top">
+                  <span class="pill ${statePillClass(candidate.workspace_state)}">${stateLabel}</span>
+                  <span class="value">${name}</span>
+                </div>
+                <div class="path">${workspacePath}</div>
+                <div class="remote">${primaryRemote}</div>
               </div>
-              <div class="path">${candidate.workspace_path}</div>
-              <div class="remote">${candidate.primary_remote || 'remote: not available'}</div>
-            </div>
-          </label>
-        </div>
-      `).join('');
+            </label>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function bindEvents() {
+      const candidateList = document.getElementById('candidate-list');
+      candidateList.addEventListener('change', (event) => {
+        const input = event.target.closest('input[name="candidate"]');
+        if (!input) return;
+        const index = Number(input.value);
+        if (Number.isInteger(index)) {
+          selectCandidate(index);
+        }
+      });
+
+      document.getElementById('cancel-btn').addEventListener('click', cancel);
+      document.getElementById('change-folder-btn').addEventListener('click', changeSelectedFolder);
+      document.getElementById('open-existing-btn').addEventListener('click', openExisting);
+      document.getElementById('clone-btn').addEventListener('click', openCloneDialog);
     }
 
     function selectCandidate(index) {
@@ -452,6 +481,7 @@
       }
     });
 
+    bindEvents();
     init();
   </script>
 </body>

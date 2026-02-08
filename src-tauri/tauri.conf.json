@@ -40,7 +40,17 @@
         {
           "identifier": "main-capability",
           "description": "Main app capabilities",
-          "windows": ["*"],
+          "windows": [
+            "settings",
+            "setup",
+            "workspace-chooser",
+            "revision-handler",
+            "clone-dialog",
+            "workspace-repair",
+            "workspace-conflict",
+            "large-file-confirm",
+            "trust-warning"
+          ],
           "permissions": [
             "core:default",
             "core:window:allow-close",

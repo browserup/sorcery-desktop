@@ -203,8 +203,8 @@
     </div>
 
     <div class="button-group">
-      <button class="button secondary" onclick="cancel()">Cancel</button>
-      <button class="button" id="open-button" onclick="openSelected()" disabled>Open</button>
+      <button class="button secondary" id="cancel-button">Cancel</button>
+      <button class="button" id="open-button" disabled>Open</button>
     </div>
   </div>
 
@@ -230,29 +230,60 @@
       }
     }
 
+    function escapeHtml(value) {
+      const div = document.createElement('div');
+      div.textContent = String(value ?? '');
+      return div.innerHTML;
+    }
+
     function renderWorkspaces() {
       const list = document.getElementById('workspace-list');
 
       list.innerHTML = matches.map((match, index) => {
         const isRecent = index === 0 && match.last_seen;
+        const workspaceName = escapeHtml(match.workspace_name);
+        const workspacePath = escapeHtml(match.workspace_path);
         return `
           <div class="workspace-option ${selectedIndex === index ? 'selected' : ''}"
-               onclick="selectWorkspace(${index})">
+               data-index="${index}">
             <input type="radio"
                    name="workspace"
                    value="${index}"
-                   ${selectedIndex === index ? 'checked' : ''}
-                   onchange="selectWorkspace(${index})">
+                   ${selectedIndex === index ? 'checked' : ''}>
             <div class="workspace-info">
               <div class="workspace-name">
-                ${match.workspace_name}
+                ${workspaceName}
                 ${isRecent ? '<span class="recent-badge">MOST RECENT</span>' : ''}
               </div>
-              <div class="workspace-path">${match.workspace_path}</div>
+              <div class="workspace-path">${workspacePath}</div>
             </div>
           </div>
         `;
       }).join('');
+    }
+
+    function bindEvents() {
+      const list = document.getElementById('workspace-list');
+      list.addEventListener('click', (event) => {
+        const option = event.target.closest('.workspace-option');
+        if (!option) return;
+        const index = Number(option.dataset.index);
+        if (Number.isInteger(index)) {
+          selectWorkspace(index);
+        }
+      });
+
+      list.addEventListener('change', (event) => {
+        const input = event.target.closest('input[name="workspace"]');
+        if (!input) return;
+        const index = Number(input.value);
+        if (Number.isInteger(index)) {
+          selectWorkspace(index);
+        }
+      });
+
+      document.getElementById('open-button').addEventListener('click', openSelected);
+      document.getElementById('cancel-button').addEventListener('click', cancel);
     }
 
     function selectWorkspace(index) {
@@ -305,6 +336,7 @@
       }
     }
 
+    bindEvents();
     init();
   </script>
 </body>

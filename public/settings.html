@@ -1115,10 +1115,10 @@
 </head>
 <body>
   <div class="tabs">
-    <button class="tab active" data-tab="settings" onclick="switchTab('settings')">Settings</button>
-    <button class="tab" data-tab="workspaces" onclick="switchTab('workspaces')">Workspaces</button>
-    <button class="tab" data-tab="testbed" onclick="switchTab('testbed')">Editors</button>
-    <button class="tab" data-tab="debug" onclick="switchTab('debug')">Log</button>
+    <button class="tab active" data-tab="settings">Settings</button>
+    <button class="tab" data-tab="workspaces">Workspaces</button>
+    <button class="tab" data-tab="testbed">Editors</button>
+    <button class="tab" data-tab="debug">Log</button>
   </div>
 
   <div class="tab-content">
@@ -1126,10 +1126,10 @@
     <div id="settings-pane" class="tab-pane active">
       <div class="pane-with-sidenav">
         <nav class="sidenav">
-          <button class="sidenav-item active" data-settings-view="general" onclick="switchSettingsSubtab('general')">General</button>
-          <button class="sidenav-item" data-settings-view="terminal" onclick="switchSettingsSubtab('terminal')">Terminal</button>
-          <button class="sidenav-item" data-settings-view="info" onclick="switchSettingsSubtab('info')">Info</button>
-          <button class="sidenav-item" data-settings-view="protocol" onclick="switchSettingsSubtab('protocol')">Protocol</button>
+          <button class="sidenav-item active" data-settings-view="general">General</button>
+          <button class="sidenav-item" data-settings-view="terminal">Terminal</button>
+          <button class="sidenav-item" data-settings-view="info">Info</button>
+          <button class="sidenav-item" data-settings-view="protocol">Protocol</button>
         </nav>
         <div class="sidenav-content">
 
@@ -1202,7 +1202,7 @@
               <option value="xterm">Xterm</option>
             </select>
             <div style="margin-top: 0.5rem;">
-              <button class="button" onclick="toggleItermSetup()" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" id="iterm-setup-btn">iTerm2 Setup...</button>
+              <button class="button" data-action="toggle-iterm-setup" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" id="iterm-setup-btn">iTerm2 Setup...</button>
             </div>
             <div id="iterm-setup-panel" style="display: none; margin-top: 0.75rem; padding: 0.75rem; background: var(--bg-elevated); border-radius: 6px; border: 1px solid var(--border);">
               <div style="font-size: 0.8125rem; color: var(--text-secondary); margin-bottom: 0.25rem;">
@@ -1210,10 +1210,10 @@
               </div>
               <div style="background: var(--bg-primary); border: 1px solid var(--border); border-radius: 6px; padding: 0.5rem 0.75rem; display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;">
                 <code style="color: var(--success-light); font-family: 'SF Mono', Monaco, monospace; font-size: 0.875rem;">open "srcuri://\1@L\2"</code>
-                <button class="button" onclick="copyItermCommand(this)" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">Copy</button>
+                <button class="button" data-action="copy-iterm-command" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;">Copy</button>
               </div>
               <div style="margin-top: 0.5rem;">
-                <a href="#" onclick="toggleItermScreenshot(); return false;" style="color: var(--text-secondary); font-size: 0.75rem;" id="iterm-screenshot-toggle">Show screenshot</a>
+                <a href="#" data-action="toggle-iterm-screenshot" style="color: var(--text-secondary); font-size: 0.75rem;" id="iterm-screenshot-toggle">Show screenshot</a>
               </div>
               <div id="iterm-screenshot" style="display: none; margin-top: 0.5rem;">
                 <img src="assets/setup/iterm-semantic-history-setting.png" alt="iTerm2 Semantic History setting" style="max-width: 100%; border-radius: 4px; border: 1px solid var(--border);">
@@ -1237,7 +1237,7 @@
             <div style="display: flex; gap: 0.5rem; align-items: center;">
               <span style="color: var(--text-secondary); min-width: 6rem;">Crash Logs:</span>
               <span id="logs-directory-path" style="word-break: break-all; flex: 1;">Loading...</span>
-              <a href="#" onclick="openLogsDirectory(); return false;" id="open-logs-link" style="color: var(--primary); white-space: nowrap;">Open</a>
+              <a href="#" data-action="open-logs-directory" id="open-logs-link" style="color: var(--primary); white-space: nowrap;">Open</a>
             </div>
           </div>
         </div>
@@ -1276,13 +1276,13 @@
           </div>
 
           <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
-            <button class="button" onclick="loadProtocolStatus()">Refresh Status</button>
-            <button class="button" onclick="reregisterProtocol()" id="reregister-btn" style="background: var(--success);">Re-register Protocol</button>
+            <button class="button" data-action="refresh-protocol-status">Refresh Status</button>
+            <button class="button" data-action="reregister-protocol" id="reregister-btn" style="background: var(--success);">Re-register Protocol</button>
           </div>
 
           <div id="protocol-status-message" class="status-message">
             <span class="status-text" id="protocol-status-text"></span>
-            <button class="copy-btn" id="protocol-copy-btn" onclick="copyProtocolStatus()" style="display: none;">Copy</button>
+            <button class="copy-btn" id="protocol-copy-btn" data-action="copy-protocol-status" style="display: none;">Copy</button>
           </div>
         </div>
 
@@ -1295,10 +1295,10 @@
     <div id="workspaces-pane" class="tab-pane">
       <div class="pane-with-sidenav">
         <nav class="sidenav">
-          <button class="sidenav-action" onclick="refreshWorkspaceHealth(this)" title="Refresh Status">
+          <button class="sidenav-action" data-action="refresh-workspace-health" title="Refresh Status">
             <span class="sidenav-action-icon">⟳</span> Refresh
           </button>
-          <button class="sidenav-action" onclick="addWorkspace()">
+          <button class="sidenav-action" data-action="add-workspace">
             <span>+</span> Add Folder
           </button>
         </nav>
@@ -1314,8 +1314,8 @@
                 <div id="workspace-health-summary" class="summary"></div>
               </div>
               <div class="workspace-health-actions">
-                <button onclick="reviewWorkspaceIssues()">Review</button>
-                <button onclick="refreshWorkspaceHealth(this)">Refresh</button>
+                <button data-action="review-workspace-issues">Review</button>
+                <button data-action="refresh-workspace-health">Refresh</button>
               </div>
             </div>
             <div id="workspaces-list"></div>
@@ -1331,7 +1331,7 @@
               <a
                 href="#"
                 id="ignored-workspaces-toggle"
-                onclick="toggleIgnoredWorkspaces(); return false;"
+                data-action="toggle-ignored-workspaces"
                 style="display: none; color: var(--text-secondary); font-size: 0.8125rem;"
               >
                 Ignored Items (0)
@@ -1351,8 +1351,8 @@
     <div id="testbed-pane" class="tab-pane">
       <div class="pane-with-sidenav">
         <nav class="sidenav">
-          <button class="sidenav-item active" data-editors-view="editors" onclick="switchEditorsView('editors')">Editors</button>
-          <button class="sidenav-item" data-editors-view="debug" onclick="switchEditorsView('debug')">Debug Info</button>
+          <button class="sidenav-item active" data-editors-view="editors">Editors</button>
+          <button class="sidenav-item" data-editors-view="debug">Debug Info</button>
         </nav>
         <div class="sidenav-content">
           <div id="editors-view-editors" class="editors-view-content">
@@ -1362,8 +1362,8 @@
                   <span style="color: var(--success);">●</span> = running | <span style="color: var(--success);">✓</span> = installed
                 </div>
                 <div class="sidenav-toggle">
-                  <button id="filter-installed" class="active" onclick="setEditorFilter('installed')">Installed</button>
-                  <button id="filter-all" onclick="setEditorFilter('all')">All</button>
+                  <button id="filter-installed" class="active" data-editor-filter="installed">Installed</button>
+                  <button id="filter-all" data-editor-filter="all">All</button>
                 </div>
               </div>
               <div id="editor-list" class="editor-list">
@@ -1398,15 +1398,15 @@
         <div class="toolbar">
           <input type="text" class="search-box" id="search-box" placeholder="Search commands, args, or output...">
           <div style="display: flex; gap: 0.5rem;">
-            <button class="filter-button active" data-scope="editor" onclick="setCommandScope('editor')">Editor</button>
-            <button class="filter-button" data-scope="git" onclick="setCommandScope('git')">Git</button>
+            <button class="filter-button active" data-scope="editor">Editor</button>
+            <button class="filter-button" data-scope="git">Git</button>
           </div>
           <div style="display: flex; gap: 0.5rem;">
-            <button class="filter-button active" data-filter="all" onclick="setFilter('all')">All</button>
-            <button class="filter-button" data-filter="success" onclick="setFilter('success')">Success</button>
-            <button class="filter-button" data-filter="error" onclick="setFilter('error')">Errors</button>
+            <button class="filter-button active" data-filter="all">All</button>
+            <button class="filter-button" data-filter="success">Success</button>
+            <button class="filter-button" data-filter="error">Errors</button>
           </div>
-          <button class="button" onclick="loadGitHistory()">Refresh</button>
+          <button class="button" data-action="refresh-git-history">Refresh</button>
         </div>
 
         <div id="table-container">
@@ -1636,15 +1636,22 @@
       }
     }
 
+    function escapeHtml(value) {
+      const div = document.createElement('div');
+      div.textContent = String(value ?? '');
+      return div.innerHTML;
+    }
+
     function populateEditorDropdown(selectElement, selectedValue) {
+      const safeSelectedValue = escapeHtml(selectedValue);
       selectElement.innerHTML = installedEditors.map(editor =>
-        `<option value="${editor.editor_id}" ${selectedValue === editor.editor_id ? 'selected' : ''}>
-          ${editor.display_name}
+        `<option value="${escapeHtml(editor.editor_id)}" ${selectedValue === editor.editor_id ? 'selected' : ''}>
+          ${escapeHtml(editor.display_name)}
         </option>`
       ).join('');
 
       if (!installedEditors.find(e => e.editor_id === selectedValue)) {
-        selectElement.innerHTML = `<option value="${selectedValue}" selected>${selectedValue} (not installed)</option>` + selectElement.innerHTML;
+        selectElement.innerHTML = `<option value="${safeSelectedValue}" selected>${safeSelectedValue} (not installed)</option>` + selectElement.innerHTML;
       }
     }
 
@@ -2040,8 +2047,6 @@
       document.querySelectorAll('.workspace-overflow-menu.open').forEach(m => m.classList.remove('open'));
     }
 
-    document.addEventListener('click', closeAllOverflowMenus);
-
     function showWorkspacesStatus(message, type) {
       const el = document.getElementById('workspaces-status-message');
       el.textContent = message;
@@ -2062,15 +2067,15 @@
 
       const items = workspaces.map((ws, idx) => {
         const defaultEditorName = installedEditors.find(e => e.editor_id === defaultEditor)?.display_name || defaultEditor;
-        const defaultOption = `<option value="" ${!ws.editor ? 'selected' : ''}>Default (${defaultEditorName})</option>`;
+        const defaultOption = `<option value="" ${!ws.editor ? 'selected' : ''}>Default (${escapeHtml(defaultEditorName)})</option>`;
         const editorOptions = installedEditors.map(editor =>
-          `<option value="${editor.editor_id}" ${ws.editor === editor.editor_id ? 'selected' : ''}>
-            ${editor.display_name}
+          `<option value="${escapeHtml(editor.editor_id)}" ${ws.editor === editor.editor_id ? 'selected' : ''}>
+            ${escapeHtml(editor.display_name)}
           </option>`
         ).join('');
 
         const notInstalledOption = (!installedEditors.find(e => e.editor_id === ws.editor) && ws.editor)
-          ? `<option value="${ws.editor}" selected>${ws.editor} (not installed)</option>`
+          ? `<option value="${escapeHtml(ws.editor)}" selected>${escapeHtml(ws.editor)} (not installed)</option>`
           : '';
 
         const workspaceKey = workspaceDisplayKey(ws);
@@ -2086,42 +2091,53 @@
         const statusLabel = status in statusLabelMap ? statusLabelMap[status] : status.charAt(0).toUpperCase() + status.slice(1);
         const kindLabel = ws.workspace_kind === 'git' ? 'Git' : 'Folder';
         const remote = ws.repo_identity?.primary_remote || '—';
+        const safeRemote = escapeHtml(remote);
+        const safeWorkspaceKey = escapeHtml(workspaceKey);
+        const safePath = escapeHtml(ws.path || '');
+        const safeKindLabel = escapeHtml(kindLabel);
+        const safeStatusLabel = escapeHtml(statusLabel);
         const resolveAction = status === 'present'
           ? ''
-          : `<button class="workspace-btn warn" onclick="changeWorkspaceFolder(${idx})">Fix…</button>`;
+          : `<button class="workspace-btn warn" data-action="change-workspace-folder" data-index="${idx}">Fix…</button>`;
 
         return `
           <div class="workspace-item" data-workspace-status="${status}">
             <div class="workspace-meta">
-              ${statusLabel ? `<span class="workspace-status-badge ${statusClass}">${statusLabel}</span>` : ''}
-              <span>Type: ${kindLabel}</span>
-              <span>Remote: <code>${remote}</code></span>
+              ${statusLabel ? `<span class="workspace-status-badge ${statusClass}">${safeStatusLabel}</span>` : ''}
+              <span>Type: ${safeKindLabel}</span>
+              <span>Remote: <code>${safeRemote}</code></span>
             </div>
             <div class="workspace-row">
               <div class="field-group name-field">
                 <div class="field-label">Name</div>
-                <input type="text" placeholder="my-project" value="${workspaceKey}" oninput="updateWorkspace(${idx}, 'name', this.value)" onblur="saveWorkspaceField(${idx}, 'name', this.value)" />
+                <input
+                  type="text"
+                  placeholder="my-project"
+                  value="${safeWorkspaceKey}"
+                  data-workspace-index="${idx}"
+                  data-workspace-field="name"
+                />
               </div>
               <div class="field-group editor-field">
                 <div class="field-label">Editor</div>
-                <select onchange="updateWorkspace(${idx}, 'editor', this.value)">
+                <select data-workspace-index="${idx}" data-workspace-field="editor">
                   ${defaultOption}${notInstalledOption}${editorOptions}
                 </select>
               </div>
               <div class="workspace-overflow">
-                <button class="workspace-overflow-btn" onclick="toggleOverflowMenu(event, ${idx})" aria-label="More actions">⋯</button>
+                <button class="workspace-overflow-btn" data-action="toggle-overflow-menu" data-index="${idx}" aria-label="More actions">⋯</button>
                 <div class="workspace-overflow-menu" id="overflow-menu-${idx}">
-                  <button onclick="changeWorkspaceFolder(${idx})">Change Folder…</button>
-                  <button onclick="testWorkspace(${idx})">Open Test File</button>
+                  <button data-action="change-workspace-folder" data-index="${idx}">Change Folder…</button>
+                  <button data-action="test-workspace" data-index="${idx}">Open Test File</button>
                   <div class="menu-divider"></div>
-                  <button class="menu-danger" onclick="removeWorkspace(${idx})">Remove</button>
+                  <button class="menu-danger" data-action="remove-workspace" data-index="${idx}">Remove</button>
                 </div>
               </div>
             </div>
             <div class="workspace-row">
               <div class="field-group path-field">
                 <div class="field-label">Path</div>
-                <input type="text" placeholder="/Users/you/projects/myapp" value="${ws.path || ''}" readonly />
+                <input type="text" placeholder="/Users/you/projects/myapp" value="${safePath}" readonly />
               </div>
               ${resolveAction ? `<div class="workspace-actions">${resolveAction}</div>` : ''}
             </div>
@@ -2144,35 +2160,36 @@
       section.style.display = 'block';
 
       const defaultEditorName = installedEditors.find(e => e.editor_id === defaultEditor)?.display_name || defaultEditor;
+      const safeDefaultEditorName = escapeHtml(defaultEditorName);
 
       const items = discoveredWorkspaces.map((ws, idx) => `
         <div class="workspace-item discovered">
           <div class="workspace-meta">
             <span>Type: ${ws.workspace_kind === 'git' ? 'Git' : 'Folder'}</span>
-            <span>Remote: <code>${ws.primary_remote || '—'}</code></span>
+            <span>Remote: <code>${escapeHtml(ws.primary_remote || '—')}</code></span>
           </div>
           <div class="workspace-row">
             <div class="field-group name-field">
               <div class="field-label">Name <span class="badge-auto">auto</span></div>
-              <div style="padding: 0.375rem 0; color: var(--text-primary);">${ws.name}</div>
+              <div style="padding: 0.375rem 0; color: var(--text-primary);">${escapeHtml(ws.name)}</div>
             </div>
             <div class="field-group editor-field">
               <div class="field-label">Editor</div>
-              <div style="padding: 0.375rem 0; color: var(--text-secondary);">${defaultEditorName} (default)</div>
+              <div style="padding: 0.375rem 0; color: var(--text-secondary);">${safeDefaultEditorName} (default)</div>
             </div>
             <div class="workspace-overflow">
-              <button class="workspace-overflow-btn" onclick="toggleOverflowMenu(event, 'disc-${idx}')" aria-label="More actions">⋯</button>
+              <button class="workspace-overflow-btn" data-action="toggle-overflow-menu" data-index="disc-${idx}" aria-label="More actions">⋯</button>
               <div class="workspace-overflow-menu" id="overflow-menu-disc-${idx}">
-                <button onclick="promoteWorkspace(${idx}, null)">Configure</button>
+                <button data-action="promote-workspace" data-index="${idx}">Configure</button>
                 <div class="menu-divider"></div>
-                <button class="menu-danger" onclick="deleteDiscoveredWorkspace(${idx})">Ignore</button>
+                <button class="menu-danger" data-action="delete-discovered-workspace" data-index="${idx}">Ignore</button>
               </div>
             </div>
           </div>
           <div class="workspace-row">
             <div class="field-group path-field">
               <div class="field-label">Path</div>
-              <div style="padding: 0.375rem 0; color: var(--text-secondary); font-size: 0.875rem;">${ws.path}</div>
+              <div style="padding: 0.375rem 0; color: var(--text-secondary); font-size: 0.875rem;">${escapeHtml(ws.path)}</div>
             </div>
           </div>
         </div>
@@ -2275,10 +2292,10 @@
           <div class="workspace-row">
             <div class="field-group path-field">
               <div class="field-label">Path</div>
-              <div style="padding: 0.375rem 0; color: var(--text-secondary); font-size: 0.875rem;">${path}</div>
+              <div style="padding: 0.375rem 0; color: var(--text-secondary); font-size: 0.875rem;">${escapeHtml(path)}</div>
             </div>
             <div class="workspace-actions">
-              <button class="workspace-btn" onclick="unignoreWorkspace(${idx})">Un-ignore</button>
+              <button class="workspace-btn" data-action="unignore-workspace" data-index="${idx}">Un-ignore</button>
             </div>
           </div>
         </div>
@@ -2396,7 +2413,7 @@
         renderDiscoveredWorkspaces();
       } catch (err) {
         document.getElementById('editor-list').innerHTML =
-          `<div class="empty-state">Error loading data: ${err}</div>`;
+          `<div class="empty-state">Error loading data: ${escapeHtml(err)}</div>`;
       }
     }
 
@@ -2429,13 +2446,15 @@
         const statusClass = editor.is_installed ? 'installed' : 'not-installed';
         const runningClass = editor.detected ? 'active' : 'inactive';
         const isMostRecent = editor.editor_id === mostRecent;
+        const safeDisplayName = escapeHtml(editor.display_name);
+        const safeEditorId = escapeHtml(editor.editor_id);
 
         return `
           <div class="editor-card ${isMostRecent ? 'most-recent' : ''}">
             <div class="running-dot ${runningClass}"></div>
-            <span class="editor-name">${editor.display_name}</span>
+            <span class="editor-name">${safeDisplayName}</span>
             <span style="color: ${editor.is_installed ? 'var(--success)' : 'var(--error)'}">${statusIcon}</span>
-            <button class="test-button" onclick="testEditor('${editor.editor_id}')" ${!editor.is_installed ? 'disabled' : ''}>Test</button>
+            <button class="test-button" data-action="test-editor" data-editor-id="${safeEditorId}" ${!editor.is_installed ? 'disabled' : ''}>Test</button>
           </div>
         `;
       }).join('');
@@ -2684,12 +2703,18 @@
         const displayResult = commandType === 'request' && entry.args.length > 0
           ? `[${entry.args[0]}]`
           : '';
+        const safeCommandType = escapeHtml(commandType);
+        const safeDisplayCommand = escapeHtml(displayCommand);
+        const safeDisplayResult = escapeHtml(displayResult);
+        const safeWorkingDir = escapeHtml(entry.working_dir);
+        const safeStdout = escapeHtml(entry.stdout);
+        const safeStderr = escapeHtml(entry.stderr);
         return `
-          <tr class="expandable" onclick="toggleRow(${index})">
+          <tr class="expandable" data-row-index="${index}">
             <td><span class="status-dot ${entry.success ? 'success' : 'error'}"></span></td>
-            <td><span style="color: ${typeColor}">${commandType}</span></td>
+            <td><span style="color: ${typeColor}">${safeCommandType}</span></td>
             <td>${timestamp}</td>
-            <td><span class="code">${displayCommand}</span> ${displayResult}</td>
+            <td><span class="code">${safeDisplayCommand}</span> ${safeDisplayResult}</td>
             <td>${entry.exit_code !== null ? entry.exit_code : 'N/A'}</td>
           </tr>
           <tr class="expand-row ${isExpanded ? 'visible' : ''}" id="expand-${index}">
@@ -2698,19 +2723,19 @@
                 ${commandType !== 'request' ? `
                   <div class="output-section">
                     <div class="output-label">Working Directory</div>
-                    <div class="output-text">${entry.working_dir}</div>
+                    <div class="output-text">${safeWorkingDir}</div>
                   </div>
                 ` : ''}
                 ${entry.stdout ? `
                   <div class="output-section">
                     <div class="output-label">${commandType === 'request' ? (entry.args[0] === 'opened' ? 'Target File' : 'Details') : 'Stdout'}</div>
-                    <div class="output-text">${entry.stdout}</div>
+                    <div class="output-text">${safeStdout}</div>
                   </div>
                 ` : ''}
                 ${entry.stderr ? `
                   <div class="output-section">
                     <div class="output-label">${commandType === 'request' ? 'Error' : 'Stderr'}</div>
-                    <div class="output-text">${entry.stderr}</div>
+                    <div class="output-text">${safeStderr}</div>
                   </div>
                 ` : ''}
                 ${commandType === 'request' ? `
@@ -2726,9 +2751,195 @@
       }).join('');
     }
 
+    function parseIndex(value) {
+      const parsed = Number(value);
+      return Number.isInteger(parsed) ? parsed : null;
+    }
+
+    function bindClickHandlers() {
+      document.addEventListener('click', (event) => {
+        if (!event.target.closest('.workspace-overflow')) {
+          closeAllOverflowMenus();
+        }
+
+        const tabButton = event.target.closest('.tabs .tab[data-tab]');
+        if (tabButton) {
+          switchTab(tabButton.dataset.tab);
+          return;
+        }
+
+        const settingsSubtabButton = event.target.closest('[data-settings-view]');
+        if (settingsSubtabButton) {
+          switchSettingsSubtab(settingsSubtabButton.dataset.settingsView);
+          return;
+        }
+
+        const editorsViewButton = event.target.closest('[data-editors-view]');
+        if (editorsViewButton) {
+          switchEditorsView(editorsViewButton.dataset.editorsView);
+          return;
+        }
+
+        const editorFilterButton = event.target.closest('[data-editor-filter]');
+        if (editorFilterButton) {
+          setEditorFilter(editorFilterButton.dataset.editorFilter);
+          return;
+        }
+
+        const scopeButton = event.target.closest('.filter-button[data-scope]');
+        if (scopeButton) {
+          setCommandScope(scopeButton.dataset.scope);
+          return;
+        }
+
+        const filterButton = event.target.closest('.filter-button[data-filter]');
+        if (filterButton) {
+          setFilter(filterButton.dataset.filter);
+          return;
+        }
+
+        const expandableRow = event.target.closest('tr.expandable[data-row-index]');
+        if (expandableRow) {
+          const rowIndex = parseIndex(expandableRow.dataset.rowIndex);
+          if (rowIndex !== null) {
+            toggleRow(rowIndex);
+          }
+          return;
+        }
+
+        const actionElement = event.target.closest('[data-action]');
+        if (!actionElement) {
+          return;
+        }
+
+        if (actionElement.tagName === 'A') {
+          event.preventDefault();
+        }
+
+        const action = actionElement.dataset.action;
+        const rawIndex = actionElement.dataset.index;
+        const index = parseIndex(rawIndex);
+
+        switch (action) {
+          case 'toggle-iterm-setup':
+            toggleItermSetup();
+            break;
+          case 'copy-iterm-command':
+            copyItermCommand(actionElement);
+            break;
+          case 'toggle-iterm-screenshot':
+            toggleItermScreenshot();
+            break;
+          case 'open-logs-directory':
+            openLogsDirectory();
+            break;
+          case 'refresh-protocol-status':
+            loadProtocolStatus();
+            break;
+          case 'reregister-protocol':
+            reregisterProtocol();
+            break;
+          case 'copy-protocol-status':
+            copyProtocolStatus();
+            break;
+          case 'refresh-workspace-health':
+            refreshWorkspaceHealth(actionElement);
+            break;
+          case 'add-workspace':
+            addWorkspace();
+            break;
+          case 'review-workspace-issues':
+            reviewWorkspaceIssues();
+            break;
+          case 'toggle-ignored-workspaces':
+            toggleIgnoredWorkspaces();
+            break;
+          case 'refresh-git-history':
+            loadGitHistory();
+            break;
+          case 'change-workspace-folder':
+            if (index !== null) {
+              changeWorkspaceFolder(index);
+            }
+            break;
+          case 'test-workspace':
+            if (index !== null) {
+              testWorkspace(index);
+            }
+            break;
+          case 'remove-workspace':
+            if (index !== null) {
+              removeWorkspace(index);
+            }
+            break;
+          case 'toggle-overflow-menu':
+            if (rawIndex) {
+              toggleOverflowMenu(event, rawIndex);
+            }
+            break;
+          case 'promote-workspace':
+            if (index !== null) {
+              promoteWorkspace(index, actionElement);
+            }
+            break;
+          case 'delete-discovered-workspace':
+            if (index !== null) {
+              deleteDiscoveredWorkspace(index);
+            }
+            break;
+          case 'unignore-workspace':
+            if (index !== null) {
+              unignoreWorkspace(index);
+            }
+            break;
+          case 'test-editor':
+            if (actionElement.dataset.editorId) {
+              testEditor(actionElement.dataset.editorId);
+            }
+            break;
+          default:
+            break;
+        }
+      });
+
+      document.addEventListener('change', (event) => {
+        const workspaceSelect = event.target.closest('select[data-workspace-index][data-workspace-field="editor"]');
+        if (!workspaceSelect) {
+          return;
+        }
+        const index = parseIndex(workspaceSelect.dataset.workspaceIndex);
+        if (index !== null) {
+          updateWorkspace(index, 'editor', workspaceSelect.value);
+        }
+      });
+
+      document.addEventListener('input', (event) => {
+        const workspaceNameInput = event.target.closest('input[data-workspace-index][data-workspace-field="name"]');
+        if (!workspaceNameInput) {
+          return;
+        }
+        const index = parseIndex(workspaceNameInput.dataset.workspaceIndex);
+        if (index !== null) {
+          updateWorkspace(index, 'name', workspaceNameInput.value);
+        }
+      });
+
+      document.addEventListener('focusout', (event) => {
+        const workspaceNameInput = event.target.closest('input[data-workspace-index][data-workspace-field="name"]');
+        if (!workspaceNameInput) {
+          return;
+        }
+        const index = parseIndex(workspaceNameInput.dataset.workspaceIndex);
+        if (index !== null) {
+          saveWorkspaceField(index, 'name', workspaceNameInput.value);
+        }
+      });
+    }
+
     document.getElementById('search-box').addEventListener('input', renderHistory);
 
     // Initialize
+    bindClickHandlers();
     subscribeWorkspaceHealthUpdates().catch((e) => {
       console.error('Failed to subscribe workspace health events:', e);
     });
