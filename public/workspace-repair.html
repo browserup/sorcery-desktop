@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Workspace Needs Repair</title>
+  <title>Workspace Problem</title>
 
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -185,26 +185,26 @@
 </head>
 <body>
   <div class="container">
-    <h1>Workspace Needs Repair</h1>
+    <h1>Workspace Problem</h1>
     <p class="subtitle">
-      Sorcery Desktop could not open this link because the workspace mapping is not healthy. Rebind to the correct folder, then retry.
+      This link could not be opened because the workspace folder has a problem. Locate the correct folder, then retry.
     </p>
 
     <div class="alert">
-      <strong>Important:</strong> trust is reset when you rebind.
+      <strong>Important:</strong> You will need to re-verify this workspace after changing the folder.
     </div>
 
     <div class="info-box">
       <div class="row">
-        <div class="label">Workspace</div>
+        <div class="label">Name</div>
         <div class="value" id="workspace-key">loading...</div>
       </div>
       <div class="row">
-        <div class="label">State</div>
+        <div class="label">Status</div>
         <div><span class="state-pill" id="workspace-state">unknown</span></div>
       </div>
       <div class="row">
-        <div class="label">Mapped Path</div>
+        <div class="label">Folder</div>
         <div class="value" id="workspace-path">loading...</div>
       </div>
       <div class="row">
@@ -217,8 +217,8 @@
 
     <div class="button-group">
       <button class="button" onclick="cancel()">Cancel</button>
-      <button class="button danger" onclick="forgetMapping()">Forget Mapping</button>
-      <button class="button primary" id="rebind-btn" onclick="locateAndRebind()">Locate Folder</button>
+      <button class="button danger" onclick="removeWorkspace()">Remove</button>
+      <button class="button primary" id="change-folder-btn" onclick="locateAndChangeFolder()">Locate Folder</button>
       <button class="button primary" id="retry-btn" onclick="retryOpen()">Retry</button>
     </div>
   </div>
@@ -232,7 +232,7 @@
 
     function setBusy(busy) {
       isBusy = busy;
-      document.getElementById('rebind-btn').disabled = busy;
+      document.getElementById('change-folder-btn').disabled = busy;
       document.getElementById('retry-btn').disabled = busy;
     }
 
@@ -245,8 +245,15 @@
     async function init() {
       try {
         dialogData = await invoke('get_workspace_repair_dialog_data');
-        document.getElementById('workspace-key').textContent = dialogData.workspace_key;
-        document.getElementById('workspace-state').textContent = dialogData.workspace_state;
+        document.getElementById('workspace-key').textContent = dialogData.name;
+        const stateLabels = {
+          missing: 'Folder Not Found',
+          unavailable: 'Folder Unavailable',
+          repo_changed: 'Repository Changed',
+          conflict: 'Conflict',
+          present: 'OK'
+        };
+        document.getElementById('workspace-state').textContent = stateLabels[dialogData.workspace_state] || dialogData.workspace_state;
         document.getElementById('workspace-path').textContent = dialogData.workspace_path;
         document.getElementById('file-path').textContent = dialogData.file_path;
       } catch (error) {
@@ -269,49 +276,49 @@
       }
     }
 
-    async function locateAndRebind() {
+    async function locateAndChangeFolder() {
       if (!dialogData || isBusy) return;
 
       const selected = await open({
         directory: true,
         multiple: false,
         defaultPath: dialogData.workspace_path,
-        title: `Select folder for ${dialogData.workspace_key}`
+        title: `Select folder for ${dialogData.name}`
       });
 
       if (!selected) return;
 
       setBusy(true);
-      setStatus('Saving new workspace path...', '');
+      setStatus('Updating folder...', '');
       try {
-        await invoke('rebind_workspace_path', {
-          workspace_key: dialogData.workspace_key,
+        await invoke('change_workspace_folder', {
+          name: dialogData.name,
           new_path: selected
         });
         dialogData.workspace_path = selected;
         document.getElementById('workspace-path').textContent = selected;
-        setStatus('Workspace mapping updated. Retrying link...', 'success');
+        setStatus('Folder updated. Retrying link...', 'success');
         await retryOpen();
       } catch (error) {
-        setStatus(`Rebind failed: ${error}`, 'error');
+        setStatus(`Failed to update folder: ${error}`, 'error');
       } finally {
         setBusy(false);
       }
     }
 
-    async function forgetMapping() {
+    async function removeWorkspace() {
       if (!dialogData || isBusy) return;
-      const confirmed = window.confirm(`Forget workspace mapping '${dialogData.workspace_key}'?`);
+      const confirmed = window.confirm(`Remove '${dialogData.name}' from your workspaces?`);
       if (!confirmed) return;
 
       setBusy(true);
-      setStatus('Removing workspace mapping...', '');
+      setStatus('Removing workspace...', '');
       try {
-        await invoke('forget_workspace_by_key', { workspace_key: dialogData.workspace_key });
-        setStatus('Workspace mapping removed.', 'success');
+        await invoke('remove_workspace', { name: dialogData.name });
+        setStatus('Workspace removed.', 'success');
         window.close();
       } catch (error) {
-        setStatus(`Failed to forget mapping: ${error}`, 'error');
+        setStatus(`Failed to remove workspace: ${error}`, 'error');
       } finally {
         setBusy(false);
       }

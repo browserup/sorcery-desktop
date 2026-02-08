@@ -239,23 +239,23 @@
   <div class="container">
     <h1>Workspace Conflict</h1>
     <p class="subtitle">
-      A workspace with this key already exists, but the requested remote points to a different repository.
+      A workspace with this name already exists, but the link points to a different repository.
     </p>
 
     <div class="alert">
-      Choose an existing mapping to open, or clone the requested remote as a new mapping.
+      Choose an existing workspace to open, or clone the repository as a new workspace.
     </div>
 
     <div class="alert policy" id="policy-alert" style="display:none;"></div>
 
     <div class="info-grid">
-      <div class="label">Workspace Key</div>
+      <div class="label">Name</div>
       <div class="value" id="workspace-key">loading...</div>
-      <div class="label">Requested Remote</div>
+      <div class="label">Repository</div>
       <div class="value" id="requested-remote">loading...</div>
       <div class="label">Requested File</div>
       <div class="value" id="file-path">loading...</div>
-      <div class="label">Clone Suggestion</div>
+      <div class="label">Clone to</div>
       <div class="value" id="clone-path">loading...</div>
       <div class="label" id="ref-label" style="display:none;">Reference</div>
       <div class="value" id="git-ref" style="display:none;"></div>
@@ -266,9 +266,9 @@
 
     <div class="button-group">
       <button class="button" onclick="cancel()">Cancel</button>
-      <button class="button" id="rebind-btn" onclick="rebindSelected()">Rebind Selected Mapping</button>
-      <button class="button danger" id="open-existing-btn" onclick="openExisting()">Open Selected Mapping</button>
-      <button class="button primary" id="clone-btn" onclick="openCloneDialog()">Clone Requested Remote</button>
+      <button class="button" id="change-folder-btn" onclick="changeSelectedFolder()">Change Folder…</button>
+      <button class="button danger" id="open-existing-btn" onclick="openExisting()">Open Selected</button>
+      <button class="button primary" id="clone-btn" onclick="openCloneDialog()">Clone & Open</button>
     </div>
   </div>
 
@@ -281,7 +281,7 @@
 
     function setBusy(isBusy) {
       busy = isBusy;
-      document.getElementById('rebind-btn').disabled = isBusy;
+      document.getElementById('change-folder-btn').disabled = isBusy;
       document.getElementById('open-existing-btn').disabled = isBusy;
       document.getElementById('clone-btn').disabled = isBusy;
     }
@@ -296,25 +296,36 @@
       return state === 'present' ? 'healthy' : 'warning';
     }
 
+    function statePillLabel(state) {
+      const labels = {
+        present: 'OK',
+        missing: 'Folder Not Found',
+        unavailable: 'Folder Unavailable',
+        repo_changed: 'Repository Changed',
+        conflict: 'Conflict'
+      };
+      return labels[state] || state;
+    }
+
     function renderCandidates() {
       const container = document.getElementById('candidate-list');
       if (!dialogData?.candidates?.length) {
         container.innerHTML = '<div class="item"><div class="meta"><div class="path">No existing mappings were found.</div></div></div>';
         document.getElementById('open-existing-btn').disabled = true;
-        document.getElementById('rebind-btn').disabled = true;
+        document.getElementById('change-folder-btn').disabled = true;
         return;
       }
 
       document.getElementById('open-existing-btn').disabled = false;
-      document.getElementById('rebind-btn').disabled = false;
+      document.getElementById('change-folder-btn').disabled = false;
       container.innerHTML = dialogData.candidates.map((candidate, index) => `
         <div class="item">
           <label>
             <input type="radio" name="candidate" value="${index}" ${index === selectedIndex ? 'checked' : ''} onchange="selectCandidate(${index})">
             <div class="meta">
               <div class="meta-top">
-                <span class="pill ${statePillClass(candidate.workspace_state)}">${candidate.workspace_state}</span>
-                <span class="value">${candidate.workspace_key}</span>
+                <span class="pill ${statePillClass(candidate.workspace_state)}">${statePillLabel(candidate.workspace_state)}</span>
+                <span class="value">${candidate.name}</span>
               </div>
               <div class="path">${candidate.workspace_path}</div>
               <div class="remote">${candidate.primary_remote || 'remote: not available'}</div>
@@ -331,7 +342,7 @@
     async function init() {
       try {
         dialogData = await invoke('get_workspace_conflict_dialog_data');
-        document.getElementById('workspace-key').textContent = dialogData.workspace_key;
+        document.getElementById('workspace-key').textContent = dialogData.name;
         document.getElementById('requested-remote').textContent = dialogData.normalized_remote || dialogData.requested_remote;
         document.getElementById('file-path').textContent = dialogData.file_path;
         document.getElementById('clone-path').textContent = dialogData.clone_path;
@@ -360,7 +371,7 @@
       if (!selected) return;
 
       setBusy(true);
-      setStatus('Opening selected mapping...', false);
+      setStatus('Opening…', false);
       try {
         await invoke('workspace_conflict_open_existing', {
           workspace_path: selected.workspace_path,
@@ -370,13 +381,13 @@
         });
         window.close();
       } catch (error) {
-        setStatus(`Failed to open selected mapping: ${error}`, true);
+        setStatus(`Failed to open: ${error}`, true);
       } finally {
         setBusy(false);
       }
     }
 
-    async function rebindSelected() {
+    async function changeSelectedFolder() {
       if (busy || !dialogData?.candidates?.length) return;
       const selected = dialogData.candidates[selectedIndex];
       if (!selected) return;
@@ -385,16 +396,16 @@
         directory: true,
         multiple: false,
         defaultPath: selected.workspace_path,
-        title: `Select folder for ${selected.workspace_key}`
+        title: `Select folder for ${selected.name}`
       });
 
       if (!chosenPath) return;
 
       setBusy(true);
-      setStatus('Rebinding workspace mapping...', false);
+      setStatus('Updating folder…', false);
       try {
-        await invoke('rebind_workspace_path', {
-          workspace_key: selected.workspace_key,
+        await invoke('change_workspace_folder', {
+          name: selected.name,
           new_path: chosenPath
         });
 
@@ -402,7 +413,7 @@
         selected.workspace_state = 'present';
         renderCandidates();
 
-        setStatus('Mapping updated. Opening selected mapping...', false);
+        setStatus('Folder updated. Opening…', false);
         await invoke('workspace_conflict_open_existing', {
           workspace_path: chosenPath,
           file_path: dialogData.file_path,
@@ -411,7 +422,7 @@
         });
         window.close();
       } catch (error) {
-        setStatus(`Failed to rebind mapping: ${error}`, true);
+        setStatus(`Failed to change folder: ${error}`, true);
       } finally {
         setBusy(false);
       }

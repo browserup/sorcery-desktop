@@ -59,24 +59,6 @@
       -webkit-font-smoothing: antialiased;
     }
 
-    .title-bar {
-      height: 35px;
-      background: var(--bg-surface);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-      -webkit-app-region: drag;
-    }
-
-    .title-bar h1 {
-      font-size: 1rem;
-      font-weight: 600;
-      color: var(--text-primary);
-      margin: 0;
-      letter-spacing: -0.01em;
-    }
-
     .tabs {
       display: flex;
       background: var(--bg-surface);
@@ -136,7 +118,12 @@
       box-shadow: 0 2px 4px -1px var(--shadow);
     }
 
-    .section h2 {
+    .pane-content {
+      margin-bottom: 1rem;
+    }
+
+    .section h2,
+    .pane-content h2 {
       color: var(--text-primary);
       margin-bottom: 0.75rem;
       font-size: 0.875rem;
@@ -283,7 +270,7 @@
       background: rgba(245, 158, 11, 0.12);
     }
 
-    .workspace-status-badge.drifted {
+    .workspace-status-badge.repo_changed {
       color: #f97316;
       border-color: rgba(249, 115, 22, 0.45);
       background: rgba(249, 115, 22, 0.12);
@@ -523,9 +510,7 @@
       display: flex;
       align-items: flex-end;
       gap: 0.375rem;
-      margin-left: auto;
-      flex-wrap: wrap;
-      justify-content: flex-end;
+      flex-shrink: 0;
     }
 
     .workspace-inline-actions {
@@ -566,6 +551,80 @@
       border-color: var(--error);
       color: white;
       background: rgba(239, 68, 68, 0.85);
+    }
+
+    .workspace-overflow {
+      position: relative;
+      display: inline-flex;
+      align-self: flex-end;
+    }
+
+    .workspace-overflow-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      padding: 0 0.5rem;
+      border-radius: 6px;
+      font-size: 0.875rem;
+      cursor: pointer;
+      line-height: 1;
+      transition: all 0.15s;
+      height: 2.125rem;
+    }
+
+    .workspace-overflow-btn:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    .workspace-overflow-menu {
+      display: none;
+      position: absolute;
+      right: 0;
+      bottom: 100%;
+      margin-bottom: 4px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+      min-width: 160px;
+      z-index: 20;
+      overflow: hidden;
+    }
+
+    .workspace-overflow-menu.open {
+      display: block;
+    }
+
+    .workspace-overflow-menu button {
+      display: block;
+      width: 100%;
+      padding: 0.5rem 0.75rem;
+      background: none;
+      border: none;
+      color: var(--text-primary);
+      font-size: 0.8125rem;
+      text-align: left;
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+
+    .workspace-overflow-menu button:hover {
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .workspace-overflow-menu button.menu-danger {
+      color: var(--error-light);
+    }
+
+    .workspace-overflow-menu button.menu-danger:hover {
+      background: rgba(239, 68, 68, 0.12);
+    }
+
+    .workspace-overflow-menu .menu-divider {
+      height: 1px;
+      background: var(--border);
+      margin: 0.25rem 0;
     }
 
     .add-workspace-btn {
@@ -915,9 +974,6 @@
   </style>
 </head>
 <body>
-  <div class="title-bar" data-tauri-drag-region>
-    <h1>Sorcery Desktop</h1>
-  </div>
   <div class="tabs">
     <button class="tab active" data-tab="settings" onclick="switchTab('settings')">Settings</button>
     <button class="tab" data-tab="workspaces" onclick="switchTab('workspaces')">Workspaces</button>
@@ -938,7 +994,7 @@
 
         <!-- General sub-tab -->
         <div id="settings-subtab-general" class="settings-subtab-content">
-          <div class="section">
+          <div class="pane-content">
           <div class="form-group">
             <label for="default-editor">Default Editor</label>
             <select id="default-editor">
@@ -1090,32 +1146,32 @@
     <!-- Workspaces Tab -->
     <div id="workspaces-pane" class="tab-pane">
       <div style="max-width: 1000px; margin: 0 auto;">
-        <div class="section">
+        <div class="pane-content">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-            <h2>Workspace Mappings</h2>
+            <h2>Workspaces</h2>
             <div class="workspace-header-actions">
               <button
                 class="promote-btn refresh-icon-btn"
-                onclick="reconcileWorkspaceHealth(this)"
+                onclick="refreshWorkspaceHealth(this)"
                 title="Refresh Status"
                 aria-label="Refresh Status"
               >
                 <span class="refresh-icon-glyph">⟳</span>
               </button>
-              <button class="add-workspace-btn" onclick="addWorkspace()">+ Add Workspace</button>
+              <button class="add-workspace-btn" onclick="addWorkspace()">+ Add Folder</button>
             </div>
           </div>
           <p class="help-text" style="margin-bottom: 0.75rem;">
-            Map workspace directories to specific editors. Files will open in the matching editor.
+            Folders where your projects live. Links open in the editor you choose.
           </p>
           <div id="workspace-health-banner" class="workspace-health-banner">
             <div>
-              <strong>Workspace health issues detected</strong>
+              <strong>Some workspaces need attention</strong>
               <div id="workspace-health-summary" class="summary"></div>
             </div>
             <div class="workspace-health-actions">
               <button onclick="reviewWorkspaceIssues()">Review</button>
-              <button onclick="reconcileWorkspaceHealth(this)">Reconcile</button>
+              <button onclick="refreshWorkspaceHealth(this)">Refresh</button>
             </div>
           </div>
           <div id="workspaces-list"></div>
@@ -1149,7 +1205,7 @@
     <!-- Testbed Tab -->
     <div id="testbed-pane" class="tab-pane">
       <div style="max-width: 1200px; margin: 0 auto;">
-        <div class="section">
+        <div class="pane-content">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
             <div class="help-text">
               <span style="color: var(--success);">●</span> = running | <span style="color: var(--success);">✓</span> = installed
@@ -1336,18 +1392,18 @@
       healthy: 0,
       missing: 0,
       unavailable: 0,
-      drifted: 0,
+      repo_changed: 0,
       conflict: 0
     };
     let workspaceHealthUnlisten = null;
     let workspaceRefreshDebounceTimer = null;
 
     function workspaceDisplayKey(workspace) {
-      return (workspace.workspace_key || workspace.__lookup_key || '').trim();
+      return (workspace.name || workspace.__lookup_key || '').trim();
     }
 
     function workspaceLookupKey(workspace) {
-      return (workspace.__lookup_key || workspace.workspace_key || '').trim();
+      return (workspace.__lookup_key || workspace.name || '').trim();
     }
 
     function withLookupKey(workspace) {
@@ -1362,7 +1418,7 @@
       return {
         path: workspace.path,
         editor: workspace.editor || '',
-        workspace_key: workspaceKey,
+        name: workspaceKey,
         trusted: workspace.trusted === true,
         auto_discovered: workspace.auto_discovered === true,
         workspace_kind: workspace.workspace_kind || 'non_git',
@@ -1378,7 +1434,7 @@
           healthy: 0,
           missing: 0,
           unavailable: 0,
-          drifted: 0,
+          repo_changed: 0,
           conflict: 0
         };
       }
@@ -1388,7 +1444,7 @@
         healthy: count('healthy'),
         missing: count('missing'),
         unavailable: count('unavailable'),
-        drifted: count('drifted'),
+        repo_changed: count('repo_changed'),
         conflict: count('conflict')
       };
     }
@@ -1541,7 +1597,7 @@
         workspaceHealth = await window.__TAURI__.core.invoke('get_workspace_health_summary');
         renderWorkspaceHealthBanner();
         if (showToast) {
-          showWorkspacesStatus('Workspace status refreshed', 'success');
+          showWorkspacesStatus('Status refreshed', 'success');
         }
       } catch (e) {
         console.error('Failed to load workspace health summary:', e);
@@ -1551,7 +1607,7 @@
     function renderWorkspaceHealthBanner() {
       const banner = document.getElementById('workspace-health-banner');
       const summary = document.getElementById('workspace-health-summary');
-      const unhealthyCount = workspaceHealth.missing + workspaceHealth.unavailable + workspaceHealth.drifted + workspaceHealth.conflict;
+      const unhealthyCount = workspaceHealth.missing + workspaceHealth.unavailable + workspaceHealth.repo_changed + workspaceHealth.conflict;
 
       if (unhealthyCount === 0) {
         banner.style.display = 'none';
@@ -1560,30 +1616,30 @@
       }
 
       const parts = [];
-      if (workspaceHealth.missing > 0) parts.push(`${workspaceHealth.missing} missing`);
-      if (workspaceHealth.unavailable > 0) parts.push(`${workspaceHealth.unavailable} unavailable`);
-      if (workspaceHealth.drifted > 0) parts.push(`${workspaceHealth.drifted} drifted`);
+      if (workspaceHealth.missing > 0) parts.push(`${workspaceHealth.missing} folder not found`);
+      if (workspaceHealth.unavailable > 0) parts.push(`${workspaceHealth.unavailable} folder unavailable`);
+      if (workspaceHealth.repo_changed > 0) parts.push(`${workspaceHealth.repo_changed} repository changed`);
       if (workspaceHealth.conflict > 0) parts.push(`${workspaceHealth.conflict} conflict`);
 
-      summary.textContent = parts.join(' | ');
+      summary.textContent = parts.join(', ');
       banner.style.display = 'flex';
     }
 
-    async function reconcileWorkspaceHealth(button) {
+    async function refreshWorkspaceHealth(button) {
       const isIconButton = button?.classList?.contains('refresh-icon-btn');
       if (button) {
-        markButtonBusy(button, isIconButton ? null : 'Reconciling...');
+        markButtonBusy(button, isIconButton ? null : 'Refreshing...');
       }
       try {
-        workspaceHealth = await window.__TAURI__.core.invoke('reconcile_workspace_states');
+        workspaceHealth = await window.__TAURI__.core.invoke('refresh_workspace_states');
         renderWorkspaceHealthBanner();
         await loadSettings();
-        showWorkspacesStatus('Workspace reconciliation complete', 'success');
+        showWorkspacesStatus('Status refreshed', 'success');
         if (button) {
           flashButtonDone(button, isIconButton ? null : 'Done');
         }
       } catch (e) {
-        showWorkspacesStatus('Failed to reconcile workspace state: ' + e, 'error');
+        showWorkspacesStatus('Failed to refresh status: ' + e, 'error');
       } finally {
         if (button) {
           clearButtonBusy(button);
@@ -1672,7 +1728,7 @@
         workspaces.push({
           path: selected,
           editor: '',
-          workspace_key: folderName,
+          name: folderName,
           __lookup_key: folderName,
           trusted: false,
           auto_discovered: false,
@@ -1689,7 +1745,7 @@
     function reviewWorkspaceIssues() {
       const firstUnhealthy = document.querySelector('.workspace-item[data-workspace-status]:not([data-workspace-status="present"])');
       if (!firstUnhealthy) {
-        showWorkspacesStatus('No unhealthy workspaces found', 'success');
+        showWorkspacesStatus('All workspaces are OK', 'success');
         return;
       }
       firstUnhealthy.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -1715,22 +1771,22 @@
 
       workspace[field] = value;
 
-      if (field === 'workspace_key') {
-        await renameWorkspaceKey(index);
+      if (field === 'name') {
+        await renameWorkspace(index);
         return;
       }
 
       await saveSettings();
     }
 
-    async function renameWorkspaceKey(index) {
+    async function renameWorkspace(index) {
       const workspace = workspaces[index];
       if (!workspace) return;
 
       const previousKey = workspaceLookupKey(workspace);
       const nextKey = workspaceDisplayKey(workspace);
       if (!nextKey) {
-        showWorkspacesStatus('Workspace key cannot be empty', 'error');
+        showWorkspacesStatus('Name cannot be empty', 'error');
         await loadSettings();
         return;
       }
@@ -1740,25 +1796,25 @@
       }
 
       try {
-        await window.__TAURI__.core.invoke('rename_workspace_key', {
-          workspace_key: previousKey,
-          new_workspace_key: nextKey
+        await window.__TAURI__.core.invoke('rename_workspace', {
+          name: previousKey,
+          new_name: nextKey
         });
-        showWorkspacesStatus(`Workspace key renamed to '${nextKey}'`, 'success');
+        showWorkspacesStatus(`Renamed to '${nextKey}'`, 'success');
         await loadSettings();
       } catch (e) {
-        showWorkspacesStatus('Failed to rename workspace key: ' + e, 'error');
+        showWorkspacesStatus('Failed to rename: ' + e, 'error');
         await loadSettings();
       }
     }
 
-    async function rebindWorkspace(index) {
+    async function changeWorkspaceFolder(index) {
       const workspace = workspaces[index];
       if (!workspace) return;
 
       const key = workspaceLookupKey(workspace);
       if (!key) {
-        showWorkspacesStatus('Workspace key is missing', 'error');
+        showWorkspacesStatus('Workspace name is missing', 'error');
         return;
       }
 
@@ -1774,38 +1830,38 @@
 
         if (!selected) return;
 
-        await window.__TAURI__.core.invoke('rebind_workspace_path', {
-          workspace_key: key,
+        await window.__TAURI__.core.invoke('change_workspace_folder', {
+          name: key,
           new_path: selected
         });
-        showWorkspacesStatus(`Workspace '${key}' rebound to ${selected}`, 'success');
+        showWorkspacesStatus(`Folder changed to ${selected}`, 'success');
         await loadSettings();
       } catch (e) {
-        showWorkspacesStatus('Failed to rebind workspace: ' + e, 'error');
+        showWorkspacesStatus('Failed to change folder: ' + e, 'error');
       }
     }
 
-    async function forgetWorkspace(index) {
+    async function removeWorkspace(index) {
       const workspace = workspaces[index];
       if (!workspace) return;
 
       const key = workspaceLookupKey(workspace);
       if (!key) {
-        showWorkspacesStatus('Workspace key is missing', 'error');
+        showWorkspacesStatus('Workspace name is missing', 'error');
         return;
       }
 
-      const confirmed = window.confirm(`Forget workspace mapping '${key}'?`);
+      const confirmed = window.confirm(`Remove '${key}' from your workspaces? (Files on disk are not affected.)`);
       if (!confirmed) return;
 
       try {
-        await window.__TAURI__.core.invoke('forget_workspace_by_key', {
-          workspace_key: key
+        await window.__TAURI__.core.invoke('remove_workspace', {
+          name: key
         });
-        showWorkspacesStatus(`Forgot workspace '${key}'`, 'success');
+        showWorkspacesStatus(`Removed '${key}'`, 'success');
         await loadSettings();
       } catch (e) {
-        showWorkspacesStatus('Failed to forget workspace: ' + e, 'error');
+        showWorkspacesStatus('Failed to remove workspace: ' + e, 'error');
       }
     }
 
@@ -1832,6 +1888,22 @@
         showWorkspacesStatus(`✗ Test failed: ${err}`, 'error');
       }
     }
+
+    function toggleOverflowMenu(event, idx) {
+      event.stopPropagation();
+      const menu = document.getElementById(`overflow-menu-${idx}`);
+      const wasOpen = menu.classList.contains('open');
+      closeAllOverflowMenus();
+      if (!wasOpen) {
+        menu.classList.add('open');
+      }
+    }
+
+    function closeAllOverflowMenus() {
+      document.querySelectorAll('.workspace-overflow-menu.open').forEach(m => m.classList.remove('open'));
+    }
+
+    document.addEventListener('click', closeAllOverflowMenus);
 
     function showWorkspacesStatus(message, type) {
       const el = document.getElementById('workspaces-status-message');
@@ -1862,32 +1934,32 @@
 
         const workspaceKey = workspaceDisplayKey(ws);
         const status = ws.workspace_state || 'present';
-        const statusClass = status === 'present' ? 'healthy' : (status === 'identity_drift' ? 'drifted' : status);
-        const statusLabel = status === 'present'
-          ? 'Healthy'
-          : status === 'identity_drift'
-            ? 'Drifted'
-            : status.charAt(0).toUpperCase() + status.slice(1);
+        const statusClass = status === 'present' ? 'healthy' : status;
+        const statusLabelMap = {
+          present: '',
+          repo_changed: 'Repository Changed',
+          missing: 'Folder Not Found',
+          unavailable: 'Folder Unavailable',
+          conflict: 'Conflict'
+        };
+        const statusLabel = status in statusLabelMap ? statusLabelMap[status] : status.charAt(0).toUpperCase() + status.slice(1);
         const kindLabel = ws.workspace_kind === 'git' ? 'Git' : 'Folder';
         const remote = ws.repo_identity?.primary_remote || '—';
         const resolveAction = status === 'present'
           ? ''
-          : `<button class="workspace-btn warn" onclick="rebindWorkspace(${idx})">Resolve</button>`;
-        const trustLabel = ws.trusted ? 'Trusted' : 'Untrusted';
+          : `<button class="workspace-btn warn" onclick="changeWorkspaceFolder(${idx})">Fix…</button>`;
 
         return `
           <div class="workspace-item" data-workspace-status="${status}">
             <div class="workspace-meta">
-              <span class="workspace-status-badge ${statusClass}">${statusLabel}</span>
-              <span>Key: <code>${workspaceKey || 'unset'}</code></span>
+              ${statusLabel ? `<span class="workspace-status-badge ${statusClass}">${statusLabel}</span>` : ''}
               <span>Type: ${kindLabel}</span>
               <span>Remote: <code>${remote}</code></span>
-              <span>${trustLabel}</span>
             </div>
             <div class="workspace-row">
               <div class="field-group name-field">
-                <div class="field-label">Workspace Key</div>
-                <input type="text" placeholder="my-project" value="${workspaceKey}" oninput="updateWorkspace(${idx}, 'workspace_key', this.value)" onblur="saveWorkspaceField(${idx}, 'workspace_key', this.value)" />
+                <div class="field-label">Name</div>
+                <input type="text" placeholder="my-project" value="${workspaceKey}" oninput="updateWorkspace(${idx}, 'name', this.value)" onblur="saveWorkspaceField(${idx}, 'name', this.value)" />
               </div>
               <div class="field-group editor-field">
                 <div class="field-label">Editor</div>
@@ -1895,19 +1967,22 @@
                   ${defaultOption}${notInstalledOption}${editorOptions}
                 </select>
               </div>
+              <div class="workspace-overflow">
+                <button class="workspace-overflow-btn" onclick="toggleOverflowMenu(event, ${idx})" aria-label="More actions">⋯</button>
+                <div class="workspace-overflow-menu" id="overflow-menu-${idx}">
+                  <button onclick="changeWorkspaceFolder(${idx})">Change Folder…</button>
+                  <button onclick="testWorkspace(${idx})">Open Test File</button>
+                  <div class="menu-divider"></div>
+                  <button class="menu-danger" onclick="removeWorkspace(${idx})">Remove</button>
+                </div>
+              </div>
             </div>
             <div class="workspace-row">
               <div class="field-group path-field">
                 <div class="field-label">Path</div>
                 <input type="text" placeholder="/Users/you/projects/myapp" value="${ws.path || ''}" readonly />
               </div>
-              <div class="workspace-actions">
-                <button class="workspace-btn" onclick="renameWorkspaceKey(${idx})">Rename</button>
-                <button class="workspace-btn" onclick="rebindWorkspace(${idx})">Rebind</button>
-                ${resolveAction}
-                <button class="workspace-btn" onclick="testWorkspace(${idx})">Test</button>
-                <button class="workspace-btn danger" onclick="forgetWorkspace(${idx})">Forget</button>
-              </div>
+              ${resolveAction ? `<div class="workspace-actions">${resolveAction}</div>` : ''}
             </div>
           </div>
         `;
@@ -1932,27 +2007,25 @@
       const items = discoveredWorkspaces.map((ws, idx) => `
         <div class="workspace-item discovered">
           <div class="workspace-meta">
-            <span class="workspace-status-badge healthy">Healthy</span>
-            <span>Key: <code>${ws.workspace_key}</code></span>
             <span>Type: ${ws.workspace_kind === 'git' ? 'Git' : 'Folder'}</span>
             <span>Remote: <code>${ws.primary_remote || '—'}</code></span>
           </div>
           <div class="workspace-row">
             <div class="field-group name-field">
-              <div class="field-label">Workspace Key <span class="badge-auto">auto</span></div>
-              <div style="padding: 0.375rem 0; color: var(--text-primary);">${ws.workspace_key}</div>
+              <div class="field-label">Name <span class="badge-auto">auto</span></div>
+              <div style="padding: 0.375rem 0; color: var(--text-primary);">${ws.name}</div>
             </div>
             <div class="field-group editor-field">
               <div class="field-label">Editor</div>
               <div style="padding: 0.375rem 0; color: var(--text-secondary);">${defaultEditorName} (default)</div>
             </div>
             <div class="workspace-inline-actions">
-              <button class="promote-btn" onclick="promoteWorkspace(${idx}, this)">Customize</button>
+              <button class="promote-btn" onclick="promoteWorkspace(${idx}, this)">Add</button>
               <span
                 class="tooltip"
                 tabindex="0"
-                aria-label="Move this workspace to the main list so you can edit its name and editor."
-                data-tooltip="Move this workspace to the main list so you can edit its name and editor."
+                aria-label="Add to your workspaces so you can customize the name and editor."
+                data-tooltip="Add to your workspaces so you can customize the name and editor."
               >?</span>
               <button class="remove-btn" onclick="deleteDiscoveredWorkspace(${idx})" title="Remove (adds to ignored list)">×</button>
             </div>
@@ -1975,7 +2048,7 @@
 
       try {
         await window.__TAURI__.core.invoke('delete_workspace', { path: ws.path });
-        showWorkspacesStatus('Workspace removed (added to ignored list)', 'success');
+        showWorkspacesStatus('Moved to ignored list', 'success');
         await loadSettings();
       } catch (e) {
         showWorkspacesStatus('Failed to remove workspace: ' + e, 'error');
@@ -1987,21 +2060,21 @@
       if (!ws) return;
 
       if (button) {
-        markButtonBusy(button, 'Customizing...');
+        markButtonBusy(button, 'Adding...');
       }
       try {
         await window.__TAURI__.core.invoke('promote_workspace', {
           path: ws.path,
-          workspace_key: ws.workspace_key
+          name: ws.name
         });
-        showWorkspacesStatus('Workspace moved to the main list', 'success');
+        showWorkspacesStatus('Added to your workspaces', 'success');
         // Reload both lists
         await loadSettings();
         if (button) {
           flashButtonDone(button, 'Ready');
         }
       } catch (e) {
-        showWorkspacesStatus('Failed to promote workspace: ' + e, 'error');
+        showWorkspacesStatus('Failed to add workspace: ' + e, 'error');
       } finally {
         if (button) {
           clearButtonBusy(button);
