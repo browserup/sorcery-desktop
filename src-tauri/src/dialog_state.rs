@@ -51,7 +51,7 @@ pub struct CloneDialogData {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub clone_validation_message: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub suggested_workspace_key: Option<String>,
+    pub suggested_name: Option<String>,
     #[serde(skip)]
     pub git_ref_kind: Option<GitRef>,
 }
@@ -62,7 +62,7 @@ const fn default_clone_allowed() -> bool {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkspaceRepairDialogData {
-    pub workspace_key: String,
+    pub name: String,
     pub workspace_path: String,
     pub workspace_state: String,
     pub file_path: String,
@@ -74,7 +74,7 @@ pub struct WorkspaceRepairDialogData {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkspaceConflictCandidateData {
-    pub workspace_key: String,
+    pub name: String,
     pub workspace_path: String,
     pub workspace_state: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -83,7 +83,7 @@ pub struct WorkspaceConflictCandidateData {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkspaceConflictDialogData {
-    pub workspace_key: String,
+    pub name: String,
     pub requested_remote: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub normalized_remote: Option<String>,

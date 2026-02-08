@@ -178,7 +178,7 @@ async fn configure_workspace(
         .workspaces
         .push(sorcery_desktop::settings::WorkspaceConfig {
             path: workspace_path.to_string(),
-            workspace_key: workspace_name,
+            name: workspace_name,
             editor: "null".to_string(),
             auto_discovered: false,
             trusted: false,
@@ -569,7 +569,7 @@ async fn test_enforced_policy_blocks_non_compliant_workspace_resolution() {
         r#"
 mode: enforced
 mappings:
-  - workspace_key: rails
+  - name: rails
     remote: github.com/rails/rails
 "#,
     )
@@ -613,7 +613,7 @@ async fn test_enforced_policy_blocks_clone_resolution() {
         r#"
 mode: enforced
 mappings:
-  - workspace_key: myrepo
+  - name: myrepo
     remote: github.com/company/myrepo
 allowed_clone_roots:
   - {}

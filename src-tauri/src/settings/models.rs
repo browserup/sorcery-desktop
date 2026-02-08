@@ -7,7 +7,7 @@ pub struct Settings {
     #[serde(default)]
     pub defaults: DefaultEditorConfig,
 
-    #[serde(default, alias = "repos")]
+    #[serde(default)]
     pub workspaces: Vec<WorkspaceConfig>,
 }
 
@@ -35,7 +35,7 @@ pub struct DefaultEditorConfig {
     #[serde(default = "default_terminal")]
     pub preferred_terminal: String,
 
-    #[serde(default = "default_workspaces_folder", alias = "repo_base_dir")]
+    #[serde(default = "default_workspaces_folder")]
     pub default_workspaces_folder: String,
 
     #[serde(default = "default_auto_switch_clean_branches")]
@@ -170,7 +170,7 @@ pub enum WorkspaceState {
     Present,
     Missing,
     Unavailable,
-    IdentityDrift,
+    RepoChanged,
     Conflict,
 }
 
@@ -184,7 +184,7 @@ pub enum PolicyMode {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct WorkspacePolicyMapping {
-    pub workspace_key: String,
+    pub name: String,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub remote: Option<String>,
@@ -230,8 +230,8 @@ pub struct RepoIdentity {
 pub struct WorkspaceConfig {
     pub path: String,
 
-    #[serde(default, alias = "name")]
-    pub workspace_key: String,
+    #[serde(default)]
+    pub name: String,
 
     #[serde(default)]
     pub editor: String,

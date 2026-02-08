@@ -20,27 +20,27 @@ pub struct SettingsManager {
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum SettingsValidationError {
-    #[error("Workspace mapped at '{workspace_path}' must have a non-empty workspace key")]
-    EmptyWorkspaceKey { workspace_path: String },
+    #[error("Workspace mapped at '{workspace_path}' must have a non-empty name")]
+    EmptyWorkspaceName { workspace_path: String },
     #[error(
-        "Workspace key '{workspace_key}' must be unique (paths: '{first_path}' and '{second_path}')"
+        "Workspace name '{workspace_name}' must be unique (paths: '{first_path}' and '{second_path}')"
     )]
-    DuplicateWorkspaceKey {
-        workspace_key: String,
+    DuplicateWorkspaceName {
+        workspace_name: String,
         first_path: String,
         second_path: String,
     },
     #[error(
-        "Workspace path '{workspace_path}' is already mapped (keys: '{first_workspace_key}' and '{second_workspace_key}')"
+        "Workspace path '{workspace_path}' is already mapped (names: '{first_workspace_name}' and '{second_workspace_name}')"
     )]
     DuplicateWorkspacePath {
         workspace_path: String,
-        first_workspace_key: String,
-        second_workspace_key: String,
+        first_workspace_name: String,
+        second_workspace_name: String,
     },
-    #[error("Workspace '{workspace_key}' violates policy: {reason}")]
+    #[error("Workspace '{workspace_name}' violates policy: {reason}")]
     PolicyViolation {
-        workspace_key: String,
+        workspace_name: String,
         reason: String,
     },
 }
@@ -190,13 +190,13 @@ impl SettingsManager {
 
     pub async fn evaluate_clone_policy(
         &self,
-        workspace_key: &str,
+        name: &str,
         remote: Option<&str>,
         target_path: &Path,
     ) -> PolicyDecision {
         let policy = self.policy.read().await;
         policy.as_ref().map_or(PolicyDecision::Allowed, |policy| {
-            policy.evaluate_clone_request(workspace_key, remote, target_path)
+            policy.evaluate_clone_request(name, remote, target_path)
         })
     }
 
@@ -217,23 +217,23 @@ impl SettingsManager {
         None
     }
 
-    pub async fn resolve_workspace_by_key(
+    pub async fn resolve_workspace_by_name(
         &self,
         key: &str,
         remote: Option<&str>,
     ) -> (Vec<WorkspaceConfig>, Vec<WorkspaceConfig>) {
         let mut matched = Vec::new();
-        let mut key_only_matches = Vec::new();
-        let lookup_key = identity::canonical_workspace_key_for_lookup(key);
+        let mut name_only_matches = Vec::new();
+        let lookup_key = identity::canonical_name_for_lookup(key);
         let settings = self.settings.read().await;
 
         for workspace in &settings.workspaces {
-            let workspace_key = identity::derive_workspace_key(workspace);
-            if identity::canonical_workspace_key_for_lookup(&workspace_key) != lookup_key {
+            let name = identity::derive_workspace_name(workspace);
+            if identity::canonical_name_for_lookup(&name) != lookup_key {
                 continue;
             }
 
-            key_only_matches.push(workspace.clone());
+            name_only_matches.push(workspace.clone());
 
             if let Some(remote) = remote {
                 if workspace
@@ -248,7 +248,7 @@ impl SettingsManager {
             }
         }
 
-        (matched, key_only_matches)
+        (matched, name_only_matches)
     }
 
     pub async fn get_workspaces_in_repo_group(
@@ -274,7 +274,7 @@ impl SettingsManager {
             .collect()
     }
 
-    pub async fn reconcile_workspace_states(&self) -> Result<bool> {
+    pub async fn refresh_workspace_states(&self) -> Result<bool> {
         let mut settings = self.settings.write().await;
         let before = settings.workspaces.clone();
         Self::normalize_workspace_paths(&mut settings);
@@ -297,7 +297,7 @@ impl SettingsManager {
                 WorkspaceState::Present => "healthy",
                 WorkspaceState::Missing => "missing",
                 WorkspaceState::Unavailable => "unavailable",
-                WorkspaceState::IdentityDrift => "drifted",
+                WorkspaceState::RepoChanged => "repo_changed",
                 WorkspaceState::Conflict => "conflict",
             };
 
@@ -408,16 +408,16 @@ impl SettingsManager {
             match decision {
                 PolicyDecision::Allowed => {}
                 PolicyDecision::AdvisoryViolation(violation) => {
-                    let workspace_key = identity::derive_workspace_key(workspace);
+                    let name = identity::derive_workspace_name(workspace);
                     warn!(
                         "Policy advisory for workspace '{}': {}",
-                        workspace_key, violation
+                        name, violation
                     );
                 }
                 PolicyDecision::EnforcedViolation(violation) => {
-                    let workspace_key = identity::derive_workspace_key(workspace);
+                    let name = identity::derive_workspace_name(workspace);
                     return Err(SettingsValidationError::PolicyViolation {
-                        workspace_key,
+                        workspace_name: name,
                         reason: violation.to_string(),
                     }
                     .into());
@@ -430,14 +430,14 @@ impl SettingsManager {
 
     fn normalize_workspace_paths(settings: &mut Settings) {
         for workspace in &mut settings.workspaces {
-            let previous_key = workspace.workspace_key.clone();
+            let previous_name = workspace.name.clone();
             let previous_kind = workspace.workspace_kind;
             let previous_state = workspace.workspace_state;
             let previous_repo_identity = workspace.repo_identity.clone();
             let previous_normalized_path = workspace.normalized_path.clone();
 
-            let workspace_key = identity::derive_workspace_key(workspace);
-            workspace.workspace_key = workspace_key.clone();
+            let name = identity::derive_workspace_name(workspace);
+            workspace.name = name.clone();
 
             match Self::normalize_path(&workspace.path) {
                 Ok(normalized) => {
@@ -478,7 +478,7 @@ impl SettingsManager {
             }
 
             if workspace.workspace_state == WorkspaceState::Present {
-                let kind_drifted_from_git = matches!(previous_kind, super::WorkspaceKind::Git)
+                let kind_changed_from_git = matches!(previous_kind, super::WorkspaceKind::Git)
                     && !matches!(workspace.workspace_kind, super::WorkspaceKind::Git);
                 let primary_remote_changed = previous_repo_identity
                     .as_ref()
@@ -489,13 +489,13 @@ impl SettingsManager {
                         .and_then(|identity| identity.primary_remote.as_ref());
                 let had_previous_identity = previous_repo_identity.is_some();
 
-                if kind_drifted_from_git || (had_previous_identity && primary_remote_changed) {
-                    workspace.workspace_state = WorkspaceState::IdentityDrift;
+                if kind_changed_from_git || (had_previous_identity && primary_remote_changed) {
+                    workspace.workspace_state = WorkspaceState::RepoChanged;
                     workspace.trusted = false;
                 }
             }
 
-            let changed = workspace.workspace_key != previous_key
+            let changed = workspace.name != previous_name
                 || workspace.workspace_kind != previous_kind
                 || workspace.workspace_state != previous_state
                 || workspace.repo_identity != previous_repo_identity
@@ -508,23 +508,23 @@ impl SettingsManager {
 
         Self::mark_workspace_conflicts(settings);
 
-        // Validate workspace keys
-        Self::validate_workspace_keys(settings);
+        // Validate workspace names
+        Self::validate_workspace_names(settings);
     }
 
-    /// Validate workspace keys and warn about those containing dots.
-    /// Workspace keys with dots are ambiguous with provider hostnames (e.g., github.com).
-    /// Use ?workspace= escape hatch in URLs to reference dot-containing workspace keys.
-    fn validate_workspace_keys(settings: &Settings) {
+    /// Warn about workspace names containing dots.
+    /// Names with dots are ambiguous with provider hostnames (e.g., github.com).
+    /// Use ?workspace= escape hatch in URLs to reference dot-containing names.
+    fn validate_workspace_names(settings: &Settings) {
         for workspace in &settings.workspaces {
-            let key = identity::derive_workspace_key(workspace);
+            let name = identity::derive_workspace_name(workspace);
 
-            if key.contains('.') {
+            if name.contains('.') {
                 warn!(
-                    "Workspace '{}' contains a dot in its key. \
+                    "Workspace '{}' contains a dot in its name. \
                      This may be confused with provider hostnames (e.g., github.com). \
                      Consider renaming, or use ?workspace={} in URLs to reference it explicitly.",
-                    key, key
+                    name, name
                 );
             }
         }
@@ -535,8 +535,8 @@ impl SettingsManager {
 
         let mut key_to_indices: HashMap<String, Vec<usize>> = HashMap::new();
         for (index, workspace) in settings.workspaces.iter().enumerate() {
-            let key = identity::canonical_workspace_key_for_lookup(
-                &identity::derive_workspace_key(workspace),
+            let key = identity::canonical_name_for_lookup(
+                &identity::derive_workspace_name(workspace),
             );
             key_to_indices.entry(key).or_default().push(index);
         }
@@ -625,22 +625,22 @@ impl SettingsManager {
     fn validate_workspace_uniqueness(
         settings: &Settings,
     ) -> std::result::Result<(), SettingsValidationError> {
-        let mut workspace_keys: HashMap<String, String> = HashMap::new();
+        let mut seen_names: HashMap<String, String> = HashMap::new();
 
         for workspace in &settings.workspaces {
-            let workspace_key = identity::derive_workspace_key(workspace);
-            if workspace_key.is_empty() {
-                return Err(SettingsValidationError::EmptyWorkspaceKey {
+            let name = identity::derive_workspace_name(workspace);
+            if name.is_empty() {
+                return Err(SettingsValidationError::EmptyWorkspaceName {
                     workspace_path: workspace.path.clone(),
                 });
             }
-            let canonical_key = identity::canonical_workspace_key_for_lookup(&workspace_key);
+            let canonical = identity::canonical_name_for_lookup(&name);
             let path = workspace.path.clone();
 
-            if let Some(existing_path) = workspace_keys.insert(canonical_key.clone(), path.clone())
+            if let Some(existing_path) = seen_names.insert(canonical.clone(), path.clone())
             {
-                return Err(SettingsValidationError::DuplicateWorkspaceKey {
-                    workspace_key: canonical_key,
+                return Err(SettingsValidationError::DuplicateWorkspaceName {
+                    workspace_name: canonical,
                     first_path: existing_path,
                     second_path: path,
                 });
@@ -657,14 +657,14 @@ impl SettingsManager {
                 continue;
             }
 
-            let workspace_key = identity::derive_workspace_key(workspace);
-            if let Some(existing_workspace_key) =
-                normalized_paths.insert(path.clone(), workspace_key.clone())
+            let name = identity::derive_workspace_name(workspace);
+            if let Some(existing_name) =
+                normalized_paths.insert(path.clone(), name.clone())
             {
                 return Err(SettingsValidationError::DuplicateWorkspacePath {
                     workspace_path: path.to_string_lossy().to_string(),
-                    first_workspace_key: existing_workspace_key,
-                    second_workspace_key: workspace_key,
+                    first_workspace_name: existing_name,
+                    second_workspace_name: name,
                 });
             }
         }
@@ -703,14 +703,14 @@ mod tests {
     use tempfile::TempDir;
 
     fn workspace_config(path: String) -> WorkspaceConfig {
-        let workspace_key = Path::new(&path)
+        let name = Path::new(&path)
             .file_name()
-            .and_then(|name| name.to_str())
-            .filter(|name| !name.trim().is_empty())
+            .and_then(|n| n.to_str())
+            .filter(|n| !n.trim().is_empty())
             .map_or_else(|| "workspace".to_string(), ToString::to_string);
         WorkspaceConfig {
             path,
-            workspace_key,
+            name,
             editor: String::new(),
             auto_discovered: false,
             trusted: false,
@@ -723,7 +723,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn load_rejects_empty_workspace_keys() {
+    async fn load_rejects_empty_workspace_names() {
         let temp_dir = TempDir::new().expect("temp dir");
         let settings_path = temp_dir.path().join("settings.yaml");
         let invalid_workspace_path = temp_dir.path().join("repo");
@@ -734,7 +734,7 @@ defaults:
   editor: "vscode"
 workspaces:
   - path: "{}"
-    workspace_key: ""
+    name: ""
 "#,
             invalid_workspace_path.to_string_lossy()
         );
@@ -747,19 +747,19 @@ workspaces:
         let error = manager
             .load()
             .await
-            .expect_err("empty workspace key must be rejected on load");
+            .expect_err("empty workspace name must be rejected on load");
         let validation_error = error
             .downcast_ref::<SettingsValidationError>()
             .expect("validation error");
         assert!(matches!(
             validation_error,
-            SettingsValidationError::EmptyWorkspaceKey { workspace_path }
+            SettingsValidationError::EmptyWorkspaceName { workspace_path }
                 if workspace_path == &invalid_workspace_path.to_string_lossy().to_string()
         ));
     }
 
     #[tokio::test]
-    async fn load_accepts_legacy_name_field_as_workspace_key() {
+    async fn load_accepts_name_field() {
         let temp_dir = TempDir::new().expect("temp dir");
         let settings_path = temp_dir.path().join("settings.yaml");
         let workspace_path = temp_dir.path().join("repo");
@@ -780,11 +780,11 @@ workspaces:
         let manager = SettingsManager::new_with_path(settings_path)
             .await
             .expect("settings manager");
-        manager.load().await.expect("legacy name field should load");
+        manager.load().await.expect("name field should load");
 
         let settings = manager.get().await;
         assert_eq!(settings.workspaces.len(), 1);
-        assert_eq!(settings.workspaces[0].workspace_key, "repo");
+        assert_eq!(settings.workspaces[0].name, "repo");
     }
 
     #[tokio::test]
@@ -849,7 +849,7 @@ workspaces:
     }
 
     #[tokio::test]
-    async fn duplicate_workspace_keys_are_rejected_on_save() {
+    async fn duplicate_workspace_names_are_rejected_on_save() {
         let temp_dir = TempDir::new().expect("temp dir");
         let settings_path = temp_dir.path().join("settings.yaml");
         let manager = SettingsManager::new_with_path(settings_path)
@@ -864,7 +864,7 @@ workspaces:
         let mut settings = Settings::default();
         settings.workspaces.push(WorkspaceConfig {
             path: workspace_a.to_string_lossy().to_string(),
-            workspace_key: "rails".to_string(),
+            name: "rails".to_string(),
             editor: String::new(),
             auto_discovered: false,
             trusted: false,
@@ -876,7 +876,7 @@ workspaces:
         });
         settings.workspaces.push(WorkspaceConfig {
             path: workspace_b.to_string_lossy().to_string(),
-            workspace_key: "rails".to_string(),
+            name: "rails".to_string(),
             editor: String::new(),
             auto_discovered: false,
             trusted: false,
@@ -890,14 +890,14 @@ workspaces:
         let error = manager
             .save(settings)
             .await
-            .expect_err("duplicate workspace keys must be rejected");
+            .expect_err("duplicate workspace names must be rejected");
         let validation_error = error
             .downcast_ref::<SettingsValidationError>()
             .expect("validation error");
         assert!(matches!(
             validation_error,
-            SettingsValidationError::DuplicateWorkspaceKey { workspace_key, .. }
-                if workspace_key == "rails"
+            SettingsValidationError::DuplicateWorkspaceName { workspace_name, .. }
+                if workspace_name == "rails"
         ));
     }
 
@@ -915,7 +915,7 @@ workspaces:
         let mut settings = Settings::default();
         settings.workspaces.push(WorkspaceConfig {
             path: workspace_path.to_string_lossy().to_string(),
-            workspace_key: "workspace-a".to_string(),
+            name: "workspace-a".to_string(),
             editor: String::new(),
             auto_discovered: false,
             trusted: false,
@@ -927,7 +927,7 @@ workspaces:
         });
         settings.workspaces.push(WorkspaceConfig {
             path: workspace_path.to_string_lossy().to_string(),
-            workspace_key: "workspace-b".to_string(),
+            name: "workspace-b".to_string(),
             editor: String::new(),
             auto_discovered: false,
             trusted: false,
@@ -948,15 +948,15 @@ workspaces:
         assert!(matches!(
             validation_error,
             SettingsValidationError::DuplicateWorkspacePath {
-                first_workspace_key,
-                second_workspace_key,
+                first_workspace_name,
+                second_workspace_name,
                 ..
-            } if first_workspace_key == "workspace-a" && second_workspace_key == "workspace-b"
+            } if first_workspace_name == "workspace-a" && second_workspace_name == "workspace-b"
         ));
     }
 
     #[tokio::test]
-    async fn empty_workspace_keys_are_rejected_on_save() {
+    async fn empty_workspace_names_are_rejected_on_save() {
         let temp_dir = TempDir::new().expect("temp dir");
         let settings_path = temp_dir.path().join("settings.yaml");
         let manager = SettingsManager::new_with_path(settings_path)
@@ -971,7 +971,7 @@ workspaces:
         let mut settings = Settings::default();
         settings.workspaces.push(WorkspaceConfig {
             path: first_workspace.to_string_lossy().to_string(),
-            workspace_key: String::new(),
+            name: String::new(),
             editor: String::new(),
             auto_discovered: false,
             trusted: false,
@@ -983,7 +983,7 @@ workspaces:
         });
         settings.workspaces.push(WorkspaceConfig {
             path: second_workspace.to_string_lossy().to_string(),
-            workspace_key: String::new(),
+            name: String::new(),
             editor: String::new(),
             auto_discovered: false,
             trusted: false,
@@ -997,19 +997,19 @@ workspaces:
         let error = manager
             .save(settings)
             .await
-            .expect_err("empty workspace key must be rejected");
+            .expect_err("empty workspace name must be rejected");
         let validation_error = error
             .downcast_ref::<SettingsValidationError>()
             .expect("validation error");
         assert!(matches!(
             validation_error,
-            SettingsValidationError::EmptyWorkspaceKey { workspace_path }
+            SettingsValidationError::EmptyWorkspaceName { workspace_path }
                 if workspace_path == &first_workspace.to_string_lossy().to_string()
         ));
     }
 
     #[tokio::test]
-    async fn workspace_key_is_trimmed_on_save() {
+    async fn workspace_name_is_trimmed_on_save() {
         let temp_dir = TempDir::new().expect("temp dir");
         let settings_path = temp_dir.path().join("settings.yaml");
         let manager = SettingsManager::new_with_path(settings_path)
@@ -1022,7 +1022,7 @@ workspaces:
         let mut settings = Settings::default();
         settings.workspaces.push(WorkspaceConfig {
             path: workspace_path.to_string_lossy().to_string(),
-            workspace_key: "  nexty  ".to_string(),
+            name: "  nexty  ".to_string(),
             editor: String::new(),
             auto_discovered: false,
             trusted: false,
@@ -1036,7 +1036,7 @@ workspaces:
 
         let saved = manager.get().await;
         assert_eq!(saved.workspaces.len(), 1);
-        assert_eq!(saved.workspaces[0].workspace_key, "nexty");
+        assert_eq!(saved.workspaces[0].name, "nexty");
     }
 
     #[tokio::test]
@@ -1055,7 +1055,7 @@ workspaces:
         let mut settings = Settings::default();
         settings.workspaces.push(WorkspaceConfig {
             path: workspace_path.to_string_lossy().to_string(),
-            workspace_key: "perforce-project".to_string(),
+            name: "perforce-project".to_string(),
             editor: String::new(),
             auto_discovered: false,
             trusted: false,
@@ -1075,7 +1075,7 @@ workspaces:
     }
 
     #[tokio::test]
-    async fn duplicate_key_is_rejected_when_existing_mapping_is_missing() {
+    async fn duplicate_name_is_rejected_when_existing_mapping_is_missing() {
         let temp_dir = TempDir::new().expect("temp dir");
         let settings_path = temp_dir.path().join("settings.yaml");
         let manager = SettingsManager::new_with_path(settings_path)
@@ -1089,7 +1089,7 @@ workspaces:
         let mut settings = Settings::default();
         settings.workspaces.push(WorkspaceConfig {
             path: missing_workspace.to_string_lossy().to_string(),
-            workspace_key: "myapp".to_string(),
+            name: "myapp".to_string(),
             editor: String::new(),
             auto_discovered: false,
             trusted: false,
@@ -1101,7 +1101,7 @@ workspaces:
         });
         settings.workspaces.push(WorkspaceConfig {
             path: present_workspace.to_string_lossy().to_string(),
-            workspace_key: "myapp".to_string(),
+            name: "myapp".to_string(),
             editor: String::new(),
             auto_discovered: false,
             trusted: false,
@@ -1115,19 +1115,19 @@ workspaces:
         let error = manager
             .save(settings)
             .await
-            .expect_err("duplicate key must be rejected even if one mapping is missing");
+            .expect_err("duplicate name must be rejected even if one mapping is missing");
         let validation_error = error
             .downcast_ref::<SettingsValidationError>()
             .expect("validation error");
         assert!(matches!(
             validation_error,
-            SettingsValidationError::DuplicateWorkspaceKey { workspace_key, .. }
-                if workspace_key == "myapp"
+            SettingsValidationError::DuplicateWorkspaceName { workspace_name, .. }
+                if workspace_name == "myapp"
         ));
     }
 
     #[tokio::test]
-    async fn reconcile_marks_identity_drift_when_remote_changes() {
+    async fn refresh_marks_repo_changed_when_remote_changes() {
         let temp_dir = TempDir::new().expect("temp dir");
         let settings_path = temp_dir.path().join("settings.yaml");
         let manager = SettingsManager::new_with_path(settings_path)
@@ -1156,7 +1156,7 @@ workspaces:
         let mut settings = Settings::default();
         settings.workspaces.push(WorkspaceConfig {
             path: workspace_path.to_string_lossy().to_string(),
-            workspace_key: "repo".to_string(),
+            name: "repo".to_string(),
             editor: String::new(),
             auto_discovered: false,
             trusted: true,
@@ -1179,9 +1179,9 @@ workspaces:
         );
 
         manager
-            .reconcile_workspace_states()
+            .refresh_workspace_states()
             .await
-            .expect("reconcile workspace states");
+            .expect("refresh workspace states");
 
         let refreshed = manager.get().await;
         assert_eq!(refreshed.workspaces.len(), 1);
@@ -1191,7 +1191,7 @@ workspaces:
             .as_ref()
             .and_then(|identity| identity.primary_remote.clone());
         assert_eq!(refreshed_remote, Some("github.com/org/repo-b".to_string()));
-        assert_eq!(workspace.workspace_state, WorkspaceState::IdentityDrift);
+        assert_eq!(workspace.workspace_state, WorkspaceState::RepoChanged);
         assert!(!workspace.trusted);
     }
 
@@ -1214,7 +1214,7 @@ workspaces:
         let mut settings = Settings::default();
         settings.workspaces.push(WorkspaceConfig {
             path: workspace_real_path.to_string_lossy().to_string(),
-            workspace_key: "workspace".to_string(),
+            name: "workspace".to_string(),
             editor: String::new(),
             auto_discovered: false,
             trusted: true,
@@ -1249,7 +1249,7 @@ workspaces:
         let mut settings = Settings::default();
         settings.workspaces.push(WorkspaceConfig {
             path: workspace_real_path.to_string_lossy().to_string(),
-            workspace_key: "workspace".to_string(),
+            name: "workspace".to_string(),
             editor: String::new(),
             auto_discovered: false,
             trusted: false,
@@ -1303,7 +1303,7 @@ workspaces:
         let mut settings = Settings::default();
         settings.workspaces.push(WorkspaceConfig {
             path: repo_path.to_string_lossy().to_string(),
-            workspace_key: "repo-main".to_string(),
+            name: "repo-main".to_string(),
             editor: String::new(),
             auto_discovered: false,
             trusted: false,
@@ -1315,7 +1315,7 @@ workspaces:
         });
         settings.workspaces.push(WorkspaceConfig {
             path: feature_path.to_string_lossy().to_string(),
-            workspace_key: "repo-feature".to_string(),
+            name: "repo-feature".to_string(),
             editor: String::new(),
             auto_discovered: false,
             trusted: false,
@@ -1331,7 +1331,7 @@ workspaces:
         let repo_identity = saved
             .workspaces
             .iter()
-            .find(|workspace| workspace.workspace_key == "repo-main")
+            .find(|workspace| workspace.name == "repo-main")
             .and_then(|workspace| workspace.repo_identity.clone())
             .expect("repo identity");
 
@@ -1371,7 +1371,7 @@ workspaces:
             r#"
 mode: enforced
 mappings:
-  - workspace_key: rails
+  - name: rails
     remote: github.com/rails/rails
 "#,
         )
@@ -1381,7 +1381,7 @@ mappings:
         let mut settings = Settings::default();
         settings.workspaces.push(WorkspaceConfig {
             path: workspace_path.to_string_lossy().to_string(),
-            workspace_key: "rails".to_string(),
+            name: "rails".to_string(),
             editor: String::new(),
             auto_discovered: false,
             trusted: false,
@@ -1402,8 +1402,8 @@ mappings:
 
         assert!(matches!(
             validation,
-            SettingsValidationError::PolicyViolation { workspace_key, .. }
-                if workspace_key == "rails"
+            SettingsValidationError::PolicyViolation { workspace_name, .. }
+                if workspace_name == "rails"
         ));
     }
 
@@ -1439,7 +1439,7 @@ mappings:
             r#"
 mode: advisory
 mappings:
-  - workspace_key: rails
+  - name: rails
     remote: github.com/rails/rails
 "#,
         )
@@ -1449,7 +1449,7 @@ mappings:
         let mut settings = Settings::default();
         settings.workspaces.push(WorkspaceConfig {
             path: workspace_path.to_string_lossy().to_string(),
-            workspace_key: "rails".to_string(),
+            name: "rails".to_string(),
             editor: String::new(),
             auto_discovered: false,
             trusted: false,
@@ -1482,7 +1482,7 @@ mappings:
         let mut settings = Settings::default();
         settings.workspaces.push(WorkspaceConfig {
             path: manual_workspace.to_string_lossy().to_string(),
-            workspace_key: "manual-workspace".to_string(),
+            name: "manual-workspace".to_string(),
             editor: String::new(),
             auto_discovered: false,
             trusted: false,
@@ -1494,7 +1494,7 @@ mappings:
         });
         settings.workspaces.push(WorkspaceConfig {
             path: discovered_workspace.to_string_lossy().to_string(),
-            workspace_key: "discovered-workspace".to_string(),
+            name: "discovered-workspace".to_string(),
             editor: String::new(),
             auto_discovered: true,
             trusted: false,
@@ -1510,9 +1510,9 @@ mappings:
         std::fs::remove_dir_all(&discovered_workspace).expect("delete discovered workspace");
 
         manager
-            .reconcile_workspace_states()
+            .refresh_workspace_states()
             .await
-            .expect("reconcile workspace states");
+            .expect("refresh workspace states");
 
         let saved = manager.get().await;
         assert_eq!(saved.workspaces.len(), 2);
@@ -1520,7 +1520,7 @@ mappings:
         let manual = saved
             .workspaces
             .iter()
-            .find(|workspace| workspace.workspace_key == "manual-workspace")
+            .find(|workspace| workspace.name == "manual-workspace")
             .expect("manual workspace");
         assert_eq!(manual.workspace_state, WorkspaceState::Missing);
         assert!(!manual.auto_discovered);
@@ -1528,14 +1528,14 @@ mappings:
         let discovered = saved
             .workspaces
             .iter()
-            .find(|workspace| workspace.workspace_key == "discovered-workspace")
+            .find(|workspace| workspace.name == "discovered-workspace")
             .expect("discovered workspace");
         assert_eq!(discovered.workspace_state, WorkspaceState::Missing);
         assert!(discovered.auto_discovered);
     }
 
     #[tokio::test]
-    async fn reconcile_marks_identity_drift_when_repo_is_recreated_with_different_remote() {
+    async fn refresh_marks_repo_changed_when_repo_is_recreated_with_different_remote() {
         let temp_dir = TempDir::new().expect("temp dir");
         let settings_path = temp_dir.path().join("settings.yaml");
         let manager = SettingsManager::new_with_path(settings_path)
@@ -1548,7 +1548,7 @@ mappings:
         let mut settings = Settings::default();
         settings.workspaces.push(WorkspaceConfig {
             path: workspace_path.to_string_lossy().to_string(),
-            workspace_key: "repo".to_string(),
+            name: "repo".to_string(),
             editor: String::new(),
             auto_discovered: false,
             trusted: true,
@@ -1562,9 +1562,9 @@ mappings:
 
         std::fs::remove_dir_all(&workspace_path).expect("delete workspace");
         manager
-            .reconcile_workspace_states()
+            .refresh_workspace_states()
             .await
-            .expect("reconcile missing workspace");
+            .expect("refresh missing workspace");
 
         let missing = manager.get().await;
         let missing_workspace = &missing.workspaces[0];
@@ -1577,15 +1577,15 @@ mappings:
 
         initialize_git_workspace_with_remote(&workspace_path, "https://github.com/org/repo-b.git");
         manager
-            .reconcile_workspace_states()
+            .refresh_workspace_states()
             .await
-            .expect("reconcile recreated workspace");
+            .expect("refresh recreated workspace");
 
         let recreated = manager.get().await;
         let recreated_workspace = &recreated.workspaces[0];
         assert_eq!(
             recreated_workspace.workspace_state,
-            WorkspaceState::IdentityDrift
+            WorkspaceState::RepoChanged
         );
         assert!(!recreated_workspace.trusted);
         let recreated_remote = recreated_workspace
@@ -1619,7 +1619,7 @@ mappings:
         let mut settings = Settings::default();
         settings.workspaces.push(WorkspaceConfig {
             path: repo_path.to_string_lossy().to_string(),
-            workspace_key: "repo-main".to_string(),
+            name: "repo-main".to_string(),
             editor: String::new(),
             auto_discovered: false,
             trusted: false,
@@ -1645,7 +1645,7 @@ mappings:
             .modify(|settings| {
                 settings.workspaces.push(WorkspaceConfig {
                     path: worktree_path.to_string_lossy().to_string(),
-                    workspace_key: "repo-feature".to_string(),
+                    name: "repo-feature".to_string(),
                     editor: String::new(),
                     auto_discovered: false,
                     trusted: false,
@@ -1666,7 +1666,7 @@ mappings:
         let repo_identity = saved
             .workspaces
             .iter()
-            .find(|workspace| workspace.workspace_key == "repo-main")
+            .find(|workspace| workspace.name == "repo-main")
             .and_then(|workspace| workspace.repo_identity.clone())
             .expect("repo identity");
 

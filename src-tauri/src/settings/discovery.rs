@@ -81,7 +81,7 @@ impl WorkspaceSync {
 
                     settings.workspaces.push(WorkspaceConfig {
                         path: repo.to_string_lossy().to_string(),
-                        workspace_key: name,
+                        name,
                         editor: String::new(),
                         auto_discovered: true,
                         trusted: false,

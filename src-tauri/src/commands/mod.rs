@@ -74,7 +74,7 @@ pub struct WorkspaceDisplayInfo {
     pub path: String,
     pub editor: Option<String>,
     pub is_discovered: bool,
-    pub workspace_key: String,
+    pub name: String,
     pub workspace_kind: String,
     pub workspace_state: String,
     pub primary_remote: Option<String>,
@@ -92,7 +92,7 @@ pub struct WorkspaceHealthSummary {
     pub healthy: usize,
     pub missing: usize,
     pub unavailable: usize,
-    pub drifted: usize,
+    pub repo_changed: usize,
     pub conflict: usize,
 }
 
@@ -104,7 +104,7 @@ fn workspace_health_summary_from_counts(
         healthy: counts.get("healthy").copied().unwrap_or(0),
         missing: counts.get("missing").copied().unwrap_or(0),
         unavailable: counts.get("unavailable").copied().unwrap_or(0),
-        drifted: counts.get("drifted").copied().unwrap_or(0),
+        repo_changed: counts.get("repo_changed").copied().unwrap_or(0),
         conflict: counts.get("conflict").copied().unwrap_or(0),
     }
 }
@@ -127,7 +127,7 @@ pub async fn get_all_workspaces(
                 Some(ws.editor.clone())
             },
             is_discovered: ws.auto_discovered,
-            workspace_key: identity::derive_workspace_key(ws),
+            name: identity::derive_workspace_name(ws),
             workspace_kind: match ws.workspace_kind {
                 WorkspaceKind::Git => "git".to_string(),
                 WorkspaceKind::NonGit => "folder".to_string(),
@@ -136,7 +136,7 @@ pub async fn get_all_workspaces(
                 WorkspaceState::Present => "healthy".to_string(),
                 WorkspaceState::Missing => "missing".to_string(),
                 WorkspaceState::Unavailable => "unavailable".to_string(),
-                WorkspaceState::IdentityDrift => "drifted".to_string(),
+                WorkspaceState::RepoChanged => "repo_changed".to_string(),
                 WorkspaceState::Conflict => "conflict".to_string(),
             },
             primary_remote: ws
@@ -168,12 +168,12 @@ pub async fn get_workspace_health_summary(
 }
 
 #[tauri::command]
-pub async fn reconcile_workspace_states(
+pub async fn refresh_workspace_states(
     app: tauri::AppHandle,
     settings_manager: State<'_, Arc<SettingsManager>>,
 ) -> Result<WorkspaceHealthSummary, String> {
     let changed = settings_manager
-        .reconcile_workspace_states()
+        .refresh_workspace_states()
         .await
         .map_err(|e| e.to_string())?;
     let counts = settings_manager.get_workspace_health_counts().await;
@@ -188,15 +188,15 @@ pub async fn reconcile_workspace_states(
 pub async fn promote_workspace(
     settings_manager: State<'_, Arc<SettingsManager>>,
     path: String,
-    workspace_key: String,
+    name: String,
 ) -> Result<(), String> {
-    promote_workspace_impl(&settings_manager, &path, &workspace_key).await
+    promote_workspace_impl(&settings_manager, &path, &name).await
 }
 
 async fn promote_workspace_impl(
     settings_manager: &SettingsManager,
     path: &str,
-    workspace_key: &str,
+    name: &str,
 ) -> Result<(), String> {
     let mut settings = settings_manager.get().await;
 
@@ -208,7 +208,7 @@ async fn promote_workspace_impl(
             .normalized_path
             .as_ref()
             .is_some_and(|existing| existing == &target_path)
-            || PathBuf::from(shellexpand::tilde(&workspace.path).as_ref()) == target_path;
+            || target_path == *shellexpand::tilde(&workspace.path).as_ref();
 
         if !matches_path {
             continue;
@@ -219,7 +219,7 @@ async fn promote_workspace_impl(
         }
 
         workspace.auto_discovered = false;
-        workspace.workspace_key = workspace_key.to_string();
+        workspace.name = name.to_string();
         workspace.normalized_path = Some(target_path);
 
         return settings_manager
@@ -230,7 +230,7 @@ async fn promote_workspace_impl(
 
     settings.workspaces.push(crate::settings::WorkspaceConfig {
         path: path.to_string(),
-        workspace_key: workspace_key.to_string(),
+        name: name.to_string(),
         editor: String::new(),
         auto_discovered: false,
         trusted: false,
@@ -815,7 +815,7 @@ pub async fn test_protocol_url(
                 git_ref: git_ref_str,
                 clone_allowed: true,
                 clone_validation_message: None,
-                suggested_workspace_key: None,
+                suggested_name: None,
                 git_ref_kind: git_ref,
             });
 
@@ -844,7 +844,7 @@ pub async fn test_protocol_url(
             Ok(())
         }
         Ok(HandleResult::ShowWorkspaceRepairDialog {
-            workspace_key,
+            name,
             workspace_path,
             workspace_state,
             file_path,
@@ -856,11 +856,11 @@ pub async fn test_protocol_url(
                 &url,
                 true,
                 "workspace_repair_dialog",
-                &format!("Workspace '{workspace_key}' is '{workspace_state_label}'"),
+                &format!("Workspace '{name}' is '{workspace_state_label}'"),
                 duration,
             );
             dialog_state.set_workspace_repair_dialog(WorkspaceRepairDialogData {
-                workspace_key,
+                name,
                 workspace_path,
                 workspace_state: workspace_state_label,
                 file_path,
@@ -915,7 +915,7 @@ pub async fn test_protocol_url(
                 duration,
             );
             dialog_state.set_workspace_conflict_dialog(WorkspaceConflictDialogData {
-                workspace_key: workspace_name,
+                name: workspace_name,
                 requested_remote: requested_remote.clone(),
                 normalized_remote: identity::normalize_remote_identity(&requested_remote),
                 policy_violation,
@@ -927,7 +927,7 @@ pub async fn test_protocol_url(
                 candidates: existing_mappings
                     .into_iter()
                     .map(|workspace| WorkspaceConflictCandidateData {
-                        workspace_key: identity::derive_workspace_key(&workspace),
+                        name: identity::derive_workspace_name(&workspace),
                         workspace_path: workspace
                             .normalized_path
                             .as_ref()
@@ -1183,16 +1183,16 @@ pub async fn clone_and_open(
     clone_result.map_err(|e| e.to_string())?;
 
     let target_path = PathBuf::from(&data.clone_path);
-    let workspace_key = data
-        .suggested_workspace_key
+    let name = data
+        .suggested_name
         .clone()
-        .unwrap_or_else(|| derive_workspace_key_from_path(&target_path, &data.workspace_name));
+        .unwrap_or_else(|| derive_workspace_name_from_path(&target_path, &data.workspace_name));
 
     // Add new workspace to settings
     let mut settings = settings_manager.get().await;
     settings.workspaces.push(crate::settings::WorkspaceConfig {
         path: data.clone_path.clone(),
-        workspace_key,
+        name,
         editor: String::new(),
         auto_discovered: false,
         trusted: false,
@@ -1264,52 +1264,52 @@ pub fn get_workspace_repair_dialog_data(
 }
 
 #[tauri::command]
-pub async fn rename_workspace_key(
-    workspace_key: String,
-    new_workspace_key: String,
+pub async fn rename_workspace(
+    name: String,
+    new_name: String,
     settings_manager: State<'_, Arc<SettingsManager>>,
 ) -> Result<(), String> {
-    rename_workspace_key_impl(
+    rename_workspace_impl(
         settings_manager.inner().as_ref(),
-        &workspace_key,
-        &new_workspace_key,
+        &name,
+        &new_name,
     )
     .await
 }
 
-async fn rename_workspace_key_impl(
+async fn rename_workspace_impl(
     settings_manager: &SettingsManager,
-    workspace_key: &str,
-    new_workspace_key: &str,
+    name: &str,
+    new_name: &str,
 ) -> Result<(), String> {
-    let desired_key = new_workspace_key.trim();
-    if desired_key.is_empty() {
-        return Err("Workspace key cannot be empty".to_string());
+    let desired = new_name.trim();
+    if desired.is_empty() {
+        return Err("Workspace name cannot be empty".to_string());
     }
 
     settings_manager
         .modify(|settings| {
-            let lookup_key = identity::canonical_workspace_key_for_lookup(workspace_key);
+            let lookup_key = identity::canonical_name_for_lookup(name);
             let mut found = false;
 
             for workspace in &mut settings.workspaces {
-                if !workspace_matches_lookup_key(workspace, &lookup_key) {
+                if !workspace_matches_lookup_name(workspace, &lookup_key) {
                     continue;
                 }
 
-                let current_key = identity::derive_workspace_key(workspace);
-                if current_key == desired_key {
+                let current = identity::derive_workspace_name(workspace);
+                if current == desired {
                     return Ok(((), false));
                 }
 
-                workspace.workspace_key = desired_key.to_string();
+                workspace.name = desired.to_string();
                 workspace.auto_discovered = false;
                 found = true;
                 break;
             }
 
             if !found {
-                return Err(anyhow::anyhow!("Workspace key '{workspace_key}' not found"));
+                return Err(anyhow::anyhow!("Workspace '{}' not found", name));
             }
 
             Ok(((), true))
@@ -1319,25 +1319,25 @@ async fn rename_workspace_key_impl(
 }
 
 #[tauri::command]
-pub async fn rebind_workspace_path(
-    workspace_key: String,
+pub async fn change_workspace_folder(
+    name: String,
     new_path: String,
     settings_manager: State<'_, Arc<SettingsManager>>,
 ) -> Result<(), String> {
-    rebind_workspace_path_impl(settings_manager.inner().as_ref(), &workspace_key, &new_path).await
+    change_workspace_folder_impl(settings_manager.inner().as_ref(), &name, &new_path).await
 }
 
-async fn rebind_workspace_path_impl(
+async fn change_workspace_folder_impl(
     settings_manager: &SettingsManager,
-    workspace_key: &str,
+    name: &str,
     new_path: &str,
 ) -> Result<(), String> {
     settings_manager
         .modify(|settings| {
-            let lookup_key = identity::canonical_workspace_key_for_lookup(workspace_key);
+            let lookup_key = identity::canonical_name_for_lookup(name);
 
             for workspace in &mut settings.workspaces {
-                if !workspace_matches_lookup_key(workspace, &lookup_key) {
+                if !workspace_matches_lookup_name(workspace, &lookup_key) {
                     continue;
                 }
 
@@ -1347,35 +1347,35 @@ async fn rebind_workspace_path_impl(
                 return Ok(((), true));
             }
 
-            Err(anyhow::anyhow!("Workspace key '{workspace_key}' not found"))
+            Err(anyhow::anyhow!("Workspace '{}' not found", name))
         })
         .await
         .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub async fn forget_workspace_by_key(
-    workspace_key: String,
+pub async fn remove_workspace(
+    name: String,
     settings_manager: State<'_, Arc<SettingsManager>>,
 ) -> Result<(), String> {
-    forget_workspace_by_key_impl(settings_manager.inner().as_ref(), &workspace_key).await
+    remove_workspace_impl(settings_manager.inner().as_ref(), &name).await
 }
 
-async fn forget_workspace_by_key_impl(
+async fn remove_workspace_impl(
     settings_manager: &SettingsManager,
-    workspace_key: &str,
+    name: &str,
 ) -> Result<(), String> {
     settings_manager
         .modify(|settings| {
-            let lookup_key = identity::canonical_workspace_key_for_lookup(workspace_key);
+            let lookup_key = identity::canonical_name_for_lookup(name);
             let original_len = settings.workspaces.len();
 
             settings
                 .workspaces
-                .retain(|workspace| !workspace_matches_lookup_key(workspace, &lookup_key));
+                .retain(|workspace| !workspace_matches_lookup_name(workspace, &lookup_key));
 
             if settings.workspaces.len() == original_len {
-                return Err(anyhow::anyhow!("Workspace key '{workspace_key}' not found"));
+                return Err(anyhow::anyhow!("Workspace '{}' not found", name));
             }
 
             Ok(((), true))
@@ -1585,7 +1585,7 @@ pub fn workspace_conflict_open_clone_dialog(
         .ok_or_else(|| "No workspace conflict dialog data available".to_string())?;
 
     dialog_state.set_clone_dialog(CloneDialogData {
-        workspace_name: conflict_data.workspace_key,
+        workspace_name: conflict_data.name,
         clone_path: conflict_data.clone_path,
         remote_url: conflict_data.requested_remote,
         normalized_remote: conflict_data.normalized_remote,
@@ -1596,7 +1596,7 @@ pub fn workspace_conflict_open_clone_dialog(
         git_ref: conflict_data.git_ref,
         clone_allowed: true,
         clone_validation_message: None,
-        suggested_workspace_key: None,
+        suggested_name: None,
         git_ref_kind: conflict_data.git_ref_kind,
     });
 
@@ -1631,7 +1631,7 @@ pub fn workspace_conflict_open_clone_dialog(
     Ok(())
 }
 
-fn derive_workspace_key_from_path(path: &Path, fallback: &str) -> String {
+fn derive_workspace_name_from_path(path: &Path, fallback: &str) -> String {
     path.file_name()
         .and_then(|name| name.to_str())
         .map(str::trim)
@@ -1639,11 +1639,11 @@ fn derive_workspace_key_from_path(path: &Path, fallback: &str) -> String {
         .map_or_else(|| fallback.to_string(), ToString::to_string)
 }
 
-fn workspace_matches_lookup_key(
+fn workspace_matches_lookup_name(
     workspace: &crate::settings::WorkspaceConfig,
     lookup_key: &str,
 ) -> bool {
-    identity::canonical_workspace_key_for_lookup(&identity::derive_workspace_key(workspace))
+    identity::canonical_name_for_lookup(&identity::derive_workspace_name(workspace))
         == lookup_key
 }
 
@@ -1657,17 +1657,17 @@ async fn enrich_clone_dialog_data(
     data.normalized_remote = normalized_remote.clone();
     data.policy_violation = None;
 
-    let desired_lookup = identity::canonical_workspace_key_for_lookup(&data.workspace_name);
-    let key_matches: Vec<_> = settings
+    let desired_lookup = identity::canonical_name_for_lookup(&data.workspace_name);
+    let name_matches: Vec<_> = settings
         .workspaces
         .iter()
         .filter(|workspace| {
-            identity::canonical_workspace_key_for_lookup(&workspace.workspace_key) == desired_lookup
+            identity::canonical_name_for_lookup(&workspace.name) == desired_lookup
         })
         .collect();
 
-    let same_remote_key_exists = normalized_remote.as_ref().is_some_and(|remote| {
-        key_matches.iter().any(|workspace| {
+    let same_remote_name_exists = normalized_remote.as_ref().is_some_and(|remote| {
+        name_matches.iter().any(|workspace| {
             workspace
                 .repo_identity
                 .as_ref()
@@ -1675,17 +1675,17 @@ async fn enrich_clone_dialog_data(
         })
     });
 
-    let different_remote_key_exists = !key_matches.is_empty() && !same_remote_key_exists;
+    let different_remote_name_exists = !name_matches.is_empty() && !same_remote_name_exists;
     let target_exists = target_path.exists();
 
     data.clone_allowed = true;
     data.clone_validation_message = None;
-    data.suggested_workspace_key = None;
+    data.suggested_name = None;
 
-    if same_remote_key_exists {
+    if same_remote_name_exists {
         data.clone_allowed = false;
         data.clone_validation_message = Some(
-            "This workspace key already maps to the same remote. Open the existing mapping instead."
+            "This workspace already maps to the same remote. Open the existing mapping instead."
                 .to_string(),
         );
         return data;
@@ -1698,18 +1698,18 @@ async fn enrich_clone_dialog_data(
         return data;
     }
 
-    if different_remote_key_exists {
-        let suggested_key = derive_workspace_key_from_path(&target_path, &data.workspace_name);
-        let suggested_key =
-            if identity::canonical_workspace_key_for_lookup(&suggested_key) == desired_lookup {
-                format!("{suggested_key}-clone")
+    if different_remote_name_exists {
+        let suggested = derive_workspace_name_from_path(&target_path, &data.workspace_name);
+        let suggested =
+            if identity::canonical_name_for_lookup(&suggested) == desired_lookup {
+                format!("{suggested}-clone")
             } else {
-                suggested_key
+                suggested
             };
 
-        data.suggested_workspace_key = Some(suggested_key.clone());
+        data.suggested_name = Some(suggested.clone());
         data.clone_validation_message = Some(format!(
-            "Workspace key collision detected. Clone will be saved as '{suggested_key}'."
+            "Name collision detected. Clone will be saved as '{suggested}'."
         ));
     }
 
@@ -2042,8 +2042,9 @@ pub fn detect_browsers() -> Vec<crate::browser_detection::BrowserInfo> {
 #[cfg(test)]
 mod tests {
     use super::{
-        ensure_workspace_policy_allows_path, forget_workspace_by_key_impl, promote_workspace_impl,
-        rebind_workspace_path_impl, rename_workspace_key_impl, resolve_conflict_open_target_path,
+        change_workspace_folder_impl, ensure_workspace_policy_allows_path,
+        promote_workspace_impl, remove_workspace_impl, rename_workspace_impl,
+        resolve_conflict_open_target_path,
     };
     use crate::settings::{
         Settings, SettingsManager, WorkspaceConfig, WorkspaceKind, WorkspaceState,
@@ -2053,7 +2054,7 @@ mod tests {
     fn explicit_workspace(path: &Path, key: &str) -> WorkspaceConfig {
         WorkspaceConfig {
             path: path.to_string_lossy().to_string(),
-            workspace_key: key.to_string(),
+            name: key.to_string(),
             editor: String::new(),
             auto_discovered: false,
             trusted: false,
@@ -2086,7 +2087,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn rename_workspace_key_updates_mapping() {
+    async fn rename_workspace_updates_mapping() {
         let temp_dir = tempfile::TempDir::new().expect("temp dir");
         let workspace_path = temp_dir.path().join("rails");
         std::fs::create_dir_all(&workspace_path).expect("workspace dir");
@@ -2094,17 +2095,17 @@ mod tests {
         let (_temp_dir, manager) =
             initialize_manager(vec![explicit_workspace(&workspace_path, "rails")]).await;
 
-        rename_workspace_key_impl(&manager, "rails", "rails-upstream")
+        rename_workspace_impl(&manager, "rails", "rails-upstream")
             .await
-            .expect("rename key");
+            .expect("rename workspace");
 
         let settings = manager.get().await;
         assert_eq!(settings.workspaces.len(), 1);
-        assert_eq!(settings.workspaces[0].workspace_key, "rails-upstream");
+        assert_eq!(settings.workspaces[0].name, "rails-upstream");
     }
 
     #[tokio::test]
-    async fn rename_workspace_key_rejects_duplicates() {
+    async fn rename_workspace_rejects_duplicates() {
         let temp_dir = tempfile::TempDir::new().expect("temp dir");
         let first_path = temp_dir.path().join("rails");
         let second_path = temp_dir.path().join("myapp");
@@ -2117,14 +2118,14 @@ mod tests {
         ])
         .await;
 
-        let error = rename_workspace_key_impl(&manager, "myapp", "rails")
+        let error = rename_workspace_impl(&manager, "myapp", "rails")
             .await
             .expect_err("rename should fail");
         assert!(error.contains("must be unique"));
     }
 
     #[tokio::test]
-    async fn rebind_workspace_path_updates_path_and_resets_flags() {
+    async fn change_workspace_folder_updates_path_and_resets_flags() {
         let temp_dir = tempfile::TempDir::new().expect("temp dir");
         let old_path = temp_dir.path().join("old");
         let new_path = temp_dir.path().join("new");
@@ -2137,9 +2138,9 @@ mod tests {
 
         let (_temp_dir, manager) = initialize_manager(vec![workspace]).await;
 
-        rebind_workspace_path_impl(&manager, "repo", &path_string(&new_path))
+        change_workspace_folder_impl(&manager, "repo", &path_string(&new_path))
             .await
-            .expect("rebind");
+            .expect("change folder");
 
         let settings = manager.get().await;
         let saved = &settings.workspaces[0];
@@ -2149,7 +2150,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn forget_workspace_by_key_removes_only_matching_workspace() {
+    async fn remove_workspace_removes_only_matching_workspace() {
         let temp_dir = tempfile::TempDir::new().expect("temp dir");
         let first_path = temp_dir.path().join("repo-a");
         let second_path = temp_dir.path().join("repo-b");
@@ -2162,17 +2163,17 @@ mod tests {
         ])
         .await;
 
-        forget_workspace_by_key_impl(&manager, "repo-a")
+        remove_workspace_impl(&manager, "repo-a")
             .await
-            .expect("forget workspace");
+            .expect("remove workspace");
 
         let settings = manager.get().await;
         assert_eq!(settings.workspaces.len(), 1);
-        assert_eq!(settings.workspaces[0].workspace_key, "repo-b");
+        assert_eq!(settings.workspaces[0].name, "repo-b");
     }
 
     #[tokio::test]
-    async fn forget_workspace_by_key_returns_error_for_unknown_key() {
+    async fn remove_workspace_returns_error_for_unknown_name() {
         let temp_dir = tempfile::TempDir::new().expect("temp dir");
         let workspace_path = temp_dir.path().join("repo");
         std::fs::create_dir_all(&workspace_path).expect("workspace path");
@@ -2180,9 +2181,9 @@ mod tests {
         let (_temp_dir, manager) =
             initialize_manager(vec![explicit_workspace(&workspace_path, "repo")]).await;
 
-        let error = forget_workspace_by_key_impl(&manager, "unknown")
+        let error = remove_workspace_impl(&manager, "unknown")
             .await
-            .expect_err("missing key should fail");
+            .expect_err("missing name should fail");
         assert!(error.contains("not found"));
     }
 
@@ -2210,7 +2211,7 @@ mod tests {
         let saved = manager.get().await;
         assert_eq!(saved.workspaces.len(), 1);
         assert!(!saved.workspaces[0].auto_discovered);
-        assert_eq!(saved.workspaces[0].workspace_key, promoted_key);
+        assert_eq!(saved.workspaces[0].name, promoted_key);
         assert_eq!(
             saved.workspaces[0].normalized_path.as_ref(),
             Some(&target_normalized)
@@ -2233,7 +2234,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn conflict_rebind_flow_resolves_file_in_new_path() {
+    async fn conflict_change_folder_flow_resolves_file_in_new_path() {
         let temp_dir = tempfile::TempDir::new().expect("temp dir");
         let old_path = temp_dir.path().join("old-location");
         let new_path = temp_dir.path().join("new-location");
@@ -2245,9 +2246,9 @@ mod tests {
         let (_temp_dir, manager) =
             initialize_manager(vec![explicit_workspace(&old_path, "workspace")]).await;
 
-        rebind_workspace_path_impl(&manager, "workspace", &path_string(&new_path))
+        change_workspace_folder_impl(&manager, "workspace", &path_string(&new_path))
             .await
-            .expect("rebind workspace");
+            .expect("change workspace folder");
 
         let full_path = resolve_conflict_open_target_path(
             &path_string(&new_path),

@@ -16,7 +16,7 @@ pub(crate) fn now_timestamp_millis() -> i64 {
 }
 
 #[must_use]
-pub(crate) fn canonical_workspace_key_for_lookup(key: &str) -> String {
+pub(crate) fn canonical_name_for_lookup(key: &str) -> String {
     let trimmed = key.trim();
     if cfg!(target_os = "windows") || cfg!(target_os = "macos") {
         trimmed.to_lowercase()
@@ -26,8 +26,8 @@ pub(crate) fn canonical_workspace_key_for_lookup(key: &str) -> String {
 }
 
 #[must_use]
-pub(crate) fn derive_workspace_key(workspace: &WorkspaceConfig) -> String {
-    workspace.workspace_key.trim().to_string()
+pub(crate) fn derive_workspace_name(workspace: &WorkspaceConfig) -> String {
+    workspace.name.trim().to_string()
 }
 
 #[must_use]

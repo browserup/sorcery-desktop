@@ -182,9 +182,9 @@ impl ProtocolHandler {
         let path = Path::new(file_path);
 
         if let Some(workspace) = self.settings_manager.get_workspace_for_path(path).await {
-            let workspace_key = identity::derive_workspace_key(&workspace);
+            let workspace_name = identity::derive_workspace_name(&workspace);
             if let Some(policy_violation) = self
-                .enforced_workspace_policy_violation(&workspace_key, &workspace)
+                .enforced_workspace_policy_violation(&workspace_name, &workspace)
                 .await
             {
                 bail!("{policy_violation}");
@@ -238,12 +238,12 @@ impl ProtocolHandler {
 
     async fn resolve_workspace(
         &self,
-        workspace_key: &str,
+        name: &str,
         remote: Option<&str>,
     ) -> WorkspaceResolution {
         let (remote_matches, key_matches) = self
             .settings_manager
-            .resolve_workspace_by_key(workspace_key, remote)
+            .resolve_workspace_by_name(name, remote)
             .await;
 
         if let Some(remote) = remote {
@@ -388,7 +388,7 @@ impl ProtocolHandler {
 
     async fn enforced_workspace_policy_violation(
         &self,
-        workspace_key: &str,
+        name: &str,
         mapping: &WorkspaceConfig,
     ) -> Option<String> {
         match self
@@ -400,8 +400,8 @@ impl ProtocolHandler {
             PolicyDecision::AdvisoryViolation(violation) => {
                 warn!(
                     "Policy advisory for workspace '{}' mapping '{}': {}",
-                    workspace_key,
-                    identity::derive_workspace_key(mapping),
+                    name,
+                    identity::derive_workspace_name(mapping),
                     violation
                 );
                 None
@@ -409,8 +409,8 @@ impl ProtocolHandler {
             PolicyDecision::EnforcedViolation(violation) => {
                 warn!(
                     "Policy denied workspace '{}' mapping '{}': {}",
-                    workspace_key,
-                    identity::derive_workspace_key(mapping),
+                    name,
+                    identity::derive_workspace_name(mapping),
                     violation
                 );
                 Some(violation.to_string())
@@ -420,22 +420,22 @@ impl ProtocolHandler {
 
     async fn enforced_clone_policy_violation(
         &self,
-        workspace_key: &str,
+        name: &str,
         remote: Option<&str>,
         clone_path: &Path,
     ) -> Option<String> {
         match self
             .settings_manager
-            .evaluate_clone_policy(workspace_key, remote, clone_path)
+            .evaluate_clone_policy(name, remote, clone_path)
             .await
         {
             PolicyDecision::Allowed => None,
             PolicyDecision::AdvisoryViolation(violation) => {
-                warn!("Policy advisory for clone '{workspace_key}': {violation}");
+                warn!("Policy advisory for clone '{name}': {violation}");
                 None
             }
             PolicyDecision::EnforcedViolation(violation) => {
-                warn!("Policy denied clone '{workspace_key}': {violation}");
+                warn!("Policy denied clone '{name}': {violation}");
                 Some(violation.to_string())
             }
         }
@@ -634,9 +634,9 @@ impl ProtocolHandler {
         let remainder = segments.collect::<Vec<_>>().join("/");
 
         for workspace in self.settings_manager.get_workspaces().await {
-            let workspace_key = identity::derive_workspace_key(&workspace);
-            if workspace_key.eq_ignore_ascii_case(first) {
-                return Some((workspace_key, remainder));
+            let workspace_name = identity::derive_workspace_name(&workspace);
+            if workspace_name.eq_ignore_ascii_case(first) {
+                return Some((workspace_name, remainder));
             }
         }
 
@@ -683,7 +683,7 @@ impl ProtocolHandler {
                         |path| path.to_string_lossy().to_string(),
                     );
                     return Ok(HandleResult::ShowWorkspaceRepairDialog {
-                        workspace_key: workspace.to_string(),
+                        name: workspace.to_string(),
                         workspace_path,
                         workspace_state: mapping.workspace_state,
                         file_path: path.to_string(),
@@ -868,7 +868,7 @@ impl ProtocolHandler {
                         |path| path.to_string_lossy().to_string(),
                     );
                     return Ok(HandleResult::ShowWorkspaceRepairDialog {
-                        workspace_key: workspace.to_string(),
+                        name: workspace.to_string(),
                         workspace_path,
                         workspace_state: mapping.workspace_state,
                         file_path: path.to_string(),
@@ -970,11 +970,11 @@ impl ProtocolHandler {
             .unwrap_or_else(|| PathBuf::from(&selected_mapping.path));
         let full_path = workspace_root.join(path);
 
-        let selected_workspace_key = identity::derive_workspace_key(&selected_mapping);
-        if !selected_workspace_key.eq_ignore_ascii_case(workspace) {
+        let selected_workspace_name = identity::derive_workspace_name(&selected_mapping);
+        if !selected_workspace_name.eq_ignore_ascii_case(workspace) {
             info!(
                 "Revision resolution switched workspace from '{}' to '{}'",
-                workspace, selected_workspace_key
+                workspace, selected_workspace_name
             );
         }
 
@@ -1102,7 +1102,7 @@ pub enum HandleResult {
         policy_violation: Option<String>,
     },
     ShowWorkspaceRepairDialog {
-        workspace_key: String,
+        name: String,
         workspace_path: String,
         workspace_state: WorkspaceState,
         file_path: String,

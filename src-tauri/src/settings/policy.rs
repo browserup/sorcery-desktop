@@ -15,26 +15,26 @@ pub enum PolicyDecision {
 
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum PolicyViolation {
-    #[error("Workspace key '{workspace_key}' is not allowed by policy")]
-    WorkspaceKeyNotAllowed { workspace_key: String },
+    #[error("Workspace name '{workspace_name}' is not allowed by policy")]
+    WorkspaceNameNotAllowed { workspace_name: String },
 
     #[error(
-        "Workspace '{workspace_key}' requires remote '{expected_remote}', but found '{actual_remote}'"
+        "Workspace '{workspace_name}' requires remote '{expected_remote}', but found '{actual_remote}'"
     )]
     WorkspaceRemoteMismatch {
-        workspace_key: String,
+        workspace_name: String,
         expected_remote: String,
         actual_remote: String,
     },
 
-    #[error("Workspace '{workspace_key}' requires git remote '{expected_remote}'")]
+    #[error("Workspace '{workspace_name}' requires git remote '{expected_remote}'")]
     WorkspaceRemoteRequired {
-        workspace_key: String,
+        workspace_name: String,
         expected_remote: String,
     },
 
-    #[error("Workspace '{workspace_key}' requires a remote, but none was provided")]
-    RemoteRequiredForWorkspace { workspace_key: String },
+    #[error("Workspace '{workspace_name}' requires a remote, but none was provided")]
+    RemoteRequiredForWorkspace { workspace_name: String },
 
     #[error("Remote '{remote}' is invalid for policy validation")]
     InvalidRemote { remote: String },
@@ -51,15 +51,15 @@ pub enum PolicyViolation {
 
 #[derive(Debug, Error)]
 pub enum PolicyBuildError {
-    #[error("Policy mapping has an empty workspace key")]
-    EmptyWorkspaceKey,
+    #[error("Policy mapping has an empty workspace name")]
+    EmptyWorkspaceName,
 
-    #[error("Duplicate policy mapping for workspace key '{workspace_key}'")]
-    DuplicateWorkspaceKey { workspace_key: String },
+    #[error("Duplicate policy mapping for workspace name '{workspace_name}'")]
+    DuplicateWorkspaceName { workspace_name: String },
 
-    #[error("Policy mapping for workspace '{workspace_key}' has invalid remote '{remote}'")]
+    #[error("Policy mapping for workspace '{workspace_name}' has invalid remote '{remote}'")]
     InvalidMappingRemote {
-        workspace_key: String,
+        workspace_name: String,
         remote: String,
     },
 
@@ -92,9 +92,9 @@ impl WorkspacePolicy {
         let mut mappings = HashMap::new();
 
         for mapping in config.mappings {
-            let key = identity::canonical_workspace_key_for_lookup(mapping.workspace_key.trim());
+            let key = identity::canonical_name_for_lookup(mapping.name.trim());
             if key.is_empty() {
-                return Err(PolicyBuildError::EmptyWorkspaceKey);
+                return Err(PolicyBuildError::EmptyWorkspaceName);
             }
 
             let expected_remote = mapping
@@ -105,7 +105,7 @@ impl WorkspacePolicy {
                 .map(|value| {
                     identity::normalize_remote_identity(value).ok_or_else(|| {
                         PolicyBuildError::InvalidMappingRemote {
-                            workspace_key: key.clone(),
+                            workspace_name: key.clone(),
                             remote: value.to_string(),
                         }
                     })
@@ -116,7 +116,7 @@ impl WorkspacePolicy {
                 .insert(key.clone(), PolicyMappingRule { expected_remote })
                 .is_some()
             {
-                return Err(PolicyBuildError::DuplicateWorkspaceKey { workspace_key: key });
+                return Err(PolicyBuildError::DuplicateWorkspaceName { workspace_name: key });
             }
         }
 
@@ -173,11 +173,11 @@ impl WorkspacePolicy {
     #[must_use]
     pub fn evaluate_clone_request(
         &self,
-        workspace_key: &str,
+        name: &str,
         remote: Option<&str>,
         target_path: &Path,
     ) -> PolicyDecision {
-        self.policy_decision(self.clone_violation(workspace_key, remote, target_path))
+        self.policy_decision(self.clone_violation(name, remote, target_path))
     }
 
     fn policy_decision(&self, violation: Option<PolicyViolation>) -> PolicyDecision {
@@ -191,19 +191,19 @@ impl WorkspacePolicy {
     }
 
     fn workspace_violation(&self, workspace: &WorkspaceConfig) -> Option<PolicyViolation> {
-        let workspace_key = identity::canonical_workspace_key_for_lookup(
-            &identity::derive_workspace_key(workspace),
+        let name = identity::canonical_name_for_lookup(
+            &identity::derive_workspace_name(workspace),
         );
 
         if !self.mappings.is_empty() {
-            let Some(rule) = self.mappings.get(&workspace_key) else {
-                return Some(PolicyViolation::WorkspaceKeyNotAllowed { workspace_key });
+            let Some(rule) = self.mappings.get(&name) else {
+                return Some(PolicyViolation::WorkspaceNameNotAllowed { workspace_name: name });
             };
 
             if let Some(expected_remote) = rule.expected_remote.as_deref() {
                 let Some(repo_identity) = workspace.repo_identity.as_ref() else {
                     return Some(PolicyViolation::WorkspaceRemoteRequired {
-                        workspace_key,
+                        workspace_name: name,
                         expected_remote: expected_remote.to_string(),
                     });
                 };
@@ -216,7 +216,7 @@ impl WorkspacePolicy {
                         .unwrap_or_else(|| "none".to_string());
 
                     return Some(PolicyViolation::WorkspaceRemoteMismatch {
-                        workspace_key,
+                        workspace_name: name,
                         expected_remote: expected_remote.to_string(),
                         actual_remote,
                     });
@@ -230,21 +230,21 @@ impl WorkspacePolicy {
 
         let Some(repo_identity) = workspace.repo_identity.as_ref() else {
             if workspace.workspace_kind == WorkspaceKind::Git {
-                return Some(PolicyViolation::RemoteRequiredForWorkspace { workspace_key });
+                return Some(PolicyViolation::RemoteRequiredForWorkspace { workspace_name: name });
             }
             return None;
         };
 
-        self.identity_remote_policy_violation(&workspace_key, repo_identity)
+        self.identity_remote_policy_violation(&name, repo_identity)
     }
 
     fn clone_violation(
         &self,
-        workspace_key: &str,
+        name: &str,
         remote: Option<&str>,
         target_path: &Path,
     ) -> Option<PolicyViolation> {
-        let canonical_key = identity::canonical_workspace_key_for_lookup(workspace_key);
+        let canonical = identity::canonical_name_for_lookup(name);
         let normalized_remote = match remote.map(str::trim).filter(|value| !value.is_empty()) {
             Some(value) => match identity::normalize_remote_identity(value) {
                 Some(normalized) => Some(normalized),
@@ -258,23 +258,23 @@ impl WorkspacePolicy {
         };
 
         if !self.mappings.is_empty() {
-            let Some(rule) = self.mappings.get(&canonical_key) else {
-                return Some(PolicyViolation::WorkspaceKeyNotAllowed {
-                    workspace_key: canonical_key,
+            let Some(rule) = self.mappings.get(&canonical) else {
+                return Some(PolicyViolation::WorkspaceNameNotAllowed {
+                    workspace_name: canonical,
                 });
             };
 
             if let Some(expected_remote) = rule.expected_remote.as_deref() {
                 let Some(actual_remote) = normalized_remote.as_deref() else {
                     return Some(PolicyViolation::WorkspaceRemoteRequired {
-                        workspace_key: canonical_key,
+                        workspace_name: canonical,
                         expected_remote: expected_remote.to_string(),
                     });
                 };
 
                 if actual_remote != expected_remote {
                     return Some(PolicyViolation::WorkspaceRemoteMismatch {
-                        workspace_key: canonical_key,
+                        workspace_name: canonical,
                         expected_remote: expected_remote.to_string(),
                         actual_remote: actual_remote.to_string(),
                     });
@@ -301,7 +301,7 @@ impl WorkspacePolicy {
 
         let Some(remote) = normalized_remote.as_deref() else {
             return Some(PolicyViolation::RemoteRequiredForWorkspace {
-                workspace_key: canonical_key,
+                workspace_name: canonical,
             });
         };
 
@@ -310,7 +310,7 @@ impl WorkspacePolicy {
 
     fn identity_remote_policy_violation(
         &self,
-        workspace_key: &str,
+        name: &str,
         identity: &RepoIdentity,
     ) -> Option<PolicyViolation> {
         let mut remotes = Vec::new();
@@ -321,7 +321,7 @@ impl WorkspacePolicy {
 
         if remotes.is_empty() {
             return Some(PolicyViolation::RemoteRequiredForWorkspace {
-                workspace_key: workspace_key.to_string(),
+                workspace_name: name.to_string(),
             });
         }
 
@@ -433,7 +433,7 @@ mod tests {
     fn workspace(path: &Path, key: &str, remote: Option<&str>) -> WorkspaceConfig {
         WorkspaceConfig {
             path: path.to_string_lossy().to_string(),
-            workspace_key: key.to_string(),
+            name: key.to_string(),
             editor: String::new(),
             auto_discovered: false,
             trusted: false,
@@ -452,16 +452,16 @@ mod tests {
     }
 
     #[test]
-    fn policy_rejects_duplicate_workspace_keys() {
+    fn policy_rejects_duplicate_workspace_names() {
         let config = WorkspacePolicyConfig {
             mode: PolicyMode::Enforced,
             mappings: vec![
                 super::super::models::WorkspacePolicyMapping {
-                    workspace_key: "rails".to_string(),
+                    name: "rails".to_string(),
                     remote: Some("github.com/rails/rails".to_string()),
                 },
                 super::super::models::WorkspacePolicyMapping {
-                    workspace_key: "Rails".to_string(),
+                    name: "Rails".to_string(),
                     remote: Some("github.com/company/rails".to_string()),
                 },
             ],
@@ -470,10 +470,10 @@ mod tests {
             allowed_remote_orgs: Vec::new(),
         };
 
-        let error = WorkspacePolicy::from_config(config).expect_err("duplicate key must fail");
+        let error = WorkspacePolicy::from_config(config).expect_err("duplicate name must fail");
         assert!(matches!(
             error,
-            PolicyBuildError::DuplicateWorkspaceKey { workspace_key } if workspace_key == "rails"
+            PolicyBuildError::DuplicateWorkspaceName { workspace_name } if workspace_name == "rails"
         ));
     }
 
@@ -482,7 +482,7 @@ mod tests {
         let config = WorkspacePolicyConfig {
             mode: PolicyMode::Enforced,
             mappings: vec![super::super::models::WorkspacePolicyMapping {
-                workspace_key: "rails".to_string(),
+                name: "rails".to_string(),
                 remote: Some("github.com/rails/rails".to_string()),
             }],
             allowed_clone_roots: Vec::new(),
@@ -506,7 +506,7 @@ mod tests {
         let config = WorkspacePolicyConfig {
             mode: PolicyMode::Advisory,
             mappings: vec![super::super::models::WorkspacePolicyMapping {
-                workspace_key: "rails".to_string(),
+                name: "rails".to_string(),
                 remote: Some("github.com/rails/rails".to_string()),
             }],
             allowed_clone_roots: Vec::new(),

@@ -19,7 +19,7 @@ impl WorkspaceWatchService {
     ) -> Result<Self> {
         let mut watcher = recommended_watcher(move |event: notify::Result<Event>| match event {
             Ok(event) => {
-                if should_trigger_reconcile(&event) {
+                if should_trigger_refresh(&event) {
                     let _ = change_tx.send(());
                 }
             }
@@ -65,7 +65,7 @@ impl WorkspaceWatchService {
     }
 }
 
-fn should_trigger_reconcile(event: &Event) -> bool {
+fn should_trigger_refresh(event: &Event) -> bool {
     matches!(
         event.kind,
         EventKind::Create(_)
@@ -185,7 +185,7 @@ mod tests {
     fn workspace_config(path: String) -> WorkspaceConfig {
         WorkspaceConfig {
             path,
-            workspace_key: "workspace".to_string(),
+            name: "workspace".to_string(),
             editor: String::new(),
             auto_discovered: false,
             trusted: false,

@@ -194,7 +194,7 @@ fn handle_protocol_result(
                 git_ref: git_ref_str,
                 clone_allowed: true,
                 clone_validation_message: None,
-                suggested_workspace_key: None,
+                suggested_name: None,
                 git_ref_kind: git_ref,
             });
             let _ = build_dialog(
@@ -209,7 +209,7 @@ fn handle_protocol_result(
             );
         }
         Ok(protocol_handler::HandleResult::ShowWorkspaceRepairDialog {
-            workspace_key,
+            name,
             workspace_path,
             workspace_state,
             file_path,
@@ -219,18 +219,18 @@ fn handle_protocol_result(
             let workspace_state_label = format!("{workspace_state:?}").to_lowercase();
             tracing::info!(
                 "Request: showing workspace repair dialog for '{}' in state '{}'",
-                workspace_key,
+                name,
                 workspace_state_label
             );
             GIT_COMMAND_LOG.log_request(
                 url,
                 true,
                 "workspace_repair_dialog",
-                &format!("Workspace '{workspace_key}' is '{workspace_state_label}'"),
+                &format!("Workspace '{name}' is '{workspace_state_label}'"),
                 duration,
             );
             dialog_state.set_workspace_repair_dialog(dialog_state::WorkspaceRepairDialogData {
-                workspace_key,
+                name,
                 workspace_path,
                 workspace_state: workspace_state_label,
                 file_path,
@@ -279,7 +279,7 @@ fn handle_protocol_result(
             let candidates = existing_mappings
                 .into_iter()
                 .map(|workspace| dialog_state::WorkspaceConflictCandidateData {
-                    workspace_key: crate::settings::identity::derive_workspace_key(&workspace),
+                    name: crate::settings::identity::derive_workspace_name(&workspace),
                     workspace_path: workspace
                         .normalized_path
                         .as_ref()
@@ -294,7 +294,7 @@ fn handle_protocol_result(
                 .collect();
 
             dialog_state.set_workspace_conflict_dialog(dialog_state::WorkspaceConflictDialogData {
-                workspace_key: workspace_name,
+                name: workspace_name,
                 requested_remote: requested_remote.clone(),
                 normalized_remote: crate::settings::identity::normalize_remote_identity(
                     &requested_remote,
@@ -498,11 +498,11 @@ impl DeepLinkThrottle {
     }
 }
 
-async fn reconcile_and_emit_workspace_health(
+async fn refresh_and_emit_workspace_health(
     settings_manager: &Arc<settings::SettingsManager>,
     app_handle: &AppHandle,
 ) -> Result<(), anyhow::Error> {
-    let changed = settings_manager.reconcile_workspace_states().await?;
+    let changed = settings_manager.refresh_workspace_states().await?;
     if !changed {
         return Ok(());
     }
@@ -563,8 +563,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tracing::warn!("Failed to sync workspaces: {}", e);
     }
 
-    if let Err(e) = settings_manager.reconcile_workspace_states().await {
-        tracing::warn!("Failed to reconcile workspace states: {}", e);
+    if let Err(e) = settings_manager.refresh_workspace_states().await {
+        tracing::warn!("Failed to refresh workspace states: {}", e);
     }
 
     let (workspace_change_tx, workspace_change_rx) = tokio::sync::mpsc::unbounded_channel();
@@ -708,13 +708,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let mut ticker = tokio::time::interval(Duration::from_secs(60));
                 loop {
                     ticker.tick().await;
-                    if let Err(error) = reconcile_and_emit_workspace_health(
+                    if let Err(error) = refresh_and_emit_workspace_health(
                         &settings_manager_for_periodic,
                         &app_handle_for_periodic,
                     )
                     .await
                     {
-                        tracing::warn!("Background workspace reconciliation failed: {}", error);
+                        tracing::warn!("Background workspace refresh failed: {}", error);
                     }
                 }
             });
@@ -746,14 +746,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                     }
 
-                    if let Err(error) = reconcile_and_emit_workspace_health(
+                    if let Err(error) = refresh_and_emit_workspace_health(
                         &settings_manager_for_watch_events,
                         &app_handle_for_watch_events,
                     )
                     .await
                     {
                         tracing::warn!(
-                            "Workspace watch reconciliation failed after filesystem event: {}",
+                            "Workspace watch refresh failed after filesystem event: {}",
                             error
                         );
                     }
@@ -876,7 +876,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     "settings",
                                     tauri::WebviewUrl::App("settings.html".into()),
                                 )
-                                .title("")
+                                .title("Sorcery Desktop")
                                 .inner_size(800.0, 600.0)
                                 .center()
                                 .resizable(true)
@@ -976,7 +976,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             commands::save_settings,
             commands::get_all_workspaces,
             commands::get_workspace_health_summary,
-            commands::reconcile_workspace_states,
+            commands::refresh_workspace_states,
             commands::promote_workspace,
             commands::sync_workspaces,
             commands::delete_workspace,
@@ -1000,9 +1000,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             commands::update_clone_path,
             commands::clone_cancelled,
             commands::get_workspace_repair_dialog_data,
-            commands::rename_workspace_key,
-            commands::rebind_workspace_path,
-            commands::forget_workspace_by_key,
+            commands::rename_workspace,
+            commands::change_workspace_folder,
+            commands::remove_workspace,
             commands::get_workspace_conflict_dialog_data,
             commands::workspace_conflict_open_existing,
             commands::workspace_conflict_open_clone_dialog,

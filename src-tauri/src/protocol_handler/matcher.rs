@@ -95,7 +95,7 @@ impl PathMatcher {
             if workspace.workspace_state != WorkspaceState::Present {
                 continue;
             }
-            let ws_name = identity::derive_workspace_key(workspace);
+            let ws_name = identity::derive_workspace_name(workspace);
 
             let Some(workspace_root) = &workspace.normalized_path else {
                 continue;
@@ -194,7 +194,7 @@ impl PathMatcher {
         let workspaces = self.settings_manager.get_workspaces().await;
 
         for workspace in &workspaces {
-            let ws_name = identity::derive_workspace_key(workspace);
+            let ws_name = identity::derive_workspace_name(workspace);
 
             if ws_name.eq_ignore_case(workspace_name) {
                 if workspace.workspace_state != WorkspaceState::Present {
@@ -263,7 +263,7 @@ impl PathMatcher {
             if workspace.workspace_state != WorkspaceState::Present {
                 continue;
             }
-            let ws_name = identity::derive_workspace_key(workspace);
+            let ws_name = identity::derive_workspace_name(workspace);
 
             let Some(workspace_root) = &workspace.normalized_path else {
                 continue;
@@ -414,7 +414,7 @@ mod tests {
         let mut settings = manager.get().await;
         settings.workspaces.push(WorkspaceConfig {
             path: workspace_dir.to_string_lossy().to_string(),
-            workspace_key: workspace_name.to_string(),
+            name: workspace_name.to_string(),
             editor: String::new(),
             auto_discovered: false,
             trusted: false,
@@ -685,7 +685,7 @@ mod tests {
         let mut settings = manager.get().await;
         settings.workspaces.push(WorkspaceConfig {
             path: workspace1_dir.path().to_string_lossy().to_string(),
-            workspace_key: "backend".to_string(),
+            name: "backend".to_string(),
             editor: String::new(),
             auto_discovered: false,
             trusted: false,
@@ -697,7 +697,7 @@ mod tests {
         });
         settings.workspaces.push(WorkspaceConfig {
             path: workspace2_dir.path().to_string_lossy().to_string(),
-            workspace_key: "frontend".to_string(),
+            name: "frontend".to_string(),
             editor: String::new(),
             auto_discovered: false,
             trusted: false,

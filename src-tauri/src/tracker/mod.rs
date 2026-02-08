@@ -144,8 +144,8 @@ impl ActiveEditorTracker {
         let title_lower = title.to_lowercase();
 
         for ws in settings_manager.get_workspaces().await {
-            let workspace_key = crate::settings::identity::derive_workspace_key(&ws);
-            if title_lower.contains(&workspace_key.to_lowercase()) {
+            let workspace_name = crate::settings::identity::derive_workspace_name(&ws);
+            if title_lower.contains(&workspace_name.to_lowercase()) {
                 return ws.normalized_path.clone();
             }
         }
