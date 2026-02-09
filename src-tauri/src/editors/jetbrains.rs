@@ -298,7 +298,7 @@ impl JetBrainsManager {
         }
 
         // Last resort: first 64.exe
-        files.first().map(|e| e.path())
+        files.first().map(std::fs::DirEntry::path)
     }
 
     #[cfg(target_os = "linux")]
@@ -392,7 +392,7 @@ impl JetBrainsManager {
         }
 
         // Last resort: first .sh
-        files.first().map(|e| e.path())
+        files.first().map(std::fs::DirEntry::path)
     }
 
     #[cfg(target_os = "linux")]

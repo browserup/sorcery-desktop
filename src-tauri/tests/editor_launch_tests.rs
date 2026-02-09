@@ -1,4 +1,4 @@
-#![cfg(any(feature = "docker-tests", target_os = "linux"))]
+#![cfg(feature = "docker-tests")]
 
 use sorcery_desktop::editors::{EditorRegistry, OpenOptions};
 use std::fs;
