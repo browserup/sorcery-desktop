@@ -236,11 +236,7 @@ impl ProtocolHandler {
             .and_then(|workspace| workspace.normalized_path)
     }
 
-    async fn resolve_workspace(
-        &self,
-        name: &str,
-        remote: Option<&str>,
-    ) -> WorkspaceResolution {
+    async fn resolve_workspace(&self, name: &str, remote: Option<&str>) -> WorkspaceResolution {
         let (remote_matches, key_matches) = self
             .settings_manager
             .resolve_workspace_by_name(name, remote)

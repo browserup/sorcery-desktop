@@ -116,7 +116,9 @@ impl WorkspacePolicy {
                 .insert(key.clone(), PolicyMappingRule { expected_remote })
                 .is_some()
             {
-                return Err(PolicyBuildError::DuplicateWorkspaceName { workspace_name: key });
+                return Err(PolicyBuildError::DuplicateWorkspaceName {
+                    workspace_name: key,
+                });
             }
         }
 
@@ -191,13 +193,13 @@ impl WorkspacePolicy {
     }
 
     fn workspace_violation(&self, workspace: &WorkspaceConfig) -> Option<PolicyViolation> {
-        let name = identity::canonical_name_for_lookup(
-            &identity::derive_workspace_name(workspace),
-        );
+        let name = identity::canonical_name_for_lookup(&identity::derive_workspace_name(workspace));
 
         if !self.mappings.is_empty() {
             let Some(rule) = self.mappings.get(&name) else {
-                return Some(PolicyViolation::WorkspaceNameNotAllowed { workspace_name: name });
+                return Some(PolicyViolation::WorkspaceNameNotAllowed {
+                    workspace_name: name,
+                });
             };
 
             if let Some(expected_remote) = rule.expected_remote.as_deref() {
@@ -230,7 +232,9 @@ impl WorkspacePolicy {
 
         let Some(repo_identity) = workspace.repo_identity.as_ref() else {
             if workspace.workspace_kind == WorkspaceKind::Git {
-                return Some(PolicyViolation::RemoteRequiredForWorkspace { workspace_name: name });
+                return Some(PolicyViolation::RemoteRequiredForWorkspace {
+                    workspace_name: name,
+                });
             }
             return None;
         };
@@ -461,7 +465,7 @@ mod tests {
                     remote: Some("github.com/rails/rails".to_string()),
                 },
                 super::super::models::WorkspacePolicyMapping {
-                    name: "Rails".to_string(),
+                    name: "rails".to_string(),
                     remote: Some("github.com/company/rails".to_string()),
                 },
             ],

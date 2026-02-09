@@ -5,9 +5,7 @@ use std::path::PathBuf;
 
 fn read_workspace_file(relative: &str) -> String {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let base = manifest_dir
-        .parent()
-        .expect("workspace root");
+    let base = manifest_dir.parent().expect("workspace root");
     fs::read_to_string(base.join(relative)).expect("read file")
 }
 
@@ -30,7 +28,9 @@ fn workspace_conflict_escapes_untrusted_fields_and_uses_bound_handlers() {
     assert!(html.contains("function escapeHtml(value)"));
     assert!(html.contains("const name = escapeHtml(candidate.name);"));
     assert!(html.contains("const workspacePath = escapeHtml(candidate.workspace_path);"));
-    assert!(html.contains("const primaryRemote = escapeHtml(candidate.primary_remote || 'remote: not available');"));
+    assert!(html.contains(
+        "const primaryRemote = escapeHtml(candidate.primary_remote || 'remote: not available');"
+    ));
     assert!(html.contains("bindEvents();"));
     assert!(!html.contains("onclick=\""));
     assert!(!html.contains("onchange=\""));

@@ -409,10 +409,7 @@ impl SettingsManager {
                 PolicyDecision::Allowed => {}
                 PolicyDecision::AdvisoryViolation(violation) => {
                     let name = identity::derive_workspace_name(workspace);
-                    warn!(
-                        "Policy advisory for workspace '{}': {}",
-                        name, violation
-                    );
+                    warn!("Policy advisory for workspace '{}': {}", name, violation);
                 }
                 PolicyDecision::EnforcedViolation(violation) => {
                     let name = identity::derive_workspace_name(workspace);
@@ -535,9 +532,8 @@ impl SettingsManager {
 
         let mut key_to_indices: HashMap<String, Vec<usize>> = HashMap::new();
         for (index, workspace) in settings.workspaces.iter().enumerate() {
-            let key = identity::canonical_name_for_lookup(
-                &identity::derive_workspace_name(workspace),
-            );
+            let key =
+                identity::canonical_name_for_lookup(&identity::derive_workspace_name(workspace));
             key_to_indices.entry(key).or_default().push(index);
         }
 
@@ -637,8 +633,7 @@ impl SettingsManager {
             let canonical = identity::canonical_name_for_lookup(&name);
             let path = workspace.path.clone();
 
-            if let Some(existing_path) = seen_names.insert(canonical.clone(), path.clone())
-            {
+            if let Some(existing_path) = seen_names.insert(canonical.clone(), path.clone()) {
                 return Err(SettingsValidationError::DuplicateWorkspaceName {
                     workspace_name: canonical,
                     first_path: existing_path,
@@ -658,9 +653,7 @@ impl SettingsManager {
             }
 
             let name = identity::derive_workspace_name(workspace);
-            if let Some(existing_name) =
-                normalized_paths.insert(path.clone(), name.clone())
-            {
+            if let Some(existing_name) = normalized_paths.insert(path.clone(), name.clone()) {
                 return Err(SettingsValidationError::DuplicateWorkspacePath {
                     workspace_path: path.to_string_lossy().to_string(),
                     first_workspace_name: existing_name,

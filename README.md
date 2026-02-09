@@ -1,8 +1,11 @@
 # Sorcery
 
-Hyperlinks for your editor (or IDE) that open on the right line. That's *Sorcery!*
+Editor/IDE hyperlinks that open to the line. That's *Sorcery!*
 
-# Sorcery enables:
+# Overview
+
+Sorcery Desktop is a system tray app that enables srcuri (Sorcery) protocol links. The srcuri 
+protocol makes links to files/lines work.
 
 * Share editor links with other developers that open in their editor, on the correct line
 * Command-Click a file-path in your terminal--it opens in your editor/IDE

@@ -687,6 +687,14 @@ mod tests {
         let work = temp.path().join("work");
         std::fs::create_dir(&work).expect("create work dir");
         run(Command::new("git").arg("init"), &work);
+        run(
+            Command::new("git").args(["config", "user.email", "test@test.com"]),
+            &work,
+        );
+        run(
+            Command::new("git").args(["config", "user.name", "Test"]),
+            &work,
+        );
         std::fs::write(work.join("README.md"), "hello").expect("write README");
         run(Command::new("git").args(["add", "README.md"]), &work);
         run(Command::new("git").args(["commit", "-m", "init"]), &work);

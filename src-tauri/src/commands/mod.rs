@@ -1275,12 +1275,7 @@ pub async fn rename_workspace(
     new_name: String,
     settings_manager: State<'_, Arc<SettingsManager>>,
 ) -> Result<(), String> {
-    rename_workspace_impl(
-        settings_manager.inner().as_ref(),
-        &name,
-        &new_name,
-    )
-    .await
+    rename_workspace_impl(settings_manager.inner().as_ref(), &name, &new_name).await
 }
 
 async fn rename_workspace_impl(
@@ -1649,8 +1644,7 @@ fn workspace_matches_lookup_name(
     workspace: &crate::settings::WorkspaceConfig,
     lookup_key: &str,
 ) -> bool {
-    identity::canonical_name_for_lookup(&identity::derive_workspace_name(workspace))
-        == lookup_key
+    identity::canonical_name_for_lookup(&identity::derive_workspace_name(workspace)) == lookup_key
 }
 
 async fn enrich_clone_dialog_data(
@@ -1667,9 +1661,7 @@ async fn enrich_clone_dialog_data(
     let name_matches: Vec<_> = settings
         .workspaces
         .iter()
-        .filter(|workspace| {
-            identity::canonical_name_for_lookup(&workspace.name) == desired_lookup
-        })
+        .filter(|workspace| identity::canonical_name_for_lookup(&workspace.name) == desired_lookup)
         .collect();
 
     let same_remote_name_exists = normalized_remote.as_ref().is_some_and(|remote| {
@@ -1706,12 +1698,11 @@ async fn enrich_clone_dialog_data(
 
     if different_remote_name_exists {
         let suggested = derive_workspace_name_from_path(&target_path, &data.workspace_name);
-        let suggested =
-            if identity::canonical_name_for_lookup(&suggested) == desired_lookup {
-                format!("{suggested}-clone")
-            } else {
-                suggested
-            };
+        let suggested = if identity::canonical_name_for_lookup(&suggested) == desired_lookup {
+            format!("{suggested}-clone")
+        } else {
+            suggested
+        };
 
         data.suggested_name = Some(suggested.clone());
         data.clone_validation_message = Some(format!(
@@ -2054,9 +2045,8 @@ pub fn detect_browsers() -> Vec<crate::browser_detection::BrowserInfo> {
 #[cfg(test)]
 mod tests {
     use super::{
-        change_workspace_folder_impl, ensure_workspace_policy_allows_path,
-        promote_workspace_impl, remove_workspace_impl, rename_workspace_impl,
-        resolve_conflict_open_target_path,
+        change_workspace_folder_impl, ensure_workspace_policy_allows_path, promote_workspace_impl,
+        remove_workspace_impl, rename_workspace_impl, resolve_conflict_open_target_path,
     };
     use crate::settings::{
         Settings, SettingsManager, WorkspaceConfig, WorkspaceKind, WorkspaceState,
