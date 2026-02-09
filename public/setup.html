@@ -412,6 +412,20 @@
       font-size: 0.8125rem;
     }
 
+    .extension-steps {
+      margin: 0.75rem 0 0 1.25rem;
+      color: var(--text-secondary);
+      font-size: 0.8125rem;
+      line-height: 1.7;
+    }
+
+    .extension-steps code {
+      background: var(--bg-elevated);
+      padding: 0.1rem 0.35rem;
+      border-radius: 3px;
+      font-size: 0.75rem;
+    }
+
     .extension-note {
       color: var(--text-secondary);
       font-size: 0.8125rem;
@@ -525,12 +539,19 @@
               <div class="extension-name">Chrome Extension</div>
               <div class="extension-desc">Click file paths to open in your editor</div>
             </div>
-            <button class="button" onclick="installChromeExtension()">Install</button>
+            <button class="button" onclick="downloadExtension()">Download</button>
           </div>
+
+          <ol class="extension-steps">
+            <li>Download and unzip the file</li>
+            <li>Open <code>chrome://extensions</code> in Chrome</li>
+            <li>Enable <strong>Developer mode</strong> (top right)</li>
+            <li>Click <strong>Load unpacked</strong> and select the unzipped folder</li>
+          </ol>
         </div>
 
         <p class="extension-note">
-          You can always install the extension later from <a href="#" onclick="openExtensionPage(event)">getsorcery.com/chrome</a>
+          You can always install the extension later from <a href="#" onclick="openExtensionPage(event)">getsorcery.com</a>
         </p>
       </div>
       <div class="button-group">
@@ -802,16 +823,15 @@
       nextStep();
     }
 
-    function installChromeExtension() {
-      window.__TAURI__.shell.open('https://chrome.google.com/webstore').catch(e => {
-        console.error('Failed to open Chrome Web Store:', e);
+    function downloadExtension() {
+      window.__TAURI__.shell.open('https://github.com/browserup/sorcery-desktop/releases/latest/download/sorcery-chrome.zip').catch(e => {
+        console.error('Failed to open download:', e);
       });
-      nextStep();
     }
 
     function openExtensionPage(event) {
       event.preventDefault();
-      window.__TAURI__.shell.open('https://getsorcery.com/chrome').catch(e => {
+      window.__TAURI__.shell.open('https://getsorcery.com').catch(e => {
         console.error('Failed to open extension page:', e);
       });
     }
