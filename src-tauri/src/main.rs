@@ -520,6 +520,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .init();
 
     tracing::info!("Starting Sorcery Desktop...");
+    let startup_start = std::time::Instant::now();
 
     let settings_manager = Arc::new(settings::SettingsManager::new().await?);
     let path_validator = Arc::new(path_validator::PathValidator::new());
@@ -556,36 +557,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let tray_state = Arc::new(TrayState::new(normal_icon, active_icon));
 
     settings_manager.load().await?;
-    tracing::info!("Settings loaded");
+    tracing::info!(
+        elapsed_ms = startup_start.elapsed().as_millis(),
+        "Settings loaded"
+    );
 
-    // Sync workspaces from default_workspaces_folder
-    if let Err(e) = workspace_sync.sync().await {
+    // Run independent startup loads concurrently
+    let (sync_result, tracker_result, workspace_tracker_result) = tokio::join!(
+        workspace_sync.sync(),
+        tracker.load(),
+        workspace_tracker.load(),
+    );
+    if let Err(e) = sync_result {
         tracing::warn!("Failed to sync workspaces: {}", e);
     }
-
-    if let Err(e) = settings_manager.refresh_workspace_states().await {
-        tracing::warn!("Failed to refresh workspace states: {}", e);
-    }
-
-    let (workspace_change_tx, workspace_change_rx) = tokio::sync::mpsc::unbounded_channel();
-    let workspace_watch_service = match settings::WorkspaceWatchService::new(
-        Arc::clone(&settings_manager),
-        workspace_change_tx,
-    )
-    .await
-    {
-        Ok(service) => Some(Arc::new(tokio::sync::Mutex::new(service))),
-        Err(error) => {
-            tracing::warn!("Failed to start workspace file watcher: {}", error);
-            None
-        }
-    };
-
-    tracker.load().await?;
-    tracing::info!("Last seen data loaded");
-
-    workspace_tracker.load().await?;
-    tracing::info!("Workspace MRU data loaded");
+    tracker_result?;
+    workspace_tracker_result?;
+    tracing::info!(
+        elapsed_ms = startup_start.elapsed().as_millis(),
+        "Startup loads complete"
+    );
 
     let tracker_handle = Arc::clone(&tracker);
     tokio::spawn(async move {
@@ -609,10 +600,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tracing::info!("Editor binary cache warmed");
     });
 
-    tracing::info!("All services initialized");
+    tracing::info!(
+        elapsed_ms = startup_start.elapsed().as_millis(),
+        "All services initialized"
+    );
 
-    // Check protocol registration status on startup
-    {
+    // Check protocol registration in background — result only needed for settings UI
+    tokio::task::spawn_blocking(|| {
         let status = protocol_registration::ProtocolRegistration::get_status();
         if !status.is_registered {
             tracing::warn!("Protocol handler not registered: {}", status.details);
@@ -632,7 +626,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         } else {
             tracing::info!("Protocol handler registered correctly");
         }
-    }
+    });
 
     let args: Vec<String> = std::env::args().collect();
     if args.len() > 1 {
@@ -662,14 +656,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let deep_link_throttle_for_setup = Arc::clone(&deep_link_throttle);
     let tray_state_for_setup = Arc::clone(&tray_state);
     let settings_manager_for_setup = Arc::clone(&settings_manager);
-    let workspace_watch_service_for_setup = workspace_watch_service.clone();
     let setup_needed = settings_manager.is_setup_needed().await;
 
     tauri::Builder::default()
         .setup(move |app| {
             let deep_link_throttle = Arc::clone(&deep_link_throttle_for_setup);
             let settings_manager_for_setup = Arc::clone(&settings_manager_for_setup);
-            let mut workspace_change_rx = workspace_change_rx;
+            let (workspace_change_tx, mut workspace_change_rx) =
+                tokio::sync::mpsc::unbounded_channel();
             tracing::info!("Setting up Tauri app...");
 
             // Show setup wizard if this is first run
@@ -735,19 +729,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             });
 
-            if let Some(workspace_watch_service) = workspace_watch_service_for_setup.as_ref() {
-                let workspace_watch_service = Arc::clone(workspace_watch_service);
-                let settings_manager_for_watch_refresh = Arc::clone(&settings_manager_for_setup);
-                tauri::async_runtime::spawn(async move {
-                    let mut ticker = tokio::time::interval(Duration::from_secs(30));
-                    loop {
-                        ticker.tick().await;
-                        let settings = settings_manager_for_watch_refresh.get().await;
-                        let mut watcher = workspace_watch_service.lock().await;
-                        watcher.refresh_watch_roots_for_settings(&settings);
+            // Defer WorkspaceWatchService setup — not needed until app is fully operational
+            let settings_manager_for_watch_init = Arc::clone(&settings_manager_for_setup);
+            tauri::async_runtime::spawn(async move {
+                match settings::WorkspaceWatchService::new(
+                    Arc::clone(&settings_manager_for_watch_init),
+                    workspace_change_tx,
+                )
+                .await
+                {
+                    Ok(service) => {
+                        let workspace_watch_service = Arc::new(tokio::sync::Mutex::new(service));
+                        let mut ticker = tokio::time::interval(Duration::from_secs(30));
+                        loop {
+                            ticker.tick().await;
+                            let settings = settings_manager_for_watch_init.get().await;
+                            let mut watcher = workspace_watch_service.lock().await;
+                            watcher.refresh_watch_roots_for_settings(&settings);
+                        }
                     }
-                });
-            }
+                    Err(error) => {
+                        tracing::warn!("Failed to start workspace file watcher: {}", error);
+                    }
+                }
+            });
 
             let app_handle_for_watch_events = app_handle.clone();
             let settings_manager_for_watch_events = Arc::clone(&settings_manager_for_setup);

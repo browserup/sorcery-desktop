@@ -126,7 +126,7 @@ impl SettingsManager {
         let mut settings: Settings =
             serde_yaml::from_str(&contents).context("Failed to parse YAML settings")?;
 
-        Self::normalize_workspace_paths(&mut settings);
+        Self::normalize_workspace_paths(&mut settings).await;
         Self::validate_workspace_uniqueness(&settings).map_err(anyhow::Error::from)?;
         self.validate_workspace_policy(&settings).await?;
 
@@ -139,7 +139,7 @@ impl SettingsManager {
 
     pub async fn save(&self, mut settings: Settings) -> Result<()> {
         // Normalize paths before persisting or caching in memory
-        Self::normalize_workspace_paths(&mut settings);
+        Self::normalize_workspace_paths(&mut settings).await;
         Self::validate_workspace_uniqueness(&settings).map_err(anyhow::Error::from)?;
         self.validate_workspace_policy(&settings).await?;
 
@@ -160,7 +160,7 @@ impl SettingsManager {
         let (result, dirty) = f(&mut settings)?;
 
         if dirty {
-            Self::normalize_workspace_paths(&mut settings);
+            Self::normalize_workspace_paths(&mut settings).await;
             Self::validate_workspace_uniqueness(&settings).map_err(anyhow::Error::from)?;
             self.validate_workspace_policy(&settings).await?;
             self.persist_to_disk(&settings).await?;
@@ -277,7 +277,7 @@ impl SettingsManager {
     pub async fn refresh_workspace_states(&self) -> Result<bool> {
         let mut settings = self.settings.write().await;
         let before = settings.workspaces.clone();
-        Self::normalize_workspace_paths(&mut settings);
+        Self::normalize_workspace_paths(&mut settings).await;
         let changed = before != settings.workspaces;
 
         if changed {
@@ -425,8 +425,20 @@ impl SettingsManager {
         Ok(())
     }
 
-    fn normalize_workspace_paths(settings: &mut Settings) {
-        for workspace in &mut settings.workspaces {
+    async fn normalize_workspace_paths(settings: &mut Settings) {
+        // Phase 1: Collect — normalize paths and record previous state (sync, no I/O)
+        struct WorkspaceSnapshot {
+            index: usize,
+            previous_name: String,
+            previous_kind: super::WorkspaceKind,
+            previous_state: WorkspaceState,
+            previous_repo_identity: Option<RepoIdentity>,
+            previous_normalized_path: Option<PathBuf>,
+            normalized_path: Result<PathBuf>,
+        }
+
+        let mut snapshots = Vec::with_capacity(settings.workspaces.len());
+        for (index, workspace) in settings.workspaces.iter_mut().enumerate() {
             let previous_name = workspace.name.clone();
             let previous_kind = workspace.workspace_kind;
             let previous_state = workspace.workspace_state;
@@ -434,57 +446,91 @@ impl SettingsManager {
             let previous_normalized_path = workspace.normalized_path.clone();
 
             let name = identity::derive_workspace_name(workspace);
-            workspace.name = name.clone();
+            workspace.name = name;
 
-            match Self::normalize_path(&workspace.path) {
-                Ok(normalized) => {
-                    let inspection = identity::inspect_workspace(&normalized);
-                    workspace.normalized_path = Some(normalized);
+            let normalized_path = Self::normalize_path(&workspace.path);
+
+            snapshots.push(WorkspaceSnapshot {
+                index,
+                previous_name,
+                previous_kind,
+                previous_state,
+                previous_repo_identity,
+                previous_normalized_path,
+                normalized_path,
+            });
+        }
+
+        // Phase 2: Inspect — spawn all workspace inspections concurrently
+        let inspection_futures: Vec<_> = snapshots
+            .iter()
+            .map(|snapshot| {
+                let path = snapshot.normalized_path.as_ref().ok().cloned();
+                tokio::task::spawn_blocking(move || {
+                    path.as_deref().map(identity::inspect_workspace)
+                })
+            })
+            .collect();
+
+        let inspection_results = futures::future::join_all(inspection_futures).await;
+
+        // Phase 3: Apply — merge results back into each workspace (sync, no I/O)
+        for (snapshot, inspection_result) in snapshots.iter().zip(inspection_results) {
+            let workspace = &mut settings.workspaces[snapshot.index];
+            let inspection = inspection_result.ok().flatten();
+
+            match (&snapshot.normalized_path, inspection) {
+                (Ok(normalized), Some(inspection)) => {
+                    workspace.normalized_path = Some(normalized.clone());
                     workspace.workspace_state = inspection.workspace_state;
 
                     if matches!(
                         workspace.workspace_state,
                         WorkspaceState::Missing | WorkspaceState::Unavailable
                     ) {
-                        // Preserve last known git classification and identity while unavailable so
-                        // we can detect identity drift if the path later reappears.
-                        workspace.workspace_kind = if previous_repo_identity.is_some() {
+                        workspace.workspace_kind = if snapshot.previous_repo_identity.is_some() {
                             super::WorkspaceKind::Git
                         } else {
                             inspection.workspace_kind
                         };
-                        workspace.repo_identity =
-                            previous_repo_identity.clone().or(inspection.repo_identity);
+                        workspace.repo_identity = snapshot
+                            .previous_repo_identity
+                            .clone()
+                            .or(inspection.repo_identity);
                     } else {
                         workspace.workspace_kind = inspection.workspace_kind;
                         workspace.repo_identity = inspection.repo_identity;
                     }
                 }
-                Err(e) => {
-                    let path = &workspace.path;
-                    warn!("Failed to normalize path '{path}': {e}");
+                _ => {
+                    if let Err(e) = &snapshot.normalized_path {
+                        let path = &workspace.path;
+                        warn!("Failed to normalize path '{path}': {e}");
+                    }
                     workspace.normalized_path = None;
-                    workspace.workspace_kind = if previous_repo_identity.is_some() {
+                    workspace.workspace_kind = if snapshot.previous_repo_identity.is_some() {
                         super::WorkspaceKind::Git
                     } else {
                         super::WorkspaceKind::NonGit
                     };
                     workspace.workspace_state = WorkspaceState::Unavailable;
-                    workspace.repo_identity = previous_repo_identity.clone();
+                    workspace.repo_identity = snapshot.previous_repo_identity.clone();
                 }
             }
 
             if workspace.workspace_state == WorkspaceState::Present {
-                let kind_changed_from_git = matches!(previous_kind, super::WorkspaceKind::Git)
-                    && !matches!(workspace.workspace_kind, super::WorkspaceKind::Git);
-                let primary_remote_changed = previous_repo_identity
+                let kind_changed_from_git =
+                    matches!(snapshot.previous_kind, super::WorkspaceKind::Git)
+                        && !matches!(workspace.workspace_kind, super::WorkspaceKind::Git);
+                let primary_remote_changed = snapshot
+                    .previous_repo_identity
                     .as_ref()
                     .and_then(|identity| identity.primary_remote.as_ref())
                     != workspace
                         .repo_identity
                         .as_ref()
                         .and_then(|identity| identity.primary_remote.as_ref());
-                let had_previous_identity = previous_repo_identity.is_some();
+                let had_previous_identity = snapshot.previous_repo_identity.is_some();
 
                 if kind_changed_from_git || (had_previous_identity && primary_remote_changed) {
                     workspace.workspace_state = WorkspaceState::RepoChanged;
@@ -492,11 +538,11 @@ impl SettingsManager {
                 }
             }
 
-            let changed = workspace.name != previous_name
-                || workspace.workspace_kind != previous_kind
-                || workspace.workspace_state != previous_state
-                || workspace.repo_identity != previous_repo_identity
-                || workspace.normalized_path != previous_normalized_path;
+            let changed = workspace.name != snapshot.previous_name
+                || workspace.workspace_kind != snapshot.previous_kind
+                || workspace.workspace_state != snapshot.previous_state
+                || workspace.repo_identity != snapshot.previous_repo_identity
+                || workspace.normalized_path != snapshot.previous_normalized_path;
 
             if changed || workspace.last_verified_at.is_none() {
                 workspace.last_verified_at = Some(identity::now_timestamp_millis());
@@ -505,7 +551,6 @@ impl SettingsManager {
 
         Self::mark_workspace_conflicts(settings);
 
-        // Validate workspace names
         Self::validate_workspace_names(settings);
     }
 

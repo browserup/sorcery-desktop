@@ -181,30 +181,31 @@ pub(crate) fn inspect_workspace(path: &Path) -> WorkspaceInspection {
 fn read_repo_identity(workspace_path: &Path) -> Option<RepoIdentity> {
     let workspace_str = workspace_path.to_string_lossy();
 
-    let remote_names_output = run_git_command(&workspace_str, &["remote"]).ok()?;
-    if !remote_names_output.status.success() {
+    let remote_verbose_output = run_git_command(&workspace_str, &["remote", "-v"]).ok()?;
+    if !remote_verbose_output.status.success() {
         return None;
     }
 
     let mut all_remotes = BTreeSet::new();
     let mut primary_remote: Option<String> = None;
 
-    let remote_names = String::from_utf8_lossy(&remote_names_output.stdout);
-    for remote_name in remote_names
+    let remote_verbose = String::from_utf8_lossy(&remote_verbose_output.stdout);
+    for line in remote_verbose
         .lines()
         .map(str::trim)
-        .filter(|line| !line.is_empty())
+        .filter(|l| !l.is_empty())
     {
-        let get_url_output = run_git_command(&workspace_str, &["remote", "get-url", remote_name]);
-        let Ok(get_url_output) = get_url_output else {
+        // Format: "<name>\t<url> (fetch|push)"
+        // Only process fetch URLs to avoid duplicates
+        let Some(line) = line.strip_suffix("(fetch)") else {
             continue;
         };
-        if !get_url_output.status.success() {
+        let line = line.trim();
+        let Some((remote_name, raw_url)) = line.split_once('\t') else {
             continue;
-        }
+        };
 
-        let raw_remote = String::from_utf8_lossy(&get_url_output.stdout);
-        let Some(normalized) = normalize_remote_identity(raw_remote.trim()) else {
+        let Some(normalized) = normalize_remote_identity(raw_url.trim()) else {
             continue;
         };
 
@@ -218,39 +219,38 @@ fn read_repo_identity(workspace_path: &Path) -> Option<RepoIdentity> {
         primary_remote = all_remotes.iter().next().cloned();
     }
 
-    let git_common_dir = run_git_command(&workspace_str, &["rev-parse", "--git-common-dir"])
-        .ok()
-        .and_then(|output| {
-            if !output.status.success() {
-                return None;
-            }
-            let raw = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            if raw.is_empty() {
-                return None;
-            }
-            let common_dir = PathBuf::from(raw);
-            let resolved = if common_dir.is_absolute() {
-                common_dir
-            } else {
-                workspace_path.join(common_dir)
-            };
-            Some(normalize_path_for_identity(resolved))
+    // Combine --git-common-dir and HEAD into a single rev-parse call
+    let rev_parse_output =
+        run_git_command(&workspace_str, &["rev-parse", "--git-common-dir", "HEAD"]).ok();
+
+    let (git_common_dir, head_commit) = rev_parse_output
+        .as_ref()
+        .filter(|output| output.status.success())
+        .map_or((None, None), |output| {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let mut lines = stdout.lines();
+            let common_dir = lines.next().map(str::trim).and_then(|raw| {
+                if raw.is_empty() {
+                    return None;
+                }
+                let common_dir = PathBuf::from(raw);
+                let resolved = if common_dir.is_absolute() {
+                    common_dir
+                } else {
+                    workspace_path.join(common_dir)
+                };
+                Some(normalize_path_for_identity(resolved))
+            });
+            let head = lines.next().map(str::trim).and_then(|raw| {
+                if raw.is_empty() {
+                    return None;
+                }
+                Some(raw.to_string())
+            });
+            (common_dir, head)
         });
 
     let current_branch = run_git_command(&workspace_str, &["symbolic-ref", "--short", "HEAD"])
-        .ok()
-        .and_then(|output| {
-            if !output.status.success() {
-                return None;
-            }
-            let value = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            if value.is_empty() {
-                return None;
-            }
-            Some(value)
-        });
-
-    let head_commit = run_git_command(&workspace_str, &["rev-parse", "HEAD"])
         .ok()
         .and_then(|output| {
             if !output.status.success() {
