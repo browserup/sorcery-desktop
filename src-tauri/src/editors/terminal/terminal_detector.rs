@@ -215,8 +215,7 @@ impl TerminalApp {
 
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_nanos())
-            .unwrap_or(0);
+            .map_or(0, |d| d.as_nanos());
         let script_path = format!("/tmp/sorcery_launch_{timestamp}.sh");
 
         let mut script_content = String::from("#!/bin/bash\n");

@@ -540,7 +540,7 @@ impl GitHandler {
         }
 
         // Sort by mtime, oldest first
-        entries.sort_by(|a, b| a.1.cmp(&b.1));
+        entries.sort_by_key(|(_, mtime)| *mtime);
 
         // Remove oldest entries until we're under the limit
         let to_remove = entries.len() - (MAX_WORKTREES - 1); // -1 to make room for new one

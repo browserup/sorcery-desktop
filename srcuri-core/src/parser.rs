@@ -642,11 +642,9 @@ fn parse_azure(url: &Url) -> Result<SrcuriTarget, ParseError> {
                     file_path = Some(p.to_string());
                 }
             }
-            "version" => {
-                // Strip GB/GT/GC prefix
-                if value.len() >= 2 {
-                    ref_value = Some(value[2..].to_string());
-                }
+            // Strip GB/GT/GC prefix
+            "version" if value.len() >= 2 => {
+                ref_value = Some(value[2..].to_string());
             }
             "line" => {
                 line = value.parse().ok();

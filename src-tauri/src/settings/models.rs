@@ -70,14 +70,12 @@ fn default_terminal() -> String {
 }
 
 fn count_git_repos(dir: &std::path::Path) -> usize {
-    std::fs::read_dir(dir)
-        .map(|entries| {
-            entries
-                .filter_map(Result::ok)
-                .filter(|e| e.path().join(".git").exists())
-                .count()
-        })
-        .unwrap_or(0)
+    std::fs::read_dir(dir).map_or(0, |entries| {
+        entries
+            .filter_map(Result::ok)
+            .filter(|e| e.path().join(".git").exists())
+            .count()
+    })
 }
 
 fn default_workspaces_folder() -> String {

@@ -1967,7 +1967,7 @@ pub async fn get_setup_data(
     }
 
     // Sort by repo count descending
-    folder_suggestions.sort_by(|a, b| b.repo_count.cmp(&a.repo_count));
+    folder_suggestions.sort_by_key(|s| std::cmp::Reverse(s.repo_count));
 
     // Include current setting if different
     let current_folder = settings.defaults.default_workspaces_folder.clone();
