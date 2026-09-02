@@ -130,28 +130,48 @@ impl JetBrainsManager {
             })
             .collect();
 
-        entries.sort_by(|a, b| b.1.cmp(&a.1));
+        entries.sort_by_key(|(_, mtime)| std::cmp::Reverse(*mtime));
         entries.first().map(|(path, _)| path.clone())
     }
 
     #[cfg(target_os = "macos")]
     fn find_standalone_binary_macos(&self) -> Option<PathBuf> {
         let app_name = format!("{}.app", self.display_name);
-
-        // Check both /Applications and ~/Applications
-        let candidates = vec![
-            PathBuf::from("/Applications").join(&app_name),
-            dirs::home_dir()?.join("Applications").join(&app_name),
+        let app_dirs = [
+            PathBuf::from("/Applications"),
+            dirs::home_dir()?.join("Applications"),
         ];
 
-        for app_path in candidates {
+        for dir in &app_dirs {
+            let app_path = dir.join(&app_name);
             if app_path.exists() {
                 debug!("Found {} standalone at {:?}", self.display_name, app_path);
                 return Some(app_path);
             }
         }
 
+        for dir in &app_dirs {
+            if let Some(app_path) = Self::find_app_bundle_by_prefix(dir, &self.display_name) {
+                debug!("Found {} standalone at {:?}", self.display_name, app_path);
+                return Some(app_path);
+            }
+        }
+
         None
+    }
+
+    /// Newer `JetBrains` installers append the edition to the bundle name
+    /// (e.g. `IntelliJ IDEA Ultimate.app`, `IntelliJ IDEA CE.app`), so
+    /// match any bundle whose name starts with the display name.
+    #[cfg(any(target_os = "macos", test))]
+    fn find_app_bundle_by_prefix(dir: &Path, display_name: &str) -> Option<PathBuf> {
+        let prefix = format!("{display_name} ");
+        let entries = std::fs::read_dir(dir).ok()?;
+        entries.filter_map(Result::ok).map(|e| e.path()).find(|p| {
+            p.file_name()
+                .and_then(|n| n.to_str())
+                .is_some_and(|n| n.starts_with(&prefix) && n.ends_with(".app"))
+        })
     }
 
     #[cfg(target_os = "windows")]
@@ -652,7 +672,10 @@ impl EditorManager for JetBrainsManager {
     async fn get_running_instances(&self) -> EditorResult<Vec<EditorInstance>> {
         #[cfg(target_os = "macos")]
         {
-            let pattern = format!("/Applications/{}.app", self.display_name);
+            let Some(app_path) = self.find_binary().await else {
+                return Ok(Vec::new());
+            };
+            let pattern = app_path.to_string_lossy().into_owned();
             let output = Command::new("pgrep")
                 .arg("-f")
                 .arg(&pattern)
@@ -681,5 +704,34 @@ impl EditorManager for JetBrainsManager {
         {
             Ok(Vec::new())
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn finds_edition_suffixed_bundle() {
+        let dir = std::env::temp_dir().join("sorcery-jetbrains-test-ultimate");
+        let app = dir.join("IntelliJ IDEA Ultimate.app");
+        std::fs::create_dir_all(&app).expect("create test dir");
+
+        let found = JetBrainsManager::find_app_bundle_by_prefix(&dir, "IntelliJ IDEA");
+        assert_eq!(found, Some(app));
+
+        std::fs::remove_dir_all(&dir).expect("remove test dir");
+    }
+
+    #[test]
+    fn ignores_unrelated_bundles() {
+        let dir = std::env::temp_dir().join("sorcery-jetbrains-test-unrelated");
+        std::fs::create_dir_all(dir.join("PyCharm Professional.app")).expect("create test dir");
+        std::fs::create_dir_all(dir.join("IntelliJ IDEA Ultimate")).expect("create test dir");
+
+        let found = JetBrainsManager::find_app_bundle_by_prefix(&dir, "IntelliJ IDEA");
+        assert_eq!(found, None);
+
+        std::fs::remove_dir_all(&dir).expect("remove test dir");
     }
 }
